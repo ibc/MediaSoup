@@ -13,7 +13,6 @@
 #include "RTC/RtpStreamRecv.hpp"
 #include "RTC/Shared.hpp"
 #include "RTC/Transport.hpp"
-#include "RTC/WebRtcServer.hpp"
 #include <absl/container/flat_hash_map.h>
 #include <absl/container/flat_hash_set.h>
 #include <string>
@@ -21,6 +20,7 @@
 
 namespace RTC
 {
+	class WebRtcServer;
 	class Router : public RTC::Transport::Listener,
 	               public RTC::RtpObserver::Listener,
 	               public Channel::ChannelSocket::RequestHandler

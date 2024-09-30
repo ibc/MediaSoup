@@ -116,6 +116,10 @@ namespace RTC
 		{
 			return DtlsTransport::localFingerprints;
 		}
+		static absl::flat_hash_map<std::string, DtlsTransport::FingerprintAlgorithm> &GetString2FingerprintAlgorithm()
+		{
+			return DtlsTransport::string2FingerprintAlgorithm;
+		}
 
 	private:
 		static void GenerateCertificateAndPrivateKey();
@@ -141,7 +145,14 @@ namespace RTC
 	public:
 		void Dump() const;
 		void Run(Role localRole);
+		// this causes next DTLS packet receive fails with SSL_ERROR_SYSCALL in DtlsTransport::CheckStatus
+		// which calls OnDtlsTransportFailed (calls OnDtlsTransportClosed)
+		void Close() {
+			// Send close alert to the peer.
+			SSL_shutdown(this->ssl);
+		}
 		bool SetRemoteFingerprint(const Fingerprint& fingerprint);
+		const std::optional<Fingerprint> &GetRemoteFingerprint() const { return this->remoteFingerprint; }
 		void ProcessDtlsData(const uint8_t* data, size_t len);
 		DtlsState GetState() const
 		{

@@ -52,6 +52,12 @@ namespace RTC
 			  uint32_t ppid) = 0;
 			virtual void OnSctpAssociationBufferedAmount(
 			  RTC::SctpAssociation* sctpAssociation, uint32_t len) = 0;
+			virtual void OnSctpStreamReset(RTC::SctpAssociation* sctpAssociation, uint16_t streamId) = 0;
+			virtual void OnSctpWebRtcDataChannelControlDataReceived(
+			  RTC::SctpAssociation* sctpAssociation,
+			  uint16_t streamId,
+			  const uint8_t* msg,
+			  size_t len) = 0;
 		};
 
 	public:
@@ -90,15 +96,42 @@ namespace RTC
 			return this->sctpBufferedAmount;
 		}
 		void ProcessSctpData(const uint8_t* data, size_t len) const;
-		void SendSctpMessage(
+		int SendSctpMessage(
 		  RTC::DataConsumer* dataConsumer,
 		  const uint8_t* msg,
 		  size_t len,
 		  uint32_t ppid,
+		  onQueuedCallback* cb = nullptr) {
+			int r = SendSctpMessage(dataConsumer->GetSctpStreamParameters(), msg, len, ppid, cb);
+			if (r == SctpSendResult::ErrorAgain) {
+				dataConsumer->SctpAssociationSendBufferFull();
+			}
+			return r;
+		}
+		void HandleDataConsumer(RTC::DataConsumer* dataConsumer) {
+			HandleDataConsumer(dataConsumer->GetSctpStreamParameters().streamId);
+		}
+		void DataProducerClosed(RTC::DataProducer* dataProducer) {
+			DataProducerClosed(dataProducer->GetSctpStreamParameters().streamId);
+		}
+		void DataConsumerClosed(RTC::DataConsumer* dataConsumer) {
+			DataConsumerClosed(dataConsumer->GetSctpStreamParameters().streamId);
+		}
+
+		enum SctpSendResult {
+			Ok = 0,
+			ErrorAgain = -1,
+			ErrorOthers = -2,
+		};
+		int SendSctpMessage(
+		  const RTC::SctpStreamParameters &parameters,
+		  const uint8_t* msg,
+		  size_t len,
+		  uint32_t ppid,
 		  onQueuedCallback* cb = nullptr);
-		void HandleDataConsumer(RTC::DataConsumer* dataConsumer);
-		void DataProducerClosed(RTC::DataProducer* dataProducer);
-		void DataConsumerClosed(RTC::DataConsumer* dataConsumer);
+		void HandleDataConsumer(uint16_t streamId);
+		void DataProducerClosed(uint16_t streamId);
+		void DataConsumerClosed(uint16_t streamId);
 
 	private:
 		void ResetSctpStream(uint16_t streamId, StreamDirection direction);

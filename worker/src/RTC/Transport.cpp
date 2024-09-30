@@ -32,6 +32,12 @@ namespace RTC
 	static const size_t DefaultSctpSendBufferSize{ 262144 }; // 2^18.
 	static const size_t MaxSctpSendBufferSize{ 268435456 };  // 2^28.
 
+	static thread_local Transport::CreateProducerCB producer_factory_;
+	static thread_local Transport::CreateConsumerCB consumer_factory_;
+	struct RTC::RtpHeaderExtensionIds &Transport::ext_ids() { return this->recvRtpHeaderExtensionIds; }
+	void Transport::SetProducerFactory(CreateProducerCB &&pf) { producer_factory_ = std::move(pf); }
+	void Transport::SetConsumerFactory(CreateConsumerCB &&cf) { consumer_factory_ = std::move(cf); }
+
 	/* Instance methods. */
 
 	Transport::Transport(
@@ -623,7 +629,9 @@ namespace RTC
 				}
 
 				// This may throw.
-				auto* producer = new RTC::Producer(this->shared, producerId, this, body);
+				auto* producer = producer_factory_ != nullptr ? 
+					producer_factory_(this->shared, producerId, this, body) : 
+					new RTC::Producer(this->shared, producerId, this, body);
 
 				// Insert the Producer into the RtpListener.
 				// This may throw. If so, delete the Producer and throw.
@@ -791,6 +799,9 @@ namespace RTC
 
 				RTC::Consumer* consumer{ nullptr };
 
+				if (consumer_factory_ != nullptr) {
+					consumer = consumer_factory_(type, this->shared, consumerId, producerId, this, body);
+				} else {
 				switch (type)
 				{
 					case RTC::RtpParameters::Type::SIMPLE:
@@ -824,6 +835,7 @@ namespace RTC
 
 						break;
 					}
+				}
 				}
 
 				// Notify the listener.
@@ -2925,6 +2937,18 @@ namespace RTC
 			}
 		}
 	}
+
+	void Transport::OnSctpStreamReset(RTC::SctpAssociation* sctpAssociation, uint16_t streamId) {
+		MS_ABORT("for qrpc, transport does not offer sctp support");
+	}
+	void Transport::OnSctpWebRtcDataChannelControlDataReceived(
+		RTC::SctpAssociation* sctpAssociation,
+		uint16_t streamId,
+		const uint8_t* msg,
+		size_t len) {
+		MS_ABORT("for qrpc, transport does not offer sctp support");
+	}
+
 
 	inline void Transport::OnTransportCongestionControlClientBitrates(
 	  RTC::TransportCongestionControlClient* /*tccClient*/,

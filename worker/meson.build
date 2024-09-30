@@ -238,6 +238,18 @@ subdir('fbs')
 libwebrtc_include_directories = include_directories('include', 'fbs')
 subdir('deps/libwebrtc')
 
+cpparg = custom_target(
+  'cpparg',
+  output : 'ms_cpparg.txt',
+  env: {
+    'CPPARGS': cpp_args,
+  },
+  command : [find_program('bash'), '-c', 'echo "${CPPARGS}" > ' + join_paths(meson.source_root(),'out','@OUTPUT@')],
+)
+cpparg_dep = declare_dependency(
+  sources: cpparg
+)
+
 dependencies = [
   abseil_cpp_proj.get_variable('absl_container_dep'),
   openssl_proj.get_variable('openssl_dep'),
@@ -247,6 +259,7 @@ dependencies = [
   flatbuffers_proj.get_variable('flatbuffers_dep'),
   flatbuffers_generator_dep,
   libwebrtc_dep,
+  cpparg_dep,
 ]
 
 link_whole = [

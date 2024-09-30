@@ -13,6 +13,7 @@
 #include "RTC/PipeTransport.hpp"
 #include "RTC/PlainTransport.hpp"
 #include "RTC/WebRtcTransport.hpp"
+#include "RTC/WebRtcServer.hpp"
 
 namespace RTC
 {

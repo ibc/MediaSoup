@@ -19,6 +19,7 @@ namespace RTC
 
 	public:
 		RTC::RtpPacket* GetNextPacket(size_t size);
+		static const std::string &GetMidValue();
 
 	private:
 		// Allocated by this.

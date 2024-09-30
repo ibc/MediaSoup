@@ -13,21 +13,6 @@ namespace Channel
 	static constexpr size_t MessageMaxLen{ 4194308 };
 	static constexpr size_t PayloadMaxLen{ 4194304 };
 
-	/* Static methods for UV callbacks. */
-
-	inline static void onAsync(uv_handle_t* handle)
-	{
-		while (static_cast<ChannelSocket*>(handle->data)->CallbackRead())
-		{
-			// Read while there are new messages.
-		}
-	}
-
-	inline static void onCloseAsync(uv_handle_t* handle)
-	{
-		delete reinterpret_cast<uv_async_t*>(handle);
-	}
-
 	/* Instance methods. */
 
 	ChannelSocket::ChannelSocket(int consumerFd, int producerFd)
@@ -46,31 +31,6 @@ namespace Channel
 	    channelWriteCtx(channelWriteCtx), uvReadHandle(new uv_async_t)
 	{
 		MS_TRACE_STD();
-
-		int err;
-
-		this->uvReadHandle->data = static_cast<void*>(this);
-
-		err =
-		  uv_async_init(DepLibUV::GetLoop(), this->uvReadHandle, reinterpret_cast<uv_async_cb>(onAsync));
-
-		if (err != 0)
-		{
-			delete this->uvReadHandle;
-			this->uvReadHandle = nullptr;
-
-			MS_THROW_ERROR_STD("uv_async_init() failed: %s", uv_strerror(err));
-		}
-
-		err = uv_async_send(this->uvReadHandle);
-
-		if (err != 0)
-		{
-			delete this->uvReadHandle;
-			this->uvReadHandle = nullptr;
-
-			MS_THROW_ERROR_STD("uv_async_send() failed: %s", uv_strerror(err));
-		}
 	}
 
 	ChannelSocket::~ChannelSocket()
@@ -96,12 +56,6 @@ namespace Channel
 		}
 
 		this->closed = true;
-
-		if (this->uvReadHandle)
-		{
-			uv_close(
-			  reinterpret_cast<uv_handle_t*>(this->uvReadHandle), static_cast<uv_close_cb>(onCloseAsync));
-		}
 
 		if (this->consumerSocket)
 		{

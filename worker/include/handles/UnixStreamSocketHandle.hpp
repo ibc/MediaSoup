@@ -33,42 +33,30 @@ public:
 		CONSUMER
 	};
 
+	typedef std::function<void(const uint8_t* data, size_t len)> Writer;
+
 public:
-	UnixStreamSocketHandle(int fd, size_t bufferSize, UnixStreamSocketHandle::Role role);
+	UnixStreamSocketHandle(int fd, size_t bufferSize, UnixStreamSocketHandle::Role role) {
+		this->bufferSize = bufferSize;
+		this->role       = role;
+		this->buffer     = new uint8_t[bufferSize];
+	}
 	UnixStreamSocketHandle& operator=(const UnixStreamSocketHandle&) = delete;
 	UnixStreamSocketHandle(const UnixStreamSocketHandle&)            = delete;
-	virtual ~UnixStreamSocketHandle();
-
-public:
-	void Close();
-	bool IsClosed() const
-	{
-		return this->closed;
+	virtual ~UnixStreamSocketHandle() {
+		delete[] this->buffer;
 	}
-	void Write(const uint8_t* data, size_t len);
-	uint32_t GetSendBufferSize() const;
-	void SetSendBufferSize(uint32_t size);
-	uint32_t GetRecvBufferSize() const;
-	void SetRecvBufferSize(uint32_t size);
 
-	/* Callbacks fired by UV events. */
 public:
-	void OnUvReadAlloc(size_t suggestedSize, uv_buf_t* buf);
-	void OnUvRead(ssize_t nread, const uv_buf_t* buf);
-	void OnUvWriteError(int error);
+	void Close() {}
+	bool IsClosed() const { return true; }
+	static void SetWriter(Writer w) { writer_ = w; }
+	void Write(const uint8_t* data, size_t len) { writer_(data, len); }
 
-	/* Pure virtual methods that must be implemented by the subclass. */
 protected:
 	virtual void UserOnUnixStreamRead()         = 0;
 	virtual void UserOnUnixStreamSocketClosed() = 0;
-
-private:
-	// Allocated by this.
-	uv_pipe_t* uvHandle{ nullptr };
-	// Others.
-	bool closed{ false };
-	bool isClosedByPeer{ false };
-	bool hasError{ false };
+	static Writer writer_;
 
 protected:
 	// Passed by argument.

@@ -75,6 +75,9 @@ namespace RTC
 		double GetDouble(const std::string& key) const;
 		const std::string& GetString(const std::string& key) const;
 		const std::vector<int32_t>& GetArrayOfIntegers(const std::string& key) const;
+		inline const absl::flat_hash_map<std::string, Value> &Entries() const { return mapKeyValues; }
+		template <typename T>
+		inline void Add(const std::string& key, T value) { mapKeyValues.emplace(key, Value(value)); }
 
 	private:
 		absl::flat_hash_map<std::string, Value> mapKeyValues;

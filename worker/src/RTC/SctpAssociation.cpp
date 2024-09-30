@@ -392,8 +392,8 @@ namespace RTC
 		usrsctp_conninput(reinterpret_cast<void*>(this->id), data, len, 0);
 	}
 
-	void SctpAssociation::SendSctpMessage(
-	  RTC::DataConsumer* dataConsumer, const uint8_t* msg, size_t len, uint32_t ppid, onQueuedCallback* cb)
+	int SctpAssociation::SendSctpMessage(
+	 	const RTC::SctpStreamParameters &parameters, const uint8_t* msg, size_t len, uint32_t ppid, onQueuedCallback* cb)
 	{
 		MS_TRACE();
 
@@ -403,8 +403,6 @@ namespace RTC
 		  "given message exceeds max allowed message size [message size:%zu, max message size:%zu]",
 		  len,
 		  this->maxSctpMessageSize);
-
-		const auto& parameters = dataConsumer->GetSctpStreamParameters();
 
 		// Fill sctp_sendv_spa.
 		struct sctp_sendv_spa spa
@@ -482,24 +480,19 @@ namespace RTC
 				(*cb)(false, sctpSendBufferFull);
 				delete cb;
 			}
-
-			if (sctpSendBufferFull)
-			{
-				dataConsumer->SctpAssociationSendBufferFull();
-			}
+			return sctpSendBufferFull ? SctpSendResult::ErrorAgain : SctpSendResult::ErrorOthers;
 		}
 		else if (cb)
 		{
 			(*cb)(true, false);
 			delete cb;
 		}
+		return SctpSendResult::Ok;
 	}
 
-	void SctpAssociation::HandleDataConsumer(RTC::DataConsumer* dataConsumer)
+	void SctpAssociation::HandleDataConsumer(uint16_t streamId)
 	{
 		MS_TRACE();
-
-		auto streamId = dataConsumer->GetSctpStreamParameters().streamId;
 
 		// We need more OS.
 		if (streamId > this->os - 1)
@@ -508,11 +501,9 @@ namespace RTC
 		}
 	}
 
-	void SctpAssociation::DataProducerClosed(RTC::DataProducer* dataProducer)
+	void SctpAssociation::DataProducerClosed(uint16_t streamId)
 	{
 		MS_TRACE();
-
-		auto streamId = dataProducer->GetSctpStreamParameters().streamId;
 
 		// Send SCTP_RESET_STREAMS to the remote.
 		// https://tools.ietf.org/html/rfc8831#section-6.7
@@ -526,11 +517,9 @@ namespace RTC
 		}
 	}
 
-	void SctpAssociation::DataConsumerClosed(RTC::DataConsumer* dataConsumer)
+	void SctpAssociation::DataConsumerClosed(uint16_t streamId)
 	{
 		MS_TRACE();
-
-		auto streamId = dataConsumer->GetSctpStreamParameters().streamId;
 
 		// Send SCTP_RESET_STREAMS to the remote.
 		ResetSctpStream(streamId, StreamDirection::OUTGOING);
@@ -685,8 +674,7 @@ namespace RTC
 		// Ignore WebRTC DataChannel Control DATA chunks.
 		if (ppid == 50)
 		{
-			MS_WARN_TAG(sctp, "ignoring SCTP data with ppid:50 (WebRTC DataChannel Control)");
-
+			listener->OnSctpWebRtcDataChannelControlDataReceived(this, streamId, data, len);
 			return;
 		}
 
@@ -1046,6 +1034,11 @@ namespace RTC
 
 						ResetSctpStream(streamId, StreamDirection::OUTGOING);
 					}
+				}
+				for (uint16_t i{ 0 }; i < numStreams; ++i)
+				{
+					auto streamId = notification->sn_strreset_event.strreset_stream_list[i];
+					this->listener->OnSctpStreamReset(this, streamId);
 				}
 
 				break;

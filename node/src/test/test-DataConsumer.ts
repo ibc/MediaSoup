@@ -107,6 +107,20 @@ test('transport.consumeData() succeeds', async () => {
 	});
 }, 2000);
 
+test('transport.consumeData() with already used sctpStreamId rejects with Error', async () => {
+	await ctx.webRtcTransport2!.consumeData({
+		dataProducerId: ctx.dataProducer!.id,
+		sctpStreamId: 123,
+	});
+
+	await expect(
+		ctx.webRtcTransport2!.consumeData({
+			dataProducerId: ctx.dataProducer!.id,
+			sctpStreamId: 123,
+		})
+	).rejects.toThrow(Error);
+}, 2000);
+
 test('dataConsumer.dump() succeeds', async () => {
 	const dataConsumer = await ctx.webRtcTransport2!.consumeData({
 		dataProducerId: ctx.dataProducer!.id,

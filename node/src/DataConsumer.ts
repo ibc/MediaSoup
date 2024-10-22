@@ -46,6 +46,12 @@ export type DataConsumerOptions<DataConsumerAppData extends AppData = AppData> =
 		maxRetransmits?: number;
 
 		/**
+		 * Just if consuming over SCTP.
+		 * SCTP stream id. If not provided defaults to an arbitrary available stream ID.
+		 */
+		sctpStreamId?: number;
+
+		/**
 		 * Whether the data consumer must start in paused mode. Default false.
 		 */
 		paused?: boolean;

@@ -1092,6 +1092,7 @@ export abstract class Transport<
 		ordered,
 		maxPacketLifeTime,
 		maxRetransmits,
+		sctpStreamId,
 		paused = false,
 		subchannels,
 		appData,
@@ -1114,7 +1115,6 @@ export abstract class Transport<
 
 		let type: DataConsumerType;
 		let sctpStreamParameters: SctpStreamParameters | undefined;
-		let sctpStreamId: number;
 
 		// If this is not a DirectTransport, use sctpStreamParameters from the
 		// DataProducer (if type 'sctp') unless they are given in method parameters.
@@ -1140,10 +1140,9 @@ export abstract class Transport<
 			}
 
 			// This may throw.
-			sctpStreamId = this.getNextSctpStreamId();
-
-			this.#sctpStreamIds![sctpStreamId] = 1;
-			sctpStreamParameters.streamId = sctpStreamId;
+			sctpStreamParameters.streamId = this.getNextSctpStreamId(sctpStreamId);
+			ortc.validateSctpStreamParameters(sctpStreamParameters);
+			this.#sctpStreamIds![sctpStreamParameters.streamId] = 1;
 		}
 		// If this is a DirectTransport, sctpStreamParameters must not be used.
 		else {
@@ -1152,10 +1151,11 @@ export abstract class Transport<
 			if (
 				ordered !== undefined ||
 				maxPacketLifeTime !== undefined ||
-				maxRetransmits !== undefined
+				maxRetransmits !== undefined ||
+				sctpStreamId !== undefined
 			) {
 				logger.warn(
-					'consumeData() | ordered, maxPacketLifeTime and maxRetransmits are ignored when consuming data on a DirectTransport'
+					'consumeData() | ordered, maxPacketLifeTime, maxRetransmits and sctpStreamId are ignored when consuming data on a DirectTransport'
 				);
 			}
 		}
@@ -1214,14 +1214,14 @@ export abstract class Transport<
 			this.dataConsumers.delete(dataConsumer.id);
 
 			if (this.#sctpStreamIds) {
-				this.#sctpStreamIds[sctpStreamId] = 0;
+				this.#sctpStreamIds[sctpStreamParameters!.streamId] = 0;
 			}
 		});
 		dataConsumer.on('@dataproducerclose', () => {
 			this.dataConsumers.delete(dataConsumer.id);
 
 			if (this.#sctpStreamIds) {
-				this.#sctpStreamIds[sctpStreamId] = 0;
+				this.#sctpStreamIds[sctpStreamParameters!.streamId] = 0;
 			}
 		});
 
@@ -1267,7 +1267,7 @@ export abstract class Transport<
 		);
 	}
 
-	private getNextSctpStreamId(): number {
+	private getNextSctpStreamId(sctpStreamId?: number): number {
 		if (
 			!this.#data.sctpParameters ||
 			typeof this.#data.sctpParameters.MIS !== 'number'
@@ -1281,20 +1281,26 @@ export abstract class Transport<
 			this.#sctpStreamIds = Buffer.alloc(numStreams, 0);
 		}
 
-		let sctpStreamId;
+		if (sctpStreamId === undefined) {
+			for (let idx = 0; idx < this.#sctpStreamIds.length; ++idx) {
+				sctpStreamId =
+					(this.#nextSctpStreamId + idx) % this.#sctpStreamIds.length;
 
-		for (let idx = 0; idx < this.#sctpStreamIds.length; ++idx) {
-			sctpStreamId =
-				(this.#nextSctpStreamId + idx) % this.#sctpStreamIds.length;
+				if (!this.#sctpStreamIds[sctpStreamId]) {
+					this.#nextSctpStreamId = sctpStreamId + 1;
 
-			if (!this.#sctpStreamIds[sctpStreamId]) {
-				this.#nextSctpStreamId = sctpStreamId + 1;
-
-				return sctpStreamId;
+					return sctpStreamId;
+				}
 			}
+
+			throw new Error('no sctpStreamId available');
+		} else if (sctpStreamId >= this.#sctpStreamIds.length) {
+			throw new Error('invalid sctpStreamId');
+		} else if (this.#sctpStreamIds[sctpStreamId]) {
+			throw new Error('sctpStreamId already assigned');
 		}
 
-		throw new Error('no sctpStreamId available');
+		return sctpStreamId;
 	}
 }
 

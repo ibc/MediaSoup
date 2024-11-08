@@ -2,6 +2,7 @@ import * as flatbuffers from 'flatbuffers';
 import * as mediasoup from '../';
 import { enhancedOnce } from '../enhancedEvents';
 import { WorkerEvents, ProducerEvents } from '../types';
+import { Producer } from '../Producer';
 import { UnsupportedError } from '../errors';
 import * as utils from '../utils';
 import {
@@ -15,10 +16,10 @@ type TestContext = {
 	mediaCodecs: mediasoup.types.RtpCodecCapability[];
 	audioProducerOptions: mediasoup.types.ProducerOptions;
 	videoProducerOptions: mediasoup.types.ProducerOptions;
-	worker?: mediasoup.types.Worker;
-	router?: mediasoup.types.Router;
-	webRtcTransport1?: mediasoup.types.WebRtcTransport;
-	webRtcTransport2?: mediasoup.types.WebRtcTransport;
+	worker?: mediasoup.types.WorkerInterface;
+	router?: mediasoup.types.RouterInterface;
+	webRtcTransport1?: mediasoup.types.WebRtcTransportInterface;
+	webRtcTransport2?: mediasoup.types.WebRtcTransportInterface;
 };
 
 const ctx: TestContext = {
@@ -680,7 +681,7 @@ test('producer.enableTraceEvent() succeed', async () => {
 
 	expect(dump1.traceEventTypes).toEqual(expect.arrayContaining(['rtp', 'pli']));
 
-	await audioProducer.enableTraceEvent([]);
+	await audioProducer.enableTraceEvent();
 
 	const dump2 = await audioProducer.dump();
 
@@ -726,8 +727,8 @@ test('Producer emits "score"', async () => {
 		ctx.videoProducerOptions
 	);
 
-	// Private API.
-	const channel = videoProducer.channelForTesting;
+	// API not exposed in the interface.
+	const channel = (videoProducer as Producer).channelForTesting;
 	const onScore = jest.fn();
 
 	videoProducer.on('score', onScore);

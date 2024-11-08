@@ -2,6 +2,7 @@ import * as flatbuffers from 'flatbuffers';
 import * as mediasoup from '../';
 import { enhancedOnce } from '../enhancedEvents';
 import { WorkerEvents, ConsumerEvents } from '../types';
+import { Consumer } from '../Consumer';
 import { UnsupportedError } from '../errors';
 import * as utils from '../utils';
 import {
@@ -16,12 +17,12 @@ type TestContext = {
 	audioProducerOptions: mediasoup.types.ProducerOptions;
 	videoProducerOptions: mediasoup.types.ProducerOptions;
 	consumerDeviceCapabilities: mediasoup.types.RtpCapabilities;
-	worker?: mediasoup.types.Worker;
-	router?: mediasoup.types.Router;
-	webRtcTransport1?: mediasoup.types.WebRtcTransport;
-	webRtcTransport2?: mediasoup.types.WebRtcTransport;
-	audioProducer?: mediasoup.types.Producer;
-	videoProducer?: mediasoup.types.Producer;
+	worker?: mediasoup.types.WorkerInterface;
+	router?: mediasoup.types.RouterInterface;
+	webRtcTransport1?: mediasoup.types.WebRtcTransportInterface;
+	webRtcTransport2?: mediasoup.types.WebRtcTransportInterface;
+	audioProducer?: mediasoup.types.ProducerInterface;
+	videoProducer?: mediasoup.types.ProducerInterface;
 };
 
 const ctx: TestContext = {
@@ -975,7 +976,7 @@ test('consumer.enableTraceEvent() succeed', async () => {
 
 	expect(dump1.traceEventTypes).toEqual(expect.arrayContaining(['rtp', 'pli']));
 
-	await audioConsumer.enableTraceEvent([]);
+	await audioConsumer.enableTraceEvent();
 
 	const dump2 = await audioConsumer.dump();
 
@@ -1052,8 +1053,8 @@ test('Consumer emits "score"', async () => {
 		rtpCapabilities: ctx.consumerDeviceCapabilities,
 	});
 
-	// Private API.
-	const channel = audioConsumer.channelForTesting;
+	// API not exposed in the interface.
+	const channel = (audioConsumer as Consumer).channelForTesting;
 	const onScore = jest.fn();
 
 	audioConsumer.on('score', onScore);

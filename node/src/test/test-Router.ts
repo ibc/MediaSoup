@@ -1,12 +1,13 @@
 import * as mediasoup from '../';
 import { enhancedOnce } from '../enhancedEvents';
+import { Worker } from '../Worker';
 import { WorkerEvents, RouterEvents } from '../types';
 import { InvalidStateError } from '../errors';
 import * as utils from '../utils';
 
 type TestContext = {
 	mediaCodecs: mediasoup.types.RtpCodecCapability[];
-	worker?: mediasoup.types.Worker;
+	worker?: mediasoup.types.WorkerInterface;
 };
 
 const ctx: TestContext = {
@@ -94,15 +95,15 @@ test('worker.createRouter() succeeds', async () => {
 		mapDataConsumerIdDataProducerId: {},
 	});
 
-	// Private API.
-	expect(ctx.worker!.routersForTesting.size).toBe(1);
+	// API not exposed in the interface.
+	expect((ctx.worker! as Worker).routersForTesting.size).toBe(1);
 
 	ctx.worker!.close();
 
 	expect(router.closed).toBe(true);
 
-	// Private API.
-	expect(ctx.worker!.routersForTesting.size).toBe(0);
+	// API not exposed in the interface.
+	expect((ctx.worker! as Worker).routersForTesting.size).toBe(0);
 }, 2000);
 
 test('worker.createRouter() with wrong arguments rejects with TypeError', async () => {

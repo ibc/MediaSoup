@@ -1,56 +1,29 @@
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
-import { UnsupportedError } from './errors';
 import {
-	BaseTransportDump,
-	BaseTransportStats,
+	DirectTransportInterface,
+	DirectTransportDump,
+	DirectTransportStat,
+	DirectTransportEvents,
+	DirectTransportObserver,
+	DirectTransportObserverEvents,
+} from './DirectTransportInterface';
+import { TransportInterface, BaseTransportDump } from './TransportInterface';
+import {
+	Transport,
+	TransportConstructorOptions,
 	parseBaseTransportDump,
 	parseBaseTransportStats,
 	parseTransportTraceEventData,
-	Transport,
-	TransportEvents,
-	TransportObserverEvents,
-	TransportConstructorOptions,
 } from './Transport';
 import { SctpParameters } from './SctpParameters';
 import { AppData } from './types';
+import { UnsupportedError } from './errors';
 import { Event, Notification } from './fbs/notification';
 import * as FbsDirectTransport from './fbs/direct-transport';
 import * as FbsTransport from './fbs/transport';
 import * as FbsNotification from './fbs/notification';
 import * as FbsRequest from './fbs/request';
-
-export type DirectTransportOptions<
-	DirectTransportAppData extends AppData = AppData,
-> = {
-	/**
-	 * Maximum allowed size for direct messages sent from DataProducers.
-	 * Default 262144.
-	 */
-	maxMessageSize: number;
-
-	/**
-	 * Custom application data.
-	 */
-	appData?: DirectTransportAppData;
-};
-
-export type DirectTransportDump = BaseTransportDump;
-
-export type DirectTransportStat = BaseTransportStats & {
-	type: string;
-};
-
-export type DirectTransportEvents = TransportEvents & {
-	rtcp: [Buffer];
-};
-
-export type DirectTransportObserver =
-	EnhancedEventEmitter<DirectTransportObserverEvents>;
-
-export type DirectTransportObserverEvents = TransportObserverEvents & {
-	rtcp: [Buffer];
-};
 
 type DirectTransportConstructorOptions<DirectTransportAppData> =
 	TransportConstructorOptions<DirectTransportAppData> & {
@@ -63,13 +36,14 @@ export type DirectTransportData = {
 
 const logger = new Logger('DirectTransport');
 
-export class DirectTransport<
-	DirectTransportAppData extends AppData = AppData,
-> extends Transport<
-	DirectTransportAppData,
-	DirectTransportEvents,
-	DirectTransportObserver
-> {
+export class DirectTransport<DirectTransportAppData extends AppData = AppData>
+	extends Transport<
+		DirectTransportAppData,
+		DirectTransportEvents,
+		DirectTransportObserver
+	>
+	implements TransportInterface, DirectTransportInterface
+{
 	// DirectTransport data.
 	// eslint-disable-next-line no-unused-private-class-members
 	readonly #data: DirectTransportData;
@@ -131,7 +105,7 @@ export class DirectTransport<
 	}
 
 	/**
-	 * Dump Transport.
+	 * Dump DirectTransport.
 	 */
 	async dump(): Promise<DirectTransportDump> {
 		logger.debug('dump()');

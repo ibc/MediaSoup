@@ -8,9 +8,9 @@ type TestContext = {
 	mediaCodecs: mediasoup.types.RtpCodecCapability[];
 	audioProducerOptions: mediasoup.types.ProducerOptions;
 	consumerDeviceCapabilities: mediasoup.types.RtpCapabilities;
-	worker?: mediasoup.types.Worker;
-	router?: mediasoup.types.Router;
-	webRtcTransport?: mediasoup.types.WebRtcTransport;
+	worker?: mediasoup.types.WorkerInterface;
+	router?: mediasoup.types.RouterInterface;
+	webRtcTransport?: mediasoup.types.WebRtcTransportInterface;
 };
 
 const ctx: TestContext = {

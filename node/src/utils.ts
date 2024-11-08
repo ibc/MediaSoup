@@ -1,5 +1,5 @@
 import { randomUUID, randomInt } from 'node:crypto';
-import { ProducerType } from './Producer';
+import { ProducerType } from './ProducerInterface';
 import { Type as FbsRtpParametersType } from './fbs/rtp-parameters';
 
 /**

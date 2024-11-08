@@ -5,12 +5,12 @@ import * as utils from '../utils';
 
 type TestContext = {
 	dataProducerOptions: mediasoup.types.DataProducerOptions;
-	worker?: mediasoup.types.Worker;
-	router?: mediasoup.types.Router;
-	webRtcTransport1?: mediasoup.types.WebRtcTransport;
-	webRtcTransport2?: mediasoup.types.WebRtcTransport;
-	directTransport?: mediasoup.types.DirectTransport;
-	dataProducer?: mediasoup.types.DataProducer;
+	worker?: mediasoup.types.WorkerInterface;
+	router?: mediasoup.types.RouterInterface;
+	webRtcTransport1?: mediasoup.types.WebRtcTransportInterface;
+	webRtcTransport2?: mediasoup.types.WebRtcTransportInterface;
+	directTransport?: mediasoup.types.DirectTransportInterface;
+	dataProducer?: mediasoup.types.DataProducerInterface;
 };
 
 const ctx: TestContext = {

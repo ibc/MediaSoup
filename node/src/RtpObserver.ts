@@ -1,50 +1,26 @@
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
+import { RtpObserverEvents, RtpObserverObserver } from './RtpObserverInterface';
 import { Channel } from './Channel';
 import { RouterInternal } from './Router';
-import { Producer } from './Producer';
+import { ProducerInterface } from './ProducerInterface';
 import { AppData } from './types';
 import * as FbsRequest from './fbs/request';
 import * as FbsRouter from './fbs/router';
 import * as FbsRtpObserver from './fbs/rtp-observer';
 
-export type RtpObserverEvents = {
-	routerclose: [];
-	listenererror: [string, Error];
-	// Private events.
-	'@close': [];
-};
-
-export type RtpObserverObserver =
-	EnhancedEventEmitter<RtpObserverObserverEvents>;
-
-export type RtpObserverObserverEvents = {
-	close: [];
-	pause: [];
-	resume: [];
-	addproducer: [Producer];
-	removeproducer: [Producer];
-};
-
 export type RtpObserverConstructorOptions<RtpObserverAppData> = {
 	internal: RtpObserverObserverInternal;
 	channel: Channel;
 	appData?: RtpObserverAppData;
-	getProducerById: (producerId: string) => Producer | undefined;
+	getProducerById: (producerId: string) => ProducerInterface | undefined;
 };
 
-export type RtpObserverObserverInternal = RouterInternal & {
+type RtpObserverObserverInternal = RouterInternal & {
 	rtpObserverId: string;
 };
 
 const logger = new Logger('RtpObserver');
-
-export type RtpObserverAddRemoveProducerOptions = {
-	/**
-	 * The id of the Producer to be added or removed.
-	 */
-	producerId: string;
-};
 
 export abstract class RtpObserver<
 	RtpObserverAppData extends AppData = AppData,
@@ -69,7 +45,7 @@ export abstract class RtpObserver<
 	// Method to retrieve a Producer.
 	protected readonly getProducerById: (
 		producerId: string
-	) => Producer | undefined;
+	) => ProducerInterface | undefined;
 
 	// Observer instance.
 	readonly #observer: Observer;
@@ -247,9 +223,7 @@ export abstract class RtpObserver<
 	/**
 	 * Add a Producer to the RtpObserver.
 	 */
-	async addProducer({
-		producerId,
-	}: RtpObserverAddRemoveProducerOptions): Promise<void> {
+	async addProducer({ producerId }: { producerId: string }): Promise<void> {
 		logger.debug('addProducer()');
 
 		const producer = this.getProducerById(producerId);
@@ -276,9 +250,7 @@ export abstract class RtpObserver<
 	/**
 	 * Remove a Producer from the RtpObserver.
 	 */
-	async removeProducer({
-		producerId,
-	}: RtpObserverAddRemoveProducerOptions): Promise<void> {
+	async removeProducer({ producerId }: { producerId: string }): Promise<void> {
 		logger.debug('removeProducer()');
 
 		const producer = this.getProducerById(producerId);

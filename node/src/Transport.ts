@@ -2,35 +2,55 @@ import * as flatbuffers from 'flatbuffers';
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
 import * as ortc from './ortc';
+import {
+	TransportInterface,
+	TransportProtocol,
+	TransportPortRange,
+	TransportSocketFlags,
+	TransportTuple,
+	SctpState,
+	RtpListenerDump,
+	SctpListenerDump,
+	RecvRtpHeaderExtensions,
+	BaseTransportDump,
+	BaseTransportStats,
+	TransportTraceEventType,
+	TransportTraceEventData,
+	TransportEvents,
+	TransportObserver,
+} from './TransportInterface';
 import { Channel } from './Channel';
 import { RouterInternal } from './Router';
 import { WebRtcTransportData } from './WebRtcTransport';
 import { PlainTransportData } from './PlainTransport';
 import { PipeTransportData } from './PipeTransport';
 import { DirectTransportData } from './DirectTransport';
+import { ProducerInterface, ProducerOptions } from './ProducerInterface';
+import { Producer, producerTypeFromFbs, producerTypeToFbs } from './Producer';
 import {
-	Producer,
-	ProducerOptions,
-	producerTypeFromFbs,
-	producerTypeToFbs,
-} from './Producer';
-import {
-	Consumer,
+	ConsumerInterface,
 	ConsumerOptions,
 	ConsumerType,
 	ConsumerLayers,
-} from './Consumer';
+} from './ConsumerInterface';
+import { Consumer } from './Consumer';
 import {
-	DataProducer,
+	DataProducerInterface,
 	DataProducerOptions,
 	DataProducerType,
+} from './DataProducerInterface';
+import {
+	DataProducer,
 	dataProducerTypeToFbs,
 	parseDataProducerDumpResponse,
 } from './DataProducer';
 import {
-	DataConsumer,
+	DataConsumerInterface,
 	DataConsumerOptions,
 	DataConsumerType,
+} from './DataConsumerInterface';
+import {
+	DataConsumer,
 	dataConsumerTypeToFbs,
 	parseDataConsumerDumpResponse,
 } from './DataConsumer';
@@ -60,237 +80,20 @@ import * as FbsRouter from './fbs/router';
 import * as FbsRtpParameters from './fbs/rtp-parameters';
 import { SctpState as FbsSctpState } from './fbs/sctp-association/sctp-state';
 
-export type TransportListenInfo = {
-	/**
-	 * Network protocol.
-	 */
-	protocol: TransportProtocol;
-
-	/**
-	 * Listening IPv4 or IPv6.
-	 */
-	ip: string;
-
-	/**
-	 * @deprecated Use |announcedAddress| instead.
-	 *
-	 * Announced IPv4, IPv6 or hostname (useful when running mediasoup behind NAT
-	 * with private IP).
-	 */
-	announcedIp?: string;
-
-	/**
-	 * Announced IPv4, IPv6 or hostname (useful when running mediasoup behind NAT
-	 * with private IP).
-	 */
-	announcedAddress?: string;
-
-	/**
-	 * Listening port.
-	 */
-	port?: number;
-
-	/**
-	 * Listening port range. If given then |port| will be ignored.
-	 */
-	portRange?: TransportPortRange;
-
-	/**
-	 * Socket flags.
-	 */
-	flags?: TransportSocketFlags;
-
-	/**
-	 * Send buffer size (bytes).
-	 */
-	sendBufferSize?: number;
-
-	/**
-	 * Recv buffer size (bytes).
-	 */
-	recvBufferSize?: number;
-};
-
-/**
- * Use TransportListenInfo instead.
- * @deprecated
- */
-export type TransportListenIp = {
-	/**
-	 * Listening IPv4 or IPv6.
-	 */
-	ip: string;
-
-	/**
-	 * Announced IPv4, IPv6 or hostname (useful when running mediasoup behind NAT
-	 * with private IP).
-	 */
-	announcedIp?: string;
-};
-
-/**
- * Transport protocol.
- */
-export type TransportProtocol = 'udp' | 'tcp';
-
-/**
- * Port range..
- */
-export type TransportPortRange = {
-	/**
-	 * Lowest port in the range.
-	 */
-	min: number;
-	/**
-	 * Highest port in the range.
-	 */
-	max: number;
-};
-
-/**
- * UDP/TCP socket flags.
- */
-export type TransportSocketFlags = {
-	/**
-	 * Disable dual-stack support so only IPv6 is used (only if |ip| is IPv6).
-	 */
-	ipv6Only?: boolean;
-	/**
-	 * Make different transports bind to the same IP and port (only for UDP).
-	 * Useful for multicast scenarios with plain transport. Use with caution.
-	 */
-	udpReusePort?: boolean;
-};
-
-export type TransportTuple = {
-	// @deprecated Use localAddress instead.
-	localIp: string;
-	localAddress: string;
-	localPort: number;
-	remoteIp?: string;
-	remotePort?: number;
-	protocol: TransportProtocol;
-};
-
-/**
- * Valid types for 'trace' event.
- */
-export type TransportTraceEventType = 'probation' | 'bwe';
-
-/**
- * 'trace' event data.
- */
-export type TransportTraceEventData = {
-	/**
-	 * Trace type.
-	 */
-	type: TransportTraceEventType;
-
-	/**
-	 * Event timestamp.
-	 */
-	timestamp: number;
-
-	/**
-	 * Event direction.
-	 */
-	direction: 'in' | 'out';
-
-	/**
-	 * Per type information.
-	 */
-	info: any;
-};
-
-export type SctpState =
-	| 'new'
-	| 'connecting'
-	| 'connected'
-	| 'failed'
-	| 'closed';
-
-export type TransportEvents = {
-	routerclose: [];
-	listenserverclose: [];
-	trace: [TransportTraceEventData];
-	listenererror: [string, Error];
-	// Private events.
-	'@close': [];
-	'@newproducer': [Producer];
-	'@producerclose': [Producer];
-	'@newdataproducer': [DataProducer];
-	'@dataproducerclose': [DataProducer];
-	'@listenserverclose': [];
-};
-
-export type TransportObserver = EnhancedEventEmitter<TransportObserverEvents>;
-
-export type TransportObserverEvents = {
-	close: [];
-	newproducer: [Producer];
-	newconsumer: [Consumer];
-	newdataproducer: [DataProducer];
-	newdataconsumer: [DataConsumer];
-	trace: [TransportTraceEventData];
-};
-
 export type TransportConstructorOptions<TransportAppData> = {
 	internal: TransportInternal;
 	data: TransportData;
 	channel: Channel;
 	appData?: TransportAppData;
 	getRouterRtpCapabilities: () => RtpCapabilities;
-	getProducerById: (producerId: string) => Producer | undefined;
-	getDataProducerById: (dataProducerId: string) => DataProducer | undefined;
+	getProducerById: (producerId: string) => ProducerInterface | undefined;
+	getDataProducerById: (
+		dataProducerId: string
+	) => DataProducerInterface | undefined;
 };
 
 export type TransportInternal = RouterInternal & {
 	transportId: string;
-};
-
-export type BaseTransportDump = {
-	id: string;
-	direct: boolean;
-	producerIds: string[];
-	consumerIds: string[];
-	mapSsrcConsumerId: { key: number; value: string }[];
-	mapRtxSsrcConsumerId: { key: number; value: string }[];
-	recvRtpHeaderExtensions: RecvRtpHeaderExtensions;
-	rtpListener: RtpListenerDump;
-	maxMessageSize: number;
-	dataProducerIds: string[];
-	dataConsumerIds: string[];
-	sctpParameters?: SctpParameters;
-	sctpState?: SctpState;
-	sctpListener?: SctpListenerDump;
-	traceEventTypes?: string[];
-};
-
-export type BaseTransportStats = {
-	transportId: string;
-	timestamp: number;
-	sctpState?: SctpState;
-	bytesReceived: number;
-	recvBitrate: number;
-	bytesSent: number;
-	sendBitrate: number;
-	rtpBytesReceived: number;
-	rtpRecvBitrate: number;
-	rtpBytesSent: number;
-	rtpSendBitrate: number;
-	rtxBytesReceived: number;
-	rtxRecvBitrate: number;
-	rtxBytesSent: number;
-	rtxSendBitrate: number;
-	probationBytesSent: number;
-	probationSendBitrate: number;
-	availableOutgoingBitrate?: number;
-	availableIncomingBitrate?: number;
-	maxIncomingBitrate?: number;
-	maxOutgoingBitrate?: number;
-	minOutgoingBitrate?: number;
-	rtpPacketLossReceived?: number;
-	rtpPacketLossSent?: number;
 };
 
 type TransportData =
@@ -299,31 +102,16 @@ type TransportData =
 	| PipeTransportData
 	| DirectTransportData;
 
-type RtpListenerDump = {
-	ssrcTable: { key: number; value: string }[];
-	midTable: { key: number; value: string }[];
-	ridTable: { key: number; value: string }[];
-};
-
-type SctpListenerDump = {
-	streamIdTable: { key: number; value: string }[];
-};
-
-type RecvRtpHeaderExtensions = {
-	mid?: number;
-	rid?: number;
-	rrid?: number;
-	absSendTime?: number;
-	transportWideCc01?: number;
-};
-
 const logger = new Logger('Transport');
 
 export abstract class Transport<
-	TransportAppData extends AppData = AppData,
-	Events extends TransportEvents = TransportEvents,
-	Observer extends TransportObserver = TransportObserver,
-> extends EnhancedEventEmitter<Events> {
+		TransportAppData extends AppData = AppData,
+		Events extends TransportEvents = TransportEvents,
+		Observer extends TransportObserver = TransportObserver,
+	>
+	extends EnhancedEventEmitter<Events>
+	implements TransportInterface
+{
 	// Internal data.
 	protected readonly internal: TransportInternal;
 
@@ -345,24 +133,26 @@ export abstract class Transport<
 	// Method to retrieve a Producer.
 	protected readonly getProducerById: (
 		producerId: string
-	) => Producer | undefined;
+	) => ProducerInterface | undefined;
 
 	// Method to retrieve a DataProducer.
 	protected readonly getDataProducerById: (
 		dataProducerId: string
-	) => DataProducer | undefined;
+	) => DataProducerInterface | undefined;
 
 	// Producers map.
-	readonly #producers: Map<string, Producer> = new Map();
+	readonly #producers: Map<string, ProducerInterface> = new Map();
 
 	// Consumers map.
-	protected readonly consumers: Map<string, Consumer> = new Map();
+	protected readonly consumers: Map<string, ConsumerInterface> = new Map();
 
 	// DataProducers map.
-	protected readonly dataProducers: Map<string, DataProducer> = new Map();
+	protected readonly dataProducers: Map<string, DataProducerInterface> =
+		new Map();
 
 	// DataConsumers map.
-	protected readonly dataConsumers: Map<string, DataConsumer> = new Map();
+	protected readonly dataConsumers: Map<string, DataConsumerInterface> =
+		new Map();
 
 	// RTCP CNAME for Producers.
 	#cnameForProducers?: string;
@@ -732,7 +522,9 @@ export abstract class Transport<
 		paused = false,
 		keyFrameRequestDelay,
 		appData,
-	}: ProducerOptions<ProducerAppData>): Promise<Producer<ProducerAppData>> {
+	}: ProducerOptions<ProducerAppData>): Promise<
+		ProducerInterface<ProducerAppData>
+	> {
 		logger.debug('produce()');
 
 		if (id && this.#producers.has(id)) {
@@ -825,7 +617,7 @@ export abstract class Transport<
 			consumableRtpParameters,
 		};
 
-		const producer: Producer<ProducerAppData> = new Producer({
+		const producer: ProducerInterface<ProducerAppData> = new Producer({
 			internal: {
 				...this.internal,
 				producerId,
@@ -865,7 +657,9 @@ export abstract class Transport<
 		enableRtx,
 		pipe = false,
 		appData,
-	}: ConsumerOptions<ConsumerAppData>): Promise<Consumer<ConsumerAppData>> {
+	}: ConsumerOptions<ConsumerAppData>): Promise<
+		ConsumerInterface<ConsumerAppData>
+	> {
 		logger.debug('consume()');
 
 		if (!producerId || typeof producerId !== 'string') {
@@ -952,7 +746,7 @@ export abstract class Transport<
 			type: pipe ? 'pipe' : (producer.type as ConsumerType),
 		};
 
-		const consumer: Consumer<ConsumerAppData> = new Consumer({
+		const consumer: ConsumerInterface<ConsumerAppData> = new Consumer({
 			internal: {
 				...this.internal,
 				consumerId,
@@ -992,7 +786,7 @@ export abstract class Transport<
 		paused = false,
 		appData,
 	}: DataProducerOptions<DataProducerAppData> = {}): Promise<
-		DataProducer<DataProducerAppData>
+		DataProducerInterface<DataProducerAppData>
 	> {
 		logger.debug('produceData()');
 
@@ -1054,21 +848,22 @@ export abstract class Transport<
 
 		const dump = parseDataProducerDumpResponse(produceDataResponse);
 
-		const dataProducer: DataProducer<DataProducerAppData> = new DataProducer({
-			internal: {
-				...this.internal,
-				dataProducerId,
-			},
-			data: {
-				type: dump.type,
-				sctpStreamParameters: dump.sctpStreamParameters,
-				label: dump.label,
-				protocol: dump.protocol,
-			},
-			channel: this.channel,
-			paused,
-			appData,
-		});
+		const dataProducer: DataProducerInterface<DataProducerAppData> =
+			new DataProducer({
+				internal: {
+					...this.internal,
+					dataProducerId,
+				},
+				data: {
+					type: dump.type,
+					sctpStreamParameters: dump.sctpStreamParameters,
+					label: dump.label,
+					protocol: dump.protocol,
+				},
+				channel: this.channel,
+				paused,
+				appData,
+			});
 
 		this.dataProducers.set(dataProducer.id, dataProducer);
 		dataProducer.on('@close', () => {
@@ -1096,7 +891,7 @@ export abstract class Transport<
 		subchannels,
 		appData,
 	}: DataConsumerOptions<DataConsumerAppData>): Promise<
-		DataConsumer<DataConsumerAppData>
+		DataConsumerInterface<DataConsumerAppData>
 	> {
 		logger.debug('consumeData()');
 
@@ -1189,25 +984,26 @@ export abstract class Transport<
 
 		const dump = parseDataConsumerDumpResponse(consumeDataResponse);
 
-		const dataConsumer: DataConsumer<DataConsumerAppData> = new DataConsumer({
-			internal: {
-				...this.internal,
-				dataConsumerId,
-			},
-			data: {
-				dataProducerId: dump.dataProducerId,
-				type: dump.type,
-				sctpStreamParameters: dump.sctpStreamParameters,
-				label: dump.label,
-				protocol: dump.protocol,
-				bufferedAmountLowThreshold: dump.bufferedAmountLowThreshold,
-			},
-			channel: this.channel,
-			paused: dump.paused,
-			subchannels: dump.subchannels,
-			dataProducerPaused: dump.dataProducerPaused,
-			appData,
-		});
+		const dataConsumer: DataConsumerInterface<DataConsumerAppData> =
+			new DataConsumer({
+				internal: {
+					...this.internal,
+					dataConsumerId,
+				},
+				data: {
+					dataProducerId: dump.dataProducerId,
+					type: dump.type,
+					sctpStreamParameters: dump.sctpStreamParameters,
+					label: dump.label,
+					protocol: dump.protocol,
+					bufferedAmountLowThreshold: dump.bufferedAmountLowThreshold,
+				},
+				channel: this.channel,
+				paused: dump.paused,
+				subchannels: dump.subchannels,
+				dataProducerPaused: dump.dataProducerPaused,
+				appData,
+			});
 
 		this.dataConsumers.set(dataConsumer.id, dataConsumer);
 		dataConsumer.on('@close', () => {
@@ -1617,7 +1413,7 @@ function createConsumeRequest({
 	pipe,
 }: {
 	builder: flatbuffers.Builder;
-	producer: Producer;
+	producer: ProducerInterface;
 	consumerId: string;
 	rtpParameters: RtpParameters;
 	paused: boolean;

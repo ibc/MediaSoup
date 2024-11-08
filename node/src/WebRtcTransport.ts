@@ -2,27 +2,41 @@ import * as flatbuffers from 'flatbuffers';
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
 import {
+	WebRtcTransportInterface,
+	IceParameters,
+	IceCandidate,
+	DtlsParameters,
+	FingerprintAlgorithm,
+	DtlsFingerprint,
+	IceRole,
+	IceState,
+	IceCandidateType,
+	IceCandidateTcpType,
+	DtlsRole,
+	DtlsState,
+	WebRtcTransportDump,
+	WebRtcTransportStat,
+	WebRtcTransportEvents,
+	WebRtcTransportObserver,
+	WebRtcTransportObserverEvents,
+} from './WebRtcTransportInterface';
+import {
+	TransportInterface,
+	TransportTuple,
+	SctpState,
+} from './TransportInterface';
+import {
+	Transport,
+	TransportConstructorOptions,
 	parseSctpState,
 	parseBaseTransportDump,
 	parseBaseTransportStats,
 	parseProtocol,
 	parseTransportTraceEventData,
 	parseTuple,
-	BaseTransportDump,
-	BaseTransportStats,
-	Transport,
-	TransportListenInfo,
-	TransportListenIp,
-	TransportProtocol,
-	TransportTuple,
-	TransportEvents,
-	TransportObserverEvents,
-	TransportConstructorOptions,
-	SctpState,
 } from './Transport';
-import { WebRtcServer } from './WebRtcServer';
-import { SctpParameters, NumSctpStreams } from './SctpParameters';
-import { AppData, Either } from './types';
+import { SctpParameters } from './SctpParameters';
+import { AppData } from './types';
 import { parseVector } from './utils';
 import { Event, Notification } from './fbs/notification';
 import * as FbsRequest from './fbs/request';
@@ -35,196 +49,6 @@ import { IceState as FbsIceState } from './fbs/web-rtc-transport/ice-state';
 import { IceRole as FbsIceRole } from './fbs/web-rtc-transport/ice-role';
 import { IceCandidateType as FbsIceCandidateType } from './fbs/web-rtc-transport/ice-candidate-type';
 import { IceCandidateTcpType as FbsIceCandidateTcpType } from './fbs/web-rtc-transport/ice-candidate-tcp-type';
-
-export type WebRtcTransportOptions<
-	WebRtcTransportAppData extends AppData = AppData,
-> = WebRtcTransportOptionsBase<WebRtcTransportAppData> & WebRtcTransportListen;
-
-type WebRtcTransportListenIndividualListenInfo = {
-	/**
-	 * Listening info.
-	 */
-	listenInfos: TransportListenInfo[];
-};
-
-type WebRtcTransportListenIndividualListenIp = {
-	/**
-	 * Listening IP address or addresses in order of preference (first one is the
-	 * preferred one).
-	 */
-	listenIps: (TransportListenIp | string)[];
-
-	/**
-	 * Fixed port to listen on instead of selecting automatically from Worker's port
-	 * range.
-	 */
-	port?: number;
-};
-
-type WebRtcTransportListenServer = {
-	/**
-	 * Instance of WebRtcServer.
-	 */
-	webRtcServer: WebRtcServer;
-};
-
-type WebRtcTransportListen = Either<
-	Either<
-		WebRtcTransportListenIndividualListenInfo,
-		WebRtcTransportListenIndividualListenIp
-	>,
-	WebRtcTransportListenServer
->;
-
-export type WebRtcTransportOptionsBase<WebRtcTransportAppData> = {
-	/**
-	 * Listen in UDP. Default true.
-	 */
-	enableUdp?: boolean;
-
-	/**
-	 * Listen in TCP. Default true if webrtcServer is given, false otherwise.
-	 */
-	enableTcp?: boolean;
-
-	/**
-	 * Prefer UDP. Default false.
-	 */
-	preferUdp?: boolean;
-
-	/**
-	 * Prefer TCP. Default false.
-	 */
-	preferTcp?: boolean;
-
-	/**
-	 * ICE consent timeout (in seconds). If 0 it is disabled. Default 30.
-	 */
-	iceConsentTimeout?: number;
-
-	/**
-	 * Initial available outgoing bitrate (in bps). Default 600000.
-	 */
-	initialAvailableOutgoingBitrate?: number;
-
-	/**
-	 * Create a SCTP association. Default false.
-	 */
-	enableSctp?: boolean;
-
-	/**
-	 * SCTP streams number.
-	 */
-	numSctpStreams?: NumSctpStreams;
-
-	/**
-	 * Maximum allowed size for SCTP messages sent by DataProducers.
-	 * Default 262144.
-	 */
-	maxSctpMessageSize?: number;
-
-	/**
-	 * Maximum SCTP send buffer used by DataConsumers.
-	 * Default 262144.
-	 */
-	sctpSendBufferSize?: number;
-
-	/**
-	 * Custom application data.
-	 */
-	appData?: WebRtcTransportAppData;
-};
-
-export type IceParameters = {
-	usernameFragment: string;
-	password: string;
-	iceLite?: boolean;
-};
-
-export type IceCandidate = {
-	foundation: string;
-	priority: number;
-	// @deprecated Use |address| instead.
-	ip: string;
-	address: string;
-	protocol: TransportProtocol;
-	port: number;
-	type: IceCandidateType;
-	tcpType?: IceCandidateTcpType;
-};
-
-export type DtlsParameters = {
-	role?: DtlsRole;
-	fingerprints: DtlsFingerprint[];
-};
-
-/**
- * The hash function algorithm (as defined in the "Hash function Textual Names"
- * registry initially specified in RFC 4572 Section 8).
- */
-export type FingerprintAlgorithm =
-	| 'sha-1'
-	| 'sha-224'
-	| 'sha-256'
-	| 'sha-384'
-	| 'sha-512';
-
-/**
- * The hash function algorithm and its corresponding certificate fingerprint
- * value (in lowercase hex string as expressed utilizing the syntax of
- * "fingerprint" in RFC 4572 Section 5).
- */
-export type DtlsFingerprint = {
-	algorithm: FingerprintAlgorithm;
-	value: string;
-};
-
-export type IceRole = 'controlled' | 'controlling';
-
-export type IceState =
-	| 'new'
-	| 'connected'
-	| 'completed'
-	| 'disconnected'
-	| 'closed';
-
-export type IceCandidateType = 'host';
-
-export type IceCandidateTcpType = 'passive';
-
-export type DtlsRole = 'auto' | 'client' | 'server';
-
-export type DtlsState =
-	| 'new'
-	| 'connecting'
-	| 'connected'
-	| 'failed'
-	| 'closed';
-
-export type WebRtcTransportStat = BaseTransportStats & {
-	type: string;
-	iceRole: string;
-	iceState: IceState;
-	iceSelectedTuple?: TransportTuple;
-	dtlsState: DtlsState;
-};
-
-export type WebRtcTransportEvents = TransportEvents & {
-	icestatechange: [IceState];
-	iceselectedtuplechange: [TransportTuple];
-	dtlsstatechange: [DtlsState];
-	sctpstatechange: [SctpState];
-};
-
-export type WebRtcTransportObserver =
-	EnhancedEventEmitter<WebRtcTransportObserverEvents>;
-
-export type WebRtcTransportObserverEvents = TransportObserverEvents & {
-	icestatechange: [IceState];
-	iceselectedtuplechange: [TransportTuple];
-	dtlsstatechange: [DtlsState];
-	sctpstatechange: [SctpState];
-};
 
 type WebRtcTransportConstructorOptions<WebRtcTransportAppData> =
 	TransportConstructorOptions<WebRtcTransportAppData> & {
@@ -244,26 +68,16 @@ export type WebRtcTransportData = {
 	sctpState?: SctpState;
 };
 
-type WebRtcTransportDump = BaseTransportDump & {
-	iceRole: 'controlled';
-	iceParameters: IceParameters;
-	iceCandidates: IceCandidate[];
-	iceState: IceState;
-	iceSelectedTuple?: TransportTuple;
-	dtlsParameters: DtlsParameters;
-	dtlsState: DtlsState;
-	dtlsRemoteCert?: string;
-};
-
 const logger = new Logger('WebRtcTransport');
 
-export class WebRtcTransport<
-	WebRtcTransportAppData extends AppData = AppData,
-> extends Transport<
-	WebRtcTransportAppData,
-	WebRtcTransportEvents,
-	WebRtcTransportObserver
-> {
+export class WebRtcTransport<WebRtcTransportAppData extends AppData = AppData>
+	extends Transport<
+		WebRtcTransportAppData,
+		WebRtcTransportEvents,
+		WebRtcTransportObserver
+	>
+	implements TransportInterface, WebRtcTransportInterface
+{
 	// WebRtcTransport data.
 	readonly #data: WebRtcTransportData;
 
@@ -442,7 +256,7 @@ export class WebRtcTransport<
 	}
 
 	/**
-	 * Dump Transport.
+	 * Dump WebRtcTransport.
 	 */
 	async dump(): Promise<WebRtcTransportDump> {
 		logger.debug('dump()');

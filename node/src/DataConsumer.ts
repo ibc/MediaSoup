@@ -1,5 +1,14 @@
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
+import {
+	DataConsumerInterface,
+	DataConsumerType,
+	DataConsumerDump,
+	DataConsumerStat,
+	DataConsumerEvents,
+	DataConsumerObserver,
+	DataConsumerObserverEvents,
+} from './DataConsumerInterface';
 import { Channel } from './Channel';
 import { TransportInternal } from './Transport';
 import {
@@ -13,100 +22,6 @@ import * as FbsTransport from './fbs/transport';
 import * as FbsRequest from './fbs/request';
 import * as FbsDataConsumer from './fbs/data-consumer';
 import * as FbsDataProducer from './fbs/data-producer';
-
-export type DataConsumerOptions<DataConsumerAppData extends AppData = AppData> =
-	{
-		/**
-		 * The id of the DataProducer to consume.
-		 */
-		dataProducerId: string;
-
-		/**
-		 * Just if consuming over SCTP.
-		 * Whether data messages must be received in order. If true the messages will
-		 * be sent reliably. Defaults to the value in the DataProducer if it has type
-		 * 'sctp' or to true if it has type 'direct'.
-		 */
-		ordered?: boolean;
-
-		/**
-		 * Just if consuming over SCTP.
-		 * When ordered is false indicates the time (in milliseconds) after which a
-		 * SCTP packet will stop being retransmitted. Defaults to the value in the
-		 * DataProducer if it has type 'sctp' or unset if it has type 'direct'.
-		 */
-		maxPacketLifeTime?: number;
-
-		/**
-		 * Just if consuming over SCTP.
-		 * When ordered is false indicates the maximum number of times a packet will
-		 * be retransmitted. Defaults to the value in the DataProducer if it has type
-		 * 'sctp' or unset if it has type 'direct'.
-		 */
-		maxRetransmits?: number;
-
-		/**
-		 * Whether the data consumer must start in paused mode. Default false.
-		 */
-		paused?: boolean;
-
-		/**
-		 * Subchannels this data consumer initially subscribes to.
-		 * Only used in case this data consumer receives messages from a local data
-		 * producer that specifies subchannel(s) when calling send().
-		 */
-		subchannels?: number[];
-
-		/**
-		 * Custom application data.
-		 */
-		appData?: DataConsumerAppData;
-	};
-
-export type DataConsumerStat = {
-	type: string;
-	timestamp: number;
-	label: string;
-	protocol: string;
-	messagesSent: number;
-	bytesSent: number;
-	bufferedAmount: number;
-};
-
-/**
- * DataConsumer type.
- */
-export type DataConsumerType = 'sctp' | 'direct';
-
-export type DataConsumerEvents = {
-	transportclose: [];
-	dataproducerclose: [];
-	dataproducerpause: [];
-	dataproducerresume: [];
-	message: [Buffer, number];
-	sctpsendbufferfull: [];
-	bufferedamountlow: [number];
-	listenererror: [string, Error];
-	// Private events.
-	'@close': [];
-	'@dataproducerclose': [];
-};
-
-export type DataConsumerObserver =
-	EnhancedEventEmitter<DataConsumerObserverEvents>;
-
-export type DataConsumerObserverEvents = {
-	close: [];
-	pause: [];
-	resume: [];
-};
-
-type DataConsumerDump = DataConsumerData & {
-	id: string;
-	paused: boolean;
-	dataProducerPaused: boolean;
-	subchannels: number[];
-};
 
 type DataConsumerInternal = TransportInternal & {
 	dataConsumerId: string;
@@ -123,9 +38,10 @@ type DataConsumerData = {
 
 const logger = new Logger('DataConsumer');
 
-export class DataConsumer<
-	DataConsumerAppData extends AppData = AppData,
-> extends EnhancedEventEmitter<DataConsumerEvents> {
+export class DataConsumer<DataConsumerAppData extends AppData = AppData>
+	extends EnhancedEventEmitter<DataConsumerEvents>
+	implements DataConsumerInterface
+{
 	// Internal data.
 	readonly #internal: DataConsumerInternal;
 
@@ -448,6 +364,26 @@ export class DataConsumer<
 	}
 
 	/**
+	 * Get buffered amount size.
+	 */
+	async getBufferedAmount(): Promise<number> {
+		logger.debug('getBufferedAmount()');
+
+		const response = await this.#channel.request(
+			FbsRequest.Method.DATACONSUMER_GET_BUFFERED_AMOUNT,
+			undefined,
+			undefined,
+			this.#internal.dataConsumerId
+		);
+
+		const data = new FbsDataConsumer.GetBufferedAmountResponse();
+
+		response.body(data);
+
+		return data.bufferedAmount();
+	}
+
+	/**
 	 * Send data.
 	 */
 	async send(message: string | Buffer, ppid?: number): Promise<void> {
@@ -511,26 +447,6 @@ export class DataConsumer<
 			requestOffset,
 			this.#internal.dataConsumerId
 		);
-	}
-
-	/**
-	 * Get buffered amount size.
-	 */
-	async getBufferedAmount(): Promise<number> {
-		logger.debug('getBufferedAmount()');
-
-		const response = await this.#channel.request(
-			FbsRequest.Method.DATACONSUMER_GET_BUFFERED_AMOUNT,
-			undefined,
-			undefined,
-			this.#internal.dataConsumerId
-		);
-
-		const data = new FbsDataConsumer.GetBufferedAmountResponse();
-
-		response.body(data);
-
-		return data.bufferedAmount();
 	}
 
 	/**

@@ -1,5 +1,14 @@
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
+import {
+	DataProducerInterface,
+	DataProducerType,
+	DataProducerDump,
+	DataProducerStat,
+	DataProducerEvents,
+	DataProducerObserver,
+	DataProducerObserverEvents,
+} from './DataProducerInterface';
 import { Channel } from './Channel';
 import { TransportInternal } from './Transport';
 import {
@@ -11,75 +20,6 @@ import * as FbsTransport from './fbs/transport';
 import * as FbsNotification from './fbs/notification';
 import * as FbsRequest from './fbs/request';
 import * as FbsDataProducer from './fbs/data-producer';
-
-export type DataProducerOptions<DataProducerAppData extends AppData = AppData> =
-	{
-		/**
-		 * DataProducer id (just for Router.pipeToRouter() method).
-		 */
-		id?: string;
-
-		/**
-		 * SCTP parameters defining how the endpoint is sending the data.
-		 * Just if messages are sent over SCTP.
-		 */
-		sctpStreamParameters?: SctpStreamParameters;
-
-		/**
-		 * A label which can be used to distinguish this DataChannel from others.
-		 */
-		label?: string;
-
-		/**
-		 * Name of the sub-protocol used by this DataChannel.
-		 */
-		protocol?: string;
-
-		/**
-		 * Whether the data producer must start in paused mode. Default false.
-		 */
-		paused?: boolean;
-
-		/**
-		 * Custom application data.
-		 */
-		appData?: DataProducerAppData;
-	};
-
-export type DataProducerStat = {
-	type: string;
-	timestamp: number;
-	label: string;
-	protocol: string;
-	messagesReceived: number;
-	bytesReceived: number;
-};
-
-/**
- * DataProducer type.
- */
-export type DataProducerType = 'sctp' | 'direct';
-
-export type DataProducerEvents = {
-	transportclose: [];
-	listenererror: [string, Error];
-	// Private events.
-	'@close': [];
-};
-
-export type DataProducerObserver =
-	EnhancedEventEmitter<DataProducerObserverEvents>;
-
-export type DataProducerObserverEvents = {
-	close: [];
-	pause: [];
-	resume: [];
-};
-
-type DataProducerDump = DataProducerData & {
-	id: string;
-	paused: boolean;
-};
 
 type DataProducerInternal = TransportInternal & {
 	dataProducerId: string;
@@ -94,9 +34,10 @@ type DataProducerData = {
 
 const logger = new Logger('DataProducer');
 
-export class DataProducer<
-	DataProducerAppData extends AppData = AppData,
-> extends EnhancedEventEmitter<DataProducerEvents> {
+export class DataProducer<DataProducerAppData extends AppData = AppData>
+	extends EnhancedEventEmitter<DataProducerEvents>
+	implements DataProducerInterface
+{
 	// Internal data.
 	readonly #internal: DataProducerInternal;
 

@@ -1,44 +1,17 @@
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
 import {
-	RtpObserver,
-	RtpObserverEvents,
-	RtpObserverObserverEvents,
-	RtpObserverConstructorOptions,
-} from './RtpObserver';
-import { Producer } from './Producer';
+	ActiveSpeakerObserverInterface,
+	ActiveSpeakerObserverDominantSpeaker,
+	ActiveSpeakerObserverEvents,
+	ActiveSpeakerObserverObserver,
+	ActiveSpeakerObserverObserverEvents,
+} from './ActiveSpeakerObserverInterface';
+import { RtpObserverInterface } from './RtpObserverInterface';
+import { RtpObserver, RtpObserverConstructorOptions } from './RtpObserver';
 import { AppData } from './types';
 import { Event, Notification } from './fbs/notification';
 import * as FbsActiveSpeakerObserver from './fbs/active-speaker-observer';
-
-export type ActiveSpeakerObserverOptions<
-	ActiveSpeakerObserverAppData extends AppData = AppData,
-> = {
-	interval?: number;
-
-	/**
-	 * Custom application data.
-	 */
-	appData?: ActiveSpeakerObserverAppData;
-};
-
-export type ActiveSpeakerObserverDominantSpeaker = {
-	/**
-	 * The audio Producer instance.
-	 */
-	producer: Producer;
-};
-
-export type ActiveSpeakerObserverEvents = RtpObserverEvents & {
-	dominantspeaker: [ActiveSpeakerObserverDominantSpeaker];
-};
-
-export type ActiveSpeakerObserverObserver =
-	EnhancedEventEmitter<ActiveSpeakerObserverObserverEvents>;
-
-export type ActiveSpeakerObserverObserverEvents = RtpObserverObserverEvents & {
-	dominantspeaker: [ActiveSpeakerObserverDominantSpeaker];
-};
 
 type RtpObserverObserverConstructorOptions<ActiveSpeakerObserverAppData> =
 	RtpObserverConstructorOptions<ActiveSpeakerObserverAppData>;
@@ -46,12 +19,15 @@ type RtpObserverObserverConstructorOptions<ActiveSpeakerObserverAppData> =
 const logger = new Logger('ActiveSpeakerObserver');
 
 export class ActiveSpeakerObserver<
-	ActiveSpeakerObserverAppData extends AppData = AppData,
-> extends RtpObserver<
-	ActiveSpeakerObserverAppData,
-	ActiveSpeakerObserverEvents,
-	ActiveSpeakerObserverObserver
-> {
+		ActiveSpeakerObserverAppData extends AppData = AppData,
+	>
+	extends RtpObserver<
+		ActiveSpeakerObserverAppData,
+		ActiveSpeakerObserverEvents,
+		ActiveSpeakerObserverObserver
+	>
+	implements RtpObserverInterface, ActiveSpeakerObserverInterface
+{
 	/**
 	 * @private
 	 */

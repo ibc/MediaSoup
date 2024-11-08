@@ -3,8 +3,10 @@ import * as flatbuffers from 'flatbuffers';
 import * as mediasoup from '../';
 import { enhancedOnce } from '../enhancedEvents';
 import { WorkerEvents, WebRtcTransportEvents } from '../types';
+import { WebRtcTransport } from '../WebRtcTransport';
+import { TransportTuple } from '../TransportInterface';
+import { serializeProtocol } from '../Transport';
 import * as utils from '../utils';
-import { serializeProtocol, TransportTuple } from '../Transport';
 import {
 	Notification,
 	Body as NotificationBody,
@@ -15,8 +17,8 @@ import * as FbsWebRtcTransport from '../fbs/web-rtc-transport';
 
 type TestContext = {
 	mediaCodecs: mediasoup.types.RtpCodecCapability[];
-	worker?: mediasoup.types.Worker;
-	router?: mediasoup.types.Router;
+	worker?: mediasoup.types.WorkerInterface;
+	router?: mediasoup.types.RouterInterface;
 };
 
 const ctx: TestContext = {
@@ -620,7 +622,7 @@ test('transport.enableTraceEvent() succeed', async () => {
 		traceEventTypes: ['probation'],
 	});
 
-	await webRtcTransport.enableTraceEvent([]);
+	await webRtcTransport.enableTraceEvent();
 	await expect(webRtcTransport.dump()).resolves.toMatchObject({
 		traceEventTypes: [],
 	});
@@ -667,8 +669,8 @@ test('WebRtcTransport events succeed', async () => {
 		],
 	});
 
-	// Private API.
-	const channel = webRtcTransport.channelForTesting;
+	// API not exposed in the interface.
+	const channel = (webRtcTransport as WebRtcTransport).channelForTesting;
 	const onIceStateChange = jest.fn();
 
 	webRtcTransport.on('icestatechange', onIceStateChange);

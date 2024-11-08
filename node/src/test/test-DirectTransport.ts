@@ -1,10 +1,11 @@
 import * as mediasoup from '../';
 import { enhancedOnce } from '../enhancedEvents';
-import { WorkerEvents, DirectTransportEvents } from '../types';
+import { DirectTransportEvents } from '../DirectTransportInterface';
+import { WorkerEvents } from '../types';
 
 type TestContext = {
-	worker?: mediasoup.types.Worker;
-	router?: mediasoup.types.Router;
+	worker?: mediasoup.types.WorkerInterface;
+	router?: mediasoup.types.RouterInterface;
 };
 
 const ctx: TestContext = {};

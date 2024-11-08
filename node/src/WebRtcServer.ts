@@ -1,71 +1,22 @@
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
 import { Channel } from './Channel';
-import { TransportListenInfo } from './Transport';
-import { WebRtcTransport } from './WebRtcTransport';
+import {
+	WebRtcServerInterface,
+	IpPort,
+	IceUserNameFragment,
+	TupleHash,
+	WebRtcServerDump,
+	WebRtcServerEvents,
+	WebRtcServerObserver,
+	WebRtcServerObserverEvents,
+} from './WebRtcServerInterface';
+import { WebRtcTransportInterface } from './WebRtcTransportInterface';
 import { AppData } from './types';
 import * as utils from './utils';
 import { Body as RequestBody, Method } from './fbs/request';
 import * as FbsWorker from './fbs/worker';
 import * as FbsWebRtcServer from './fbs/web-rtc-server';
-
-export type WebRtcServerOptions<WebRtcServerAppData extends AppData = AppData> =
-	{
-		/**
-		 * Listen infos.
-		 */
-		listenInfos: TransportListenInfo[];
-
-		/**
-		 * Custom application data.
-		 */
-		appData?: WebRtcServerAppData;
-	};
-
-/**
- * @deprecated Use TransportListenInfo instead.
- */
-export type WebRtcServerListenInfo = TransportListenInfo;
-
-export type WebRtcServerEvents = {
-	workerclose: [];
-	listenererror: [string, Error];
-	// Private events.
-	'@close': [];
-};
-
-export type WebRtcServerObserver =
-	EnhancedEventEmitter<WebRtcServerObserverEvents>;
-
-export type WebRtcServerObserverEvents = {
-	close: [];
-	webrtctransporthandled: [WebRtcTransport];
-	webrtctransportunhandled: [WebRtcTransport];
-};
-
-export type WebRtcServerDump = {
-	id: string;
-	udpSockets: IpPort[];
-	tcpServers: IpPort[];
-	webRtcTransportIds: string[];
-	localIceUsernameFragments: IceUserNameFragment[];
-	tupleHashes: TupleHash[];
-};
-
-type IpPort = {
-	ip: string;
-	port: number;
-};
-
-type IceUserNameFragment = {
-	localIceUsernameFragment: string;
-	webRtcTransportId: string;
-};
-
-type TupleHash = {
-	tupleHash: number;
-	webRtcTransportId: string;
-};
 
 type WebRtcServerInternal = {
 	webRtcServerId: string;
@@ -73,9 +24,10 @@ type WebRtcServerInternal = {
 
 const logger = new Logger('WebRtcServer');
 
-export class WebRtcServer<
-	WebRtcServerAppData extends AppData = AppData,
-> extends EnhancedEventEmitter<WebRtcServerEvents> {
+export class WebRtcServer<WebRtcServerAppData extends AppData = AppData>
+	extends EnhancedEventEmitter<WebRtcServerEvents>
+	implements WebRtcServerInterface
+{
 	// Internal data.
 	readonly #internal: WebRtcServerInternal;
 
@@ -89,7 +41,7 @@ export class WebRtcServer<
 	#appData: WebRtcServerAppData;
 
 	// Transports map.
-	readonly #webRtcTransports: Map<string, WebRtcTransport> = new Map();
+	readonly #webRtcTransports: Map<string, WebRtcTransportInterface> = new Map();
 
 	// Observer instance.
 	readonly #observer: WebRtcServerObserver =
@@ -155,7 +107,7 @@ export class WebRtcServer<
 	 * @private
 	 * Just for testing purposes.
 	 */
-	get webRtcTransportsForTesting(): Map<string, WebRtcTransport> {
+	get webRtcTransportsForTesting(): Map<string, WebRtcTransportInterface> {
 		return this.#webRtcTransports;
 	}
 
@@ -247,7 +199,7 @@ export class WebRtcServer<
 	/**
 	 * @private
 	 */
-	handleWebRtcTransport(webRtcTransport: WebRtcTransport): void {
+	handleWebRtcTransport(webRtcTransport: WebRtcTransportInterface): void {
 		this.#webRtcTransports.set(webRtcTransport.id, webRtcTransport);
 
 		// Emit observer event.

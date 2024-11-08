@@ -6,11 +6,11 @@ import { enhancedOnce } from '../enhancedEvents';
 import { WorkerEvents } from '../types';
 
 type TestContext = {
-	worker?: mediasoup.types.Worker;
-	router?: mediasoup.types.Router;
-	plainTransport?: mediasoup.types.PlainTransport;
-	dataProducer?: mediasoup.types.DataProducer;
-	dataConsumer?: mediasoup.types.DataConsumer;
+	worker?: mediasoup.types.WorkerInterface;
+	router?: mediasoup.types.RouterInterface;
+	plainTransport?: mediasoup.types.PlainTransportInterface;
+	dataProducer?: mediasoup.types.DataProducerInterface;
+	dataConsumer?: mediasoup.types.DataConsumerInterface;
 	udpSocket?: dgram.Socket;
 	sctpSocket?: any;
 	sctpSendStreamId?: number;

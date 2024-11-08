@@ -45,15 +45,6 @@ export { workerBin };
 const logger = new Logger();
 
 /**
- * Event listeners for mediasoup generated logs.
- */
-export type LogEventListeners = {
-	ondebug?: (namespace: string, log: string) => void;
-	onwarn?: (namespace: string, log: string) => void;
-	onerror?: (namespace: string, log: string, error?: Error) => void;
-};
-
-/**
  * Set event listeners for mediasoup generated logs. If called with no arguments
  * then no events will be emitted.
  *
@@ -74,7 +65,9 @@ export type LogEventListeners = {
  * });
  * ```
  */
-export function setLogEventListeners(listeners?: LogEventListeners): void {
+export function setLogEventListeners(
+	listeners?: types.LogEventListeners
+): void {
 	logger.debug('setLogEventListeners()');
 
 	let debugLogEmitter: LoggerEmitter | undefined;

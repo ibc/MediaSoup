@@ -1,24 +1,26 @@
 export type { Observer, ObserverEvents, LogEventListeners } from './index';
+export type * from './WorkerTypes';
+export type * from './WebRtcServerTypes';
+export type * from './RouterTypes';
+export type * from './TransportTypes';
+export type * from './WebRtcTransportTypes';
+export type * from './PlainTransportTypes';
+export type * from './PipeTransportTypes';
+export type * from './DirectTransportTypes';
+export type * from './ProducerTypes';
+export type * from './ConsumerTypes';
+export type * from './DataProducerTypes';
+export type * from './DataConsumerTypes';
+export type * from './RtpObserverTypes';
+export type * from './ActiveSpeakerObserverTypes';
+export type * from './AudioLevelObserverTypes';
 export type * from './RtpParameters';
 export type * from './SctpParameters';
 export type * from './SrtpParameters';
 export type * from './scalabilityModes';
 
-export * from './WorkerInterface';
-export * from './WebRtcServerInterface';
-export * from './RouterInterface';
-export * from './TransportInterface';
-export * from './WebRtcTransportInterface';
-export * from './PlainTransportInterface';
-export * from './PipeTransportInterface';
-export * from './DirectTransportInterface';
-export * from './ProducerInterface';
-export * from './ConsumerInterface';
-export * from './DataProducerInterface';
-export * from './DataConsumerInterface';
-export * from './RtpObserverInterface';
-export * from './ActiveSpeakerObserverInterface';
-export * from './AudioLevelObserverInterface';
+// TODO: Here we are exporting real classes rather than types. This should
+// be exported somehow else rather than in mediasoup.types namespace.
 export * from './errors';
 
 type Only<T, U> = {

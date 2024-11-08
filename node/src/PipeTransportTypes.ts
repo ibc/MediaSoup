@@ -9,8 +9,8 @@ import {
 	BaseTransportStats,
 	TransportEvents,
 	TransportObserverEvents,
-} from './TransportInterface';
-import { ConsumerInterface } from './ConsumerInterface';
+} from './TransportTypes';
+import { ConsumerInterface } from './ConsumerTypes';
 import { SrtpParameters } from './SrtpParameters';
 import { SctpParameters, NumSctpStreams } from './SctpParameters';
 import { Either, AppData } from './types';

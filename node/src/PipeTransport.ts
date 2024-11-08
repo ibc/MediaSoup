@@ -10,14 +10,14 @@ import {
 	PipeTransportEvents,
 	PipeTransportObserver,
 	PipeTransportObserverEvents,
-} from './PipeTransportInterface';
+} from './PipeTransportTypes';
 import {
 	TransportInterface,
 	TransportTuple,
 	SctpState,
-} from './TransportInterface';
+} from './TransportTypes';
 import {
-	Transport,
+	TransportImpl,
 	TransportConstructorOptions,
 	parseBaseTransportDump,
 	parseBaseTransportStats,
@@ -25,9 +25,9 @@ import {
 	parseTuple,
 	parseTransportTraceEventData,
 } from './Transport';
-import { ProducerInterface } from './ProducerInterface';
-import { ConsumerInterface, ConsumerType } from './ConsumerInterface';
-import { Consumer } from './Consumer';
+import { ProducerInterface } from './ProducerTypes';
+import { ConsumerInterface, ConsumerType } from './ConsumerTypes';
+import { ConsumerImpl } from './Consumer';
 import {
 	RtpParameters,
 	serializeRtpEncodingParameters,
@@ -64,7 +64,7 @@ export type PipeTransportData = {
 const logger = new Logger('PipeTransport');
 
 export class PipeTransport<PipeTransportAppData extends AppData = AppData>
-	extends Transport<
+	extends TransportImpl<
 		PipeTransportAppData,
 		PipeTransportEvents,
 		PipeTransportObserver
@@ -317,7 +317,7 @@ export class PipeTransport<PipeTransportAppData extends AppData = AppData>
 			type: 'pipe' as ConsumerType,
 		};
 
-		const consumer: ConsumerInterface<ConsumerAppData> = new Consumer({
+		const consumer: ConsumerInterface<ConsumerAppData> = new ConsumerImpl({
 			internal: {
 				...this.internal,
 				consumerId,

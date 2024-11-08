@@ -8,7 +8,7 @@ import {
 	DataConsumerEvents,
 	DataConsumerObserver,
 	DataConsumerObserverEvents,
-} from './DataConsumerInterface';
+} from './DataConsumerTypes';
 import { Channel } from './Channel';
 import { TransportInternal } from './Transport';
 import {
@@ -38,7 +38,7 @@ type DataConsumerData = {
 
 const logger = new Logger('DataConsumer');
 
-export class DataConsumer<DataConsumerAppData extends AppData = AppData>
+export class DataConsumerImpl<DataConsumerAppData extends AppData = AppData>
 	extends EnhancedEventEmitter<DataConsumerEvents>
 	implements DataConsumerInterface
 {

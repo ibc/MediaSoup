@@ -3,36 +3,36 @@ import {
 	TransportInterface,
 	TransportListenInfo,
 	TransportListenIp,
-} from './TransportInterface';
+} from './TransportTypes';
 import {
 	WebRtcTransportInterface,
 	WebRtcTransportOptions,
-} from './WebRtcTransportInterface';
+} from './WebRtcTransportTypes';
 import {
 	PlainTransportInterface,
 	PlainTransportOptions,
-} from './PlainTransportInterface';
+} from './PlainTransportTypes';
 import {
 	PipeTransportInterface,
 	PipeTransportOptions,
-} from './PipeTransportInterface';
+} from './PipeTransportTypes';
 import {
 	DirectTransportInterface,
 	DirectTransportOptions,
-} from './DirectTransportInterface';
-import { ProducerInterface } from './ProducerInterface';
-import { ConsumerInterface } from './ConsumerInterface';
-import { DataProducerInterface } from './DataProducerInterface';
-import { DataConsumerInterface } from './DataConsumerInterface';
-import { RtpObserverInterface } from './RtpObserverInterface';
+} from './DirectTransportTypes';
+import { ProducerInterface } from './ProducerTypes';
+import { ConsumerInterface } from './ConsumerTypes';
+import { DataProducerInterface } from './DataProducerTypes';
+import { DataConsumerInterface } from './DataConsumerTypes';
+import { RtpObserverInterface } from './RtpObserverTypes';
 import {
 	ActiveSpeakerObserverInterface,
 	ActiveSpeakerObserverOptions,
-} from './ActiveSpeakerObserverInterface';
+} from './ActiveSpeakerObserverTypes';
 import {
 	AudioLevelObserverInterface,
 	AudioLevelObserverOptions,
-} from './AudioLevelObserverInterface';
+} from './AudioLevelObserverTypes';
 import { RtpCapabilities, RtpCodecCapability } from './RtpParameters';
 import { NumSctpStreams } from './SctpParameters';
 import { Either, AppData } from './types';

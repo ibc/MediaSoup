@@ -6,10 +6,10 @@ import {
 	AudioLevelObserverEvents,
 	AudioLevelObserverObserver,
 	AudioLevelObserverObserverEvents,
-} from './AudioLevelObserverInterface';
-import { RtpObserverInterface } from './RtpObserverInterface';
-import { RtpObserver, RtpObserverConstructorOptions } from './RtpObserver';
-import { ProducerInterface } from './ProducerInterface';
+} from './AudioLevelObserverTypes';
+import { RtpObserverInterface } from './RtpObserverTypes';
+import { RtpObserverImpl, RtpObserverConstructorOptions } from './RtpObserver';
+import { ProducerInterface } from './ProducerTypes';
 import { AppData } from './types';
 import * as utils from './utils';
 import { Event, Notification } from './fbs/notification';
@@ -20,10 +20,10 @@ type AudioLevelObserverConstructorOptions<AudioLevelObserverAppData> =
 
 const logger = new Logger('AudioLevelObserver');
 
-export class AudioLevelObserver<
+export class AudioLevelObserverImpl<
 		AudioLevelObserverAppData extends AppData = AppData,
 	>
-	extends RtpObserver<
+	extends RtpObserverImpl<
 		AudioLevelObserverAppData,
 		AudioLevelObserverEvents,
 		AudioLevelObserverObserver

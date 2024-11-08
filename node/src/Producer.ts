@@ -12,7 +12,7 @@ import {
 	ProducerEvents,
 	ProducerObserver,
 	ProducerObserverEvents,
-} from './ProducerInterface';
+} from './ProducerTypes';
 import { Channel } from './Channel';
 import { TransportInternal } from './Transport';
 import { MediaKind, RtpParameters, parseRtpParameters } from './RtpParameters';
@@ -41,7 +41,7 @@ type ProducerData = {
 	consumableRtpParameters: RtpParameters;
 };
 
-export class Producer<ProducerAppData extends AppData = AppData>
+export class ProducerImpl<ProducerAppData extends AppData = AppData>
 	extends EnhancedEventEmitter<ProducerEvents>
 	implements ProducerInterface
 {

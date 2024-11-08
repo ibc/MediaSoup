@@ -2,7 +2,7 @@ import * as flatbuffers from 'flatbuffers';
 import * as mediasoup from '../';
 import { enhancedOnce } from '../enhancedEvents';
 import { WorkerEvents, ProducerEvents } from '../types';
-import { Producer } from '../Producer';
+import { ProducerImpl } from '../Producer';
 import { UnsupportedError } from '../errors';
 import * as utils from '../utils';
 import {
@@ -728,7 +728,7 @@ test('Producer emits "score"', async () => {
 	);
 
 	// API not exposed in the interface.
-	const channel = (videoProducer as Producer).channelForTesting;
+	const channel = (videoProducer as ProducerImpl).channelForTesting;
 	const onScore = jest.fn();
 
 	videoProducer.on('score', onScore);

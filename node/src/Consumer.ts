@@ -21,10 +21,10 @@ import {
 	ConsumerEvents,
 	ConsumerObserver,
 	ConsumerObserverEvents,
-} from './ConsumerInterface';
+} from './ConsumerTypes';
 import { Channel } from './Channel';
 import { TransportInternal } from './Transport';
-import { ProducerStat } from './ProducerInterface';
+import { ProducerStat } from './ProducerTypes';
 import {
 	MediaKind,
 	RtpParameters,
@@ -58,7 +58,7 @@ type ConsumerData = {
 
 const logger = new Logger('Consumer');
 
-export class Consumer<ConsumerAppData extends AppData = AppData>
+export class ConsumerImpl<ConsumerAppData extends AppData = AppData>
 	extends EnhancedEventEmitter<ConsumerEvents>
 	implements ConsumerInterface
 {

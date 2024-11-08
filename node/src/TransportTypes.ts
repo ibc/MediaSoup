@@ -1,14 +1,14 @@
 import { EnhancedEventEmitter } from './enhancedEvents';
-import { ProducerInterface, ProducerOptions } from './ProducerInterface';
-import { ConsumerInterface, ConsumerOptions } from './ConsumerInterface';
+import { ProducerInterface, ProducerOptions } from './ProducerTypes';
+import { ConsumerInterface, ConsumerOptions } from './ConsumerTypes';
 import {
 	DataProducerInterface,
 	DataProducerOptions,
-} from './DataProducerInterface';
+} from './DataProducerTypes';
 import {
 	DataConsumerInterface,
 	DataConsumerOptions,
-} from './DataConsumerInterface';
+} from './DataConsumerTypes';
 import { SctpParameters } from './SctpParameters';
 import { AppData } from './types';
 

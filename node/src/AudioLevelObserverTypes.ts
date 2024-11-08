@@ -3,8 +3,8 @@ import {
 	RtpObserverInterface,
 	RtpObserverEvents,
 	RtpObserverObserverEvents,
-} from './RtpObserverInterface';
-import { ProducerInterface } from './ProducerInterface';
+} from './RtpObserverTypes';
+import { ProducerInterface } from './ProducerTypes';
 import { AppData } from './types';
 
 export type AudioLevelObserverOptions<

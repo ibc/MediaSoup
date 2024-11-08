@@ -5,7 +5,7 @@ import {
 	BaseTransportStats,
 	TransportEvents,
 	TransportObserverEvents,
-} from './TransportInterface';
+} from './TransportTypes';
 import { AppData } from './types';
 
 export type DirectTransportOptions<

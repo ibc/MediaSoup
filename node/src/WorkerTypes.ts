@@ -2,8 +2,8 @@ import { EnhancedEventEmitter } from './enhancedEvents';
 import {
 	WebRtcServerInterface,
 	WebRtcServerOptions,
-} from './WebRtcServerInterface';
-import { RouterInterface, RouterOptions } from './RouterInterface';
+} from './WebRtcServerTypes';
+import { RouterInterface, RouterOptions } from './RouterTypes';
 import { AppData } from './types';
 
 export type WorkerLogLevel = 'debug' | 'warn' | 'error' | 'none';

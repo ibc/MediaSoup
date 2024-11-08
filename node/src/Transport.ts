@@ -18,29 +18,33 @@ import {
 	TransportTraceEventData,
 	TransportEvents,
 	TransportObserver,
-} from './TransportInterface';
+} from './TransportTypes';
 import { Channel } from './Channel';
 import { RouterInternal } from './Router';
 import { WebRtcTransportData } from './WebRtcTransport';
 import { PlainTransportData } from './PlainTransport';
 import { PipeTransportData } from './PipeTransport';
 import { DirectTransportData } from './DirectTransport';
-import { ProducerInterface, ProducerOptions } from './ProducerInterface';
-import { Producer, producerTypeFromFbs, producerTypeToFbs } from './Producer';
+import { ProducerInterface, ProducerOptions } from './ProducerTypes';
+import {
+	ProducerImpl,
+	producerTypeFromFbs,
+	producerTypeToFbs,
+} from './Producer';
 import {
 	ConsumerInterface,
 	ConsumerOptions,
 	ConsumerType,
 	ConsumerLayers,
-} from './ConsumerInterface';
-import { Consumer } from './Consumer';
+} from './ConsumerTypes';
+import { ConsumerImpl } from './Consumer';
 import {
 	DataProducerInterface,
 	DataProducerOptions,
 	DataProducerType,
-} from './DataProducerInterface';
+} from './DataProducerTypes';
 import {
-	DataProducer,
+	DataProducerImpl,
 	dataProducerTypeToFbs,
 	parseDataProducerDumpResponse,
 } from './DataProducer';
@@ -48,9 +52,9 @@ import {
 	DataConsumerInterface,
 	DataConsumerOptions,
 	DataConsumerType,
-} from './DataConsumerInterface';
+} from './DataConsumerTypes';
 import {
-	DataConsumer,
+	DataConsumerImpl,
 	dataConsumerTypeToFbs,
 	parseDataConsumerDumpResponse,
 } from './DataConsumer';
@@ -104,7 +108,7 @@ type TransportData =
 
 const logger = new Logger('Transport');
 
-export abstract class Transport<
+export abstract class TransportImpl<
 		TransportAppData extends AppData = AppData,
 		Events extends TransportEvents = TransportEvents,
 		Observer extends TransportObserver = TransportObserver,
@@ -617,7 +621,7 @@ export abstract class Transport<
 			consumableRtpParameters,
 		};
 
-		const producer: ProducerInterface<ProducerAppData> = new Producer({
+		const producer: ProducerInterface<ProducerAppData> = new ProducerImpl({
 			internal: {
 				...this.internal,
 				producerId,
@@ -746,7 +750,7 @@ export abstract class Transport<
 			type: pipe ? 'pipe' : (producer.type as ConsumerType),
 		};
 
-		const consumer: ConsumerInterface<ConsumerAppData> = new Consumer({
+		const consumer: ConsumerInterface<ConsumerAppData> = new ConsumerImpl({
 			internal: {
 				...this.internal,
 				consumerId,
@@ -849,7 +853,7 @@ export abstract class Transport<
 		const dump = parseDataProducerDumpResponse(produceDataResponse);
 
 		const dataProducer: DataProducerInterface<DataProducerAppData> =
-			new DataProducer({
+			new DataProducerImpl({
 				internal: {
 					...this.internal,
 					dataProducerId,
@@ -985,7 +989,7 @@ export abstract class Transport<
 		const dump = parseDataConsumerDumpResponse(consumeDataResponse);
 
 		const dataConsumer: DataConsumerInterface<DataConsumerAppData> =
-			new DataConsumer({
+			new DataConsumerImpl({
 				internal: {
 					...this.internal,
 					dataConsumerId,

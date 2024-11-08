@@ -2,7 +2,7 @@ import * as flatbuffers from 'flatbuffers';
 import * as mediasoup from '../';
 import { enhancedOnce } from '../enhancedEvents';
 import { WorkerEvents, ConsumerEvents } from '../types';
-import { Consumer } from '../Consumer';
+import { ConsumerImpl } from '../Consumer';
 import { UnsupportedError } from '../errors';
 import * as utils from '../utils';
 import {
@@ -1054,7 +1054,7 @@ test('Consumer emits "score"', async () => {
 	});
 
 	// API not exposed in the interface.
-	const channel = (audioConsumer as Consumer).channelForTesting;
+	const channel = (audioConsumer as ConsumerImpl).channelForTesting;
 	const onScore = jest.fn();
 
 	audioConsumer.on('score', onScore);

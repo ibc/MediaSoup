@@ -1,5 +1,5 @@
 import { EnhancedEventEmitter } from './enhancedEvents';
-import { ProducerStat } from './ProducerInterface';
+import { ProducerStat } from './ProducerTypes';
 import {
 	MediaKind,
 	RtpCapabilities,

@@ -7,10 +7,10 @@ import {
 	DirectTransportEvents,
 	DirectTransportObserver,
 	DirectTransportObserverEvents,
-} from './DirectTransportInterface';
-import { TransportInterface, BaseTransportDump } from './TransportInterface';
+} from './DirectTransportTypes';
+import { TransportInterface, BaseTransportDump } from './TransportTypes';
 import {
-	Transport,
+	TransportImpl,
 	TransportConstructorOptions,
 	parseBaseTransportDump,
 	parseBaseTransportStats,
@@ -36,8 +36,10 @@ export type DirectTransportData = {
 
 const logger = new Logger('DirectTransport');
 
-export class DirectTransport<DirectTransportAppData extends AppData = AppData>
-	extends Transport<
+export class DirectTransportImpl<
+		DirectTransportAppData extends AppData = AppData,
+	>
+	extends TransportImpl<
 		DirectTransportAppData,
 		DirectTransportEvents,
 		DirectTransportObserver

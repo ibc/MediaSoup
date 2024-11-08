@@ -10,8 +10,8 @@ import {
 	WebRtcServerEvents,
 	WebRtcServerObserver,
 	WebRtcServerObserverEvents,
-} from './WebRtcServerInterface';
-import { WebRtcTransportInterface } from './WebRtcTransportInterface';
+} from './WebRtcServerTypes';
+import { WebRtcTransportInterface } from './WebRtcTransportTypes';
 import { AppData } from './types';
 import * as utils from './utils';
 import { Body as RequestBody, Method } from './fbs/request';
@@ -24,7 +24,7 @@ type WebRtcServerInternal = {
 
 const logger = new Logger('WebRtcServer');
 
-export class WebRtcServer<WebRtcServerAppData extends AppData = AppData>
+export class WebRtcServerImpl<WebRtcServerAppData extends AppData = AppData>
 	extends EnhancedEventEmitter<WebRtcServerEvents>
 	implements WebRtcServerInterface
 {

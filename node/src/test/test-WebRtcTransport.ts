@@ -3,8 +3,8 @@ import * as flatbuffers from 'flatbuffers';
 import * as mediasoup from '../';
 import { enhancedOnce } from '../enhancedEvents';
 import { WorkerEvents, WebRtcTransportEvents } from '../types';
-import { WebRtcTransport } from '../WebRtcTransport';
-import { TransportTuple } from '../TransportInterface';
+import { WebRtcTransportImpl } from '../WebRtcTransport';
+import { TransportTuple } from '../TransportTypes';
 import { serializeProtocol } from '../Transport';
 import * as utils from '../utils';
 import {
@@ -670,7 +670,7 @@ test('WebRtcTransport events succeed', async () => {
 	});
 
 	// API not exposed in the interface.
-	const channel = (webRtcTransport as WebRtcTransport).channelForTesting;
+	const channel = (webRtcTransport as WebRtcTransportImpl).channelForTesting;
 	const onIceStateChange = jest.fn();
 
 	webRtcTransport.on('icestatechange', onIceStateChange);

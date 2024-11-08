@@ -8,7 +8,7 @@ import {
 	DataProducerEvents,
 	DataProducerObserver,
 	DataProducerObserverEvents,
-} from './DataProducerInterface';
+} from './DataProducerTypes';
 import { Channel } from './Channel';
 import { TransportInternal } from './Transport';
 import {
@@ -34,7 +34,7 @@ type DataProducerData = {
 
 const logger = new Logger('DataProducer');
 
-export class DataProducer<DataProducerAppData extends AppData = AppData>
+export class DataProducerImpl<DataProducerAppData extends AppData = AppData>
 	extends EnhancedEventEmitter<DataProducerEvents>
 	implements DataProducerInterface
 {

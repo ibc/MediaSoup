@@ -19,14 +19,14 @@ import {
 	WebRtcTransportEvents,
 	WebRtcTransportObserver,
 	WebRtcTransportObserverEvents,
-} from './WebRtcTransportInterface';
+} from './WebRtcTransportTypes';
 import {
 	TransportInterface,
 	TransportTuple,
 	SctpState,
-} from './TransportInterface';
+} from './TransportTypes';
 import {
-	Transport,
+	TransportImpl,
 	TransportConstructorOptions,
 	parseSctpState,
 	parseBaseTransportDump,
@@ -70,8 +70,10 @@ export type WebRtcTransportData = {
 
 const logger = new Logger('WebRtcTransport');
 
-export class WebRtcTransport<WebRtcTransportAppData extends AppData = AppData>
-	extends Transport<
+export class WebRtcTransportImpl<
+		WebRtcTransportAppData extends AppData = AppData,
+	>
+	extends TransportImpl<
 		WebRtcTransportAppData,
 		WebRtcTransportEvents,
 		WebRtcTransportObserver

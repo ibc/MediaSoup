@@ -1,5 +1,5 @@
 import { EnhancedEventEmitter } from './enhancedEvents';
-import { ProducerInterface } from './ProducerInterface';
+import { ProducerInterface } from './ProducerTypes';
 import { AppData } from './types';
 
 export type RtpObserverEvents = {

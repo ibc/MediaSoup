@@ -8,14 +8,14 @@ import {
 	PlainTransportEvents,
 	PlainTransportObserver,
 	PlainTransportObserverEvents,
-} from './PlainTransportInterface';
+} from './PlainTransportTypes';
 import {
 	TransportInterface,
 	TransportTuple,
 	SctpState,
-} from './TransportInterface';
+} from './TransportTypes';
 import {
-	Transport,
+	TransportImpl,
 	TransportConstructorOptions,
 	parseSctpState,
 	parseTuple,
@@ -52,8 +52,8 @@ export type PlainTransportData = {
 
 const logger = new Logger('PlainTransport');
 
-export class PlainTransport<PlainTransportAppData extends AppData = AppData>
-	extends Transport<
+export class PlainTransportImpl<PlainTransportAppData extends AppData = AppData>
+	extends TransportImpl<
 		PlainTransportAppData,
 		PlainTransportEvents,
 		PlainTransportObserver

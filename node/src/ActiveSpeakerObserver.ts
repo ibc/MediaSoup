@@ -6,9 +6,9 @@ import {
 	ActiveSpeakerObserverEvents,
 	ActiveSpeakerObserverObserver,
 	ActiveSpeakerObserverObserverEvents,
-} from './ActiveSpeakerObserverInterface';
-import { RtpObserverInterface } from './RtpObserverInterface';
-import { RtpObserver, RtpObserverConstructorOptions } from './RtpObserver';
+} from './ActiveSpeakerObserverTypes';
+import { RtpObserverInterface } from './RtpObserverTypes';
+import { RtpObserverImpl, RtpObserverConstructorOptions } from './RtpObserver';
 import { AppData } from './types';
 import { Event, Notification } from './fbs/notification';
 import * as FbsActiveSpeakerObserver from './fbs/active-speaker-observer';
@@ -18,10 +18,10 @@ type RtpObserverObserverConstructorOptions<ActiveSpeakerObserverAppData> =
 
 const logger = new Logger('ActiveSpeakerObserver');
 
-export class ActiveSpeakerObserver<
+export class ActiveSpeakerObserverImpl<
 		ActiveSpeakerObserverAppData extends AppData = AppData,
 	>
-	extends RtpObserver<
+	extends RtpObserverImpl<
 		ActiveSpeakerObserverAppData,
 		ActiveSpeakerObserverEvents,
 		ActiveSpeakerObserverObserver

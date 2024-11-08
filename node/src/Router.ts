@@ -12,57 +12,57 @@ import {
 	RouterEvents,
 	RouterObserver,
 	RouterObserverEvents,
-} from './RouterInterface';
+} from './RouterTypes';
 import {
 	TransportInterface,
 	TransportListenIp,
 	TransportProtocol,
-} from './TransportInterface';
+} from './TransportTypes';
 import { portRangeToFbs, socketFlagsToFbs } from './Transport';
 import {
 	WebRtcTransportInterface,
 	WebRtcTransportOptions,
-} from './WebRtcTransportInterface';
+} from './WebRtcTransportTypes';
 import {
-	WebRtcTransport,
+	WebRtcTransportImpl,
 	parseWebRtcTransportDumpResponse,
 } from './WebRtcTransport';
 import {
 	PlainTransportInterface,
 	PlainTransportOptions,
-} from './PlainTransportInterface';
+} from './PlainTransportTypes';
 import {
-	PlainTransport,
+	PlainTransportImpl,
 	parsePlainTransportDumpResponse,
 } from './PlainTransport';
 import {
 	PipeTransportInterface,
 	PipeTransportOptions,
-} from './PipeTransportInterface';
+} from './PipeTransportTypes';
 import { PipeTransport, parsePipeTransportDumpResponse } from './PipeTransport';
 import {
 	DirectTransportInterface,
 	DirectTransportOptions,
-} from './DirectTransportInterface';
+} from './DirectTransportTypes';
 import {
-	DirectTransport,
+	DirectTransportImpl,
 	parseDirectTransportDumpResponse,
 } from './DirectTransport';
-import { ProducerInterface } from './ProducerInterface';
-import { ConsumerInterface } from './ConsumerInterface';
-import { DataProducerInterface } from './DataProducerInterface';
-import { DataConsumerInterface } from './DataConsumerInterface';
-import { RtpObserverInterface } from './RtpObserverInterface';
+import { ProducerInterface } from './ProducerTypes';
+import { ConsumerInterface } from './ConsumerTypes';
+import { DataProducerInterface } from './DataProducerTypes';
+import { DataConsumerInterface } from './DataConsumerTypes';
+import { RtpObserverInterface } from './RtpObserverTypes';
 import {
 	ActiveSpeakerObserverInterface,
 	ActiveSpeakerObserverOptions,
-} from './ActiveSpeakerObserverInterface';
-import { ActiveSpeakerObserver } from './ActiveSpeakerObserver';
+} from './ActiveSpeakerObserverTypes';
+import { ActiveSpeakerObserverImpl } from './ActiveSpeakerObserver';
 import {
 	AudioLevelObserverInterface,
 	AudioLevelObserverOptions,
-} from './AudioLevelObserverInterface';
-import { AudioLevelObserver } from './AudioLevelObserver';
+} from './AudioLevelObserverTypes';
+import { AudioLevelObserverImpl } from './AudioLevelObserver';
 import { RtpCapabilities } from './RtpParameters';
 import { cryptoSuiteToFbs } from './SrtpParameters';
 import { AppData } from './types';
@@ -96,7 +96,7 @@ type RouterData = {
 
 const logger = new Logger('Router');
 
-export class Router<RouterAppData extends AppData = AppData>
+export class RouterImpl<RouterAppData extends AppData = AppData>
 	extends EnhancedEventEmitter<RouterEvents>
 	implements RouterInterface
 {
@@ -509,7 +509,7 @@ export class Router<RouterAppData extends AppData = AppData>
 		const webRtcTransportData = parseWebRtcTransportDumpResponse(data);
 
 		const transport: WebRtcTransportInterface<WebRtcTransportAppData> =
-			new WebRtcTransport({
+			new WebRtcTransportImpl({
 				internal: {
 					...this.#internal,
 					transportId: transportId,
@@ -682,7 +682,7 @@ export class Router<RouterAppData extends AppData = AppData>
 		const plainTransportData = parsePlainTransportDumpResponse(data);
 
 		const transport: PlainTransportInterface<PlainTransportAppData> =
-			new PlainTransport({
+			new PlainTransportImpl({
 				internal: {
 					...this.#internal,
 					transportId: transportId,
@@ -921,7 +921,7 @@ export class Router<RouterAppData extends AppData = AppData>
 		const directTransportData = parseDirectTransportDumpResponse(data);
 
 		const transport: DirectTransportInterface<DirectTransportAppData> =
-			new DirectTransport({
+			new DirectTransportImpl({
 				internal: {
 					...this.#internal,
 					transportId: transportId,
@@ -1301,7 +1301,7 @@ export class Router<RouterAppData extends AppData = AppData>
 		);
 
 		const activeSpeakerObserver: ActiveSpeakerObserverInterface<ActiveSpeakerObserverAppData> =
-			new ActiveSpeakerObserver({
+			new ActiveSpeakerObserverImpl({
 				internal: {
 					...this.#internal,
 					rtpObserverId: rtpObserverId,
@@ -1377,7 +1377,7 @@ export class Router<RouterAppData extends AppData = AppData>
 		);
 
 		const audioLevelObserver: AudioLevelObserverInterface<AudioLevelObserverAppData> =
-			new AudioLevelObserver({
+			new AudioLevelObserverImpl({
 				internal: {
 					...this.#internal,
 					rtpObserverId: rtpObserverId,

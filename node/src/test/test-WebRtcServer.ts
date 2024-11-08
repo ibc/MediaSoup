@@ -1,10 +1,10 @@
 import { pickPort } from 'pick-port';
 import * as mediasoup from '../';
 import { enhancedOnce } from '../enhancedEvents';
-import { Worker } from '../Worker';
+import { WorkerImpl } from '../Worker';
 import { WorkerEvents, WebRtcServerEvents } from '../types';
-import { WebRtcServer } from '../WebRtcServer';
-import { Router } from '../Router';
+import { WebRtcServerImpl } from '../WebRtcServer';
+import { RouterImpl } from '../Router';
 import { InvalidStateError } from '../errors';
 
 type TestContext = {
@@ -84,14 +84,14 @@ test('worker.createWebRtcServer() succeeds', async () => {
 	});
 
 	// API not exposed in the interface.
-	expect((ctx.worker! as Worker).webRtcServersForTesting.size).toBe(1);
+	expect((ctx.worker! as WorkerImpl).webRtcServersForTesting.size).toBe(1);
 
 	ctx.worker!.close();
 
 	expect(webRtcServer.closed).toBe(true);
 
 	// API not exposed in the interface.
-	expect((ctx.worker! as Worker).webRtcServersForTesting.size).toBe(0);
+	expect((ctx.worker! as WorkerImpl).webRtcServersForTesting.size).toBe(0);
 }, 2000);
 
 test('worker.createWebRtcServer() with portRange succeeds', async () => {
@@ -153,14 +153,14 @@ test('worker.createWebRtcServer() with portRange succeeds', async () => {
 	});
 
 	// API not exposed in the interface.
-	expect((ctx.worker! as Worker).webRtcServersForTesting.size).toBe(1);
+	expect((ctx.worker! as WorkerImpl).webRtcServersForTesting.size).toBe(1);
 
 	ctx.worker!.close();
 
 	expect(webRtcServer.closed).toBe(true);
 
 	// API not exposed in the interface.
-	expect((ctx.worker! as Worker).webRtcServersForTesting.size).toBe(0);
+	expect((ctx.worker! as WorkerImpl).webRtcServersForTesting.size).toBe(0);
 }, 2000);
 
 test('worker.createWebRtcServer() without specifying port/portRange succeeds', async () => {
@@ -209,14 +209,14 @@ test('worker.createWebRtcServer() without specifying port/portRange succeeds', a
 	});
 
 	// API not exposed in the interface.
-	expect((ctx.worker! as Worker).webRtcServersForTesting.size).toBe(1);
+	expect((ctx.worker! as WorkerImpl).webRtcServersForTesting.size).toBe(1);
 
 	ctx.worker!.close();
 
 	expect(webRtcServer.closed).toBe(true);
 
 	// API not exposed in the interface.
-	expect((ctx.worker! as Worker).webRtcServersForTesting.size).toBe(0);
+	expect((ctx.worker! as WorkerImpl).webRtcServersForTesting.size).toBe(0);
 }, 2000);
 
 test('worker.createWebRtcServer() with wrong arguments rejects with TypeError', async () => {
@@ -439,11 +439,11 @@ test('router.createWebRtcTransport() with webRtcServer succeeds and transport is
 	expect(transport.iceSelectedTuple).toBeUndefined();
 
 	// API not exposed in the interface.
-	expect((webRtcServer as WebRtcServer).webRtcTransportsForTesting.size).toBe(
-		1
-	);
+	expect(
+		(webRtcServer as WebRtcServerImpl).webRtcTransportsForTesting.size
+	).toBe(1);
 	// API not exposed in the interface.
-	expect((router as Router).transportsForTesting.size).toBe(1);
+	expect((router as RouterImpl).transportsForTesting.size).toBe(1);
 
 	await expect(webRtcServer.dump()).resolves.toMatchObject({
 		id: webRtcServer.id,
@@ -462,11 +462,11 @@ test('router.createWebRtcTransport() with webRtcServer succeeds and transport is
 	expect(onObserverWebRtcTransportUnhandled).toHaveBeenCalledTimes(1);
 	expect(onObserverWebRtcTransportUnhandled).toHaveBeenCalledWith(transport);
 	// API not exposed in the interface.
-	expect((webRtcServer as WebRtcServer).webRtcTransportsForTesting.size).toBe(
-		0
-	);
+	expect(
+		(webRtcServer as WebRtcServerImpl).webRtcTransportsForTesting.size
+	).toBe(0);
 	// API not exposed in the interface.
-	expect((router as Router).transportsForTesting.size).toBe(0);
+	expect((router as RouterImpl).transportsForTesting.size).toBe(0);
 
 	await expect(webRtcServer.dump()).resolves.toMatchObject({
 		id: webRtcServer.id,
@@ -543,11 +543,11 @@ test('router.createWebRtcTransport() with webRtcServer succeeds and webRtcServer
 	expect(transport.iceSelectedTuple).toBeUndefined();
 
 	// API not exposed in the interface.
-	expect((webRtcServer as WebRtcServer).webRtcTransportsForTesting.size).toBe(
-		1
-	);
+	expect(
+		(webRtcServer as WebRtcServerImpl).webRtcTransportsForTesting.size
+	).toBe(1);
 	// API not exposed in the interface.
-	expect((router as Router).transportsForTesting.size).toBe(1);
+	expect((router as RouterImpl).transportsForTesting.size).toBe(1);
 
 	await expect(webRtcServer.dump()).resolves.toMatchObject({
 		id: webRtcServer.id,
@@ -597,11 +597,11 @@ test('router.createWebRtcTransport() with webRtcServer succeeds and webRtcServer
 	expect(transport.dtlsState).toBe('closed');
 	expect(transport.sctpState).toBe(undefined);
 	// API not exposed in the interface.
-	expect((webRtcServer as WebRtcServer).webRtcTransportsForTesting.size).toBe(
-		0
-	);
+	expect(
+		(webRtcServer as WebRtcServerImpl).webRtcTransportsForTesting.size
+	).toBe(0);
 	// API not exposed in the interface.
-	expect((router as Router).transportsForTesting.size).toBe(0);
+	expect((router as RouterImpl).transportsForTesting.size).toBe(0);
 
 	await expect(ctx.worker!.dump()).resolves.toMatchObject({
 		pid: ctx.worker!.pid,

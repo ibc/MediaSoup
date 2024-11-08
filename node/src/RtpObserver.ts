@@ -1,9 +1,9 @@
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
-import { RtpObserverEvents, RtpObserverObserver } from './RtpObserverInterface';
+import { RtpObserverEvents, RtpObserverObserver } from './RtpObserverTypes';
 import { Channel } from './Channel';
 import { RouterInternal } from './Router';
-import { ProducerInterface } from './ProducerInterface';
+import { ProducerInterface } from './ProducerTypes';
 import { AppData } from './types';
 import * as FbsRequest from './fbs/request';
 import * as FbsRouter from './fbs/router';
@@ -22,7 +22,7 @@ type RtpObserverObserverInternal = RouterInternal & {
 
 const logger = new Logger('RtpObserver');
 
-export abstract class RtpObserver<
+export abstract class RtpObserverImpl<
 	RtpObserverAppData extends AppData = AppData,
 	Events extends RtpObserverEvents = RtpObserverEvents,
 	Observer extends RtpObserverObserver = RtpObserverObserver,

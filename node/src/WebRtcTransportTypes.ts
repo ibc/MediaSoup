@@ -10,8 +10,8 @@ import {
 	BaseTransportStats,
 	TransportEvents,
 	TransportObserverEvents,
-} from './TransportInterface';
-import { WebRtcServerInterface } from './WebRtcServerInterface';
+} from './TransportTypes';
+import { WebRtcServerInterface } from './WebRtcServerTypes';
 import { SctpParameters, NumSctpStreams } from './SctpParameters';
 import { Either, AppData } from './types';
 

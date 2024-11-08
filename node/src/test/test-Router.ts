@@ -1,6 +1,6 @@
 import * as mediasoup from '../';
 import { enhancedOnce } from '../enhancedEvents';
-import { Worker } from '../Worker';
+import { WorkerImpl } from '../Worker';
 import { WorkerEvents, RouterEvents } from '../types';
 import { InvalidStateError } from '../errors';
 import * as utils from '../utils';
@@ -96,14 +96,14 @@ test('worker.createRouter() succeeds', async () => {
 	});
 
 	// API not exposed in the interface.
-	expect((ctx.worker! as Worker).routersForTesting.size).toBe(1);
+	expect((ctx.worker! as WorkerImpl).routersForTesting.size).toBe(1);
 
 	ctx.worker!.close();
 
 	expect(router.closed).toBe(true);
 
 	// API not exposed in the interface.
-	expect((ctx.worker! as Worker).routersForTesting.size).toBe(0);
+	expect((ctx.worker! as WorkerImpl).routersForTesting.size).toBe(0);
 }, 2000);
 
 test('worker.createRouter() with wrong arguments rejects with TypeError', async () => {

@@ -14,15 +14,15 @@ import {
 	WorkerEvents,
 	WorkerObserver,
 	WorkerObserverEvents,
-} from './WorkerInterface';
+} from './WorkerTypes';
 import { Channel } from './Channel';
 import {
 	WebRtcServerInterface,
 	WebRtcServerOptions,
-} from './WebRtcServerInterface';
-import { WebRtcServer } from './WebRtcServer';
-import { RouterInterface, RouterOptions } from './RouterInterface';
-import { Router } from './Router';
+} from './WebRtcServerTypes';
+import { WebRtcServerImpl } from './WebRtcServer';
+import { RouterInterface, RouterOptions } from './RouterTypes';
+import { RouterImpl } from './Router';
 import { portRangeToFbs, socketFlagsToFbs } from './Transport';
 import { RtpCodecCapability } from './RtpParameters';
 import { AppData } from './types';
@@ -61,7 +61,7 @@ export const workerBin = process.env.MEDIASOUP_WORKER_BIN
 const logger = new Logger('Worker');
 const workerLogger = new Logger('Worker');
 
-export class Worker<WorkerAppData extends AppData = AppData>
+export class WorkerImpl<WorkerAppData extends AppData = AppData>
 	extends EnhancedEventEmitter<WorkerEvents>
 	implements WorkerInterface
 {
@@ -533,7 +533,7 @@ export class Worker<WorkerAppData extends AppData = AppData>
 		);
 
 		const webRtcServer: WebRtcServerInterface<WebRtcServerAppData> =
-			new WebRtcServer({
+			new WebRtcServerImpl({
 				internal: { webRtcServerId },
 				channel: this.#channel,
 				appData,
@@ -586,7 +586,7 @@ export class Worker<WorkerAppData extends AppData = AppData>
 		);
 
 		const data = { rtpCapabilities };
-		const router: RouterInterface<RouterAppData> = new Router({
+		const router: RouterInterface<RouterAppData> = new RouterImpl({
 			internal: {
 				routerId,
 			},

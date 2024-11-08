@@ -1,7 +1,7 @@
 import { Logger, LoggerEmitter } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
-import { WorkerInterface, WorkerSettings } from './WorkerInterface';
-import { Worker, workerBin } from './Worker';
+import { WorkerInterface, WorkerSettings } from './WorkerTypes';
+import { WorkerImpl, workerBin } from './Worker';
 import * as utils from './utils';
 import { supportedRtpCapabilities } from './supportedRtpCapabilities';
 import { RtpCapabilities } from './RtpParameters';
@@ -126,7 +126,7 @@ export async function createWorker<
 		throw new TypeError('if given, appData must be an object');
 	}
 
-	const worker: WorkerInterface<WorkerAppData> = new Worker({
+	const worker: WorkerInterface<WorkerAppData> = new WorkerImpl({
 		logLevel,
 		logTags,
 		rtcMinPort,

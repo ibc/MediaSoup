@@ -9,7 +9,7 @@ import {
 	BaseTransportStats,
 	TransportEvents,
 	TransportObserverEvents,
-} from './TransportInterface';
+} from './TransportTypes';
 import { SrtpParameters, SrtpCryptoSuite } from './SrtpParameters';
 import { SctpParameters, NumSctpStreams } from './SctpParameters';
 import { Either, AppData } from './types';

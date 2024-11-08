@@ -2,9 +2,9 @@ import { pickPort } from 'pick-port';
 import * as flatbuffers from 'flatbuffers';
 import * as mediasoup from '../';
 import { enhancedOnce } from '../enhancedEvents';
-import { WorkerEvents, WebRtcTransportEvents } from '../types';
-import { WebRtcTransportImpl } from '../WebRtcTransport';
-import { TransportTuple } from '../TransportTypes';
+import type { WorkerEvents, WebRtcTransportEvents } from '../types';
+import type { WebRtcTransportImpl } from '../WebRtcTransport';
+import type { TransportTuple } from '../TransportTypes';
 import { serializeProtocol } from '../Transport';
 import * as utils from '../utils';
 import {

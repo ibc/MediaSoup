@@ -1,7 +1,7 @@
-import { EnhancedEventEmitter } from './enhancedEvents';
-import { TransportListenInfo } from './TransportTypes';
-import { WebRtcTransport } from './WebRtcTransportTypes';
-import { AppData } from './types';
+import type { EnhancedEventEmitter } from './enhancedEvents';
+import type { TransportListenInfo } from './TransportTypes';
+import type { WebRtcTransport } from './WebRtcTransportTypes';
+import type { AppData } from './types';
 
 export type WebRtcServerOptions<WebRtcServerAppData extends AppData = AppData> =
 	{

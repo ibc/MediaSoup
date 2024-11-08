@@ -1,7 +1,7 @@
 import * as mediasoup from '../';
 import { enhancedOnce } from '../enhancedEvents';
-import { WorkerImpl } from '../Worker';
-import { WorkerEvents, RouterEvents } from '../types';
+import type { WorkerImpl } from '../Worker';
+import type { WorkerEvents, RouterEvents } from '../types';
 import { InvalidStateError } from '../errors';
 import * as utils from '../utils';
 

@@ -2,8 +2,8 @@ import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
 import * as ortc from './ortc';
 import { InvalidStateError } from './errors';
-import { Channel } from './Channel';
-import {
+import type { Channel } from './Channel';
+import type {
 	Router,
 	PipeToRouterOptions,
 	PipeToRouterResult,
@@ -13,13 +13,13 @@ import {
 	RouterObserver,
 	RouterObserverEvents,
 } from './RouterTypes';
-import {
+import type {
 	Transport,
 	TransportListenIp,
 	TransportProtocol,
 } from './TransportTypes';
 import { portRangeToFbs, socketFlagsToFbs } from './Transport';
-import {
+import type {
 	WebRtcTransport,
 	WebRtcTransportOptions,
 } from './WebRtcTransportTypes';
@@ -27,17 +27,20 @@ import {
 	WebRtcTransportImpl,
 	parseWebRtcTransportDumpResponse,
 } from './WebRtcTransport';
-import { PlainTransport, PlainTransportOptions } from './PlainTransportTypes';
+import type {
+	PlainTransport,
+	PlainTransportOptions,
+} from './PlainTransportTypes';
 import {
 	PlainTransportImpl,
 	parsePlainTransportDumpResponse,
 } from './PlainTransport';
-import { PipeTransport, PipeTransportOptions } from './PipeTransportTypes';
+import type { PipeTransport, PipeTransportOptions } from './PipeTransportTypes';
 import {
 	PipeTransportImpl,
 	parsePipeTransportDumpResponse,
 } from './PipeTransport';
-import {
+import type {
 	DirectTransport,
 	DirectTransportOptions,
 } from './DirectTransportTypes';
@@ -45,24 +48,24 @@ import {
 	DirectTransportImpl,
 	parseDirectTransportDumpResponse,
 } from './DirectTransport';
-import { Producer } from './ProducerTypes';
-import { Consumer } from './ConsumerTypes';
-import { DataProducer } from './DataProducerTypes';
-import { DataConsumer } from './DataConsumerTypes';
-import { RtpObserver } from './RtpObserverTypes';
-import {
+import type { Producer } from './ProducerTypes';
+import type { Consumer } from './ConsumerTypes';
+import type { DataProducer } from './DataProducerTypes';
+import type { DataConsumer } from './DataConsumerTypes';
+import type { RtpObserver } from './RtpObserverTypes';
+import type {
 	ActiveSpeakerObserver,
 	ActiveSpeakerObserverOptions,
 } from './ActiveSpeakerObserverTypes';
 import { ActiveSpeakerObserverImpl } from './ActiveSpeakerObserver';
-import {
+import type {
 	AudioLevelObserver,
 	AudioLevelObserverOptions,
 } from './AudioLevelObserverTypes';
 import { AudioLevelObserverImpl } from './AudioLevelObserver';
-import { RtpCapabilities } from './rtpParametersTypes';
+import type { RtpCapabilities } from './rtpParametersTypes';
 import { cryptoSuiteToFbs } from './srtpParametersFbsUtils';
-import { AppData } from './types';
+import type { AppData } from './types';
 import * as utils from './utils';
 import * as fbsUtils from './fbsUtils';
 import * as FbsActiveSpeakerObserver from './fbs/active-speaker-observer';

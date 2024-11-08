@@ -2,7 +2,7 @@ import * as flatbuffers from 'flatbuffers';
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
 import * as ortc from './ortc';
-import {
+import type {
 	Transport,
 	TransportProtocol,
 	TransportPortRange,
@@ -19,26 +19,26 @@ import {
 	TransportEvents,
 	TransportObserver,
 } from './TransportTypes';
-import { Channel } from './Channel';
-import { RouterInternal } from './Router';
-import { WebRtcTransportData } from './WebRtcTransport';
-import { PlainTransportData } from './PlainTransport';
-import { PipeTransportData } from './PipeTransport';
-import { DirectTransportData } from './DirectTransport';
-import { Producer, ProducerOptions } from './ProducerTypes';
+import type { Channel } from './Channel';
+import type { RouterInternal } from './Router';
+import type { WebRtcTransportData } from './WebRtcTransport';
+import type { PlainTransportData } from './PlainTransport';
+import type { PipeTransportData } from './PipeTransport';
+import type { DirectTransportData } from './DirectTransport';
+import type { Producer, ProducerOptions } from './ProducerTypes';
 import {
 	ProducerImpl,
 	producerTypeFromFbs,
 	producerTypeToFbs,
 } from './Producer';
-import {
+import type {
 	Consumer,
 	ConsumerOptions,
 	ConsumerType,
 	ConsumerLayers,
 } from './ConsumerTypes';
 import { ConsumerImpl } from './Consumer';
-import {
+import type {
 	DataProducer,
 	DataProducerOptions,
 	DataProducerType,
@@ -48,7 +48,7 @@ import {
 	dataProducerTypeToFbs,
 	parseDataProducerDumpResponse,
 } from './DataProducer';
-import {
+import type {
 	DataConsumer,
 	DataConsumerOptions,
 	DataConsumerType,
@@ -58,7 +58,7 @@ import {
 	dataConsumerTypeToFbs,
 	parseDataConsumerDumpResponse,
 } from './DataConsumer';
-import {
+import type {
 	MediaKind,
 	RtpCapabilities,
 	RtpParameters,
@@ -67,12 +67,15 @@ import {
 	serializeRtpEncodingParameters,
 	serializeRtpParameters,
 } from './rtpParametersFbsUtils';
-import { SctpParameters, SctpStreamParameters } from './sctpParametersTypes';
+import type {
+	SctpParameters,
+	SctpStreamParameters,
+} from './sctpParametersTypes';
 import {
 	parseSctpParametersDump,
 	serializeSctpStreamParameters,
 } from './sctpParametersFbsUtils';
-import { AppData } from './types';
+import type { AppData } from './types';
 import * as utils from './utils';
 import * as fbsUtils from './fbsUtils';
 import { TraceDirection as FbsTraceDirection } from './fbs/common';

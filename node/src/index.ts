@@ -1,11 +1,11 @@
 import { Logger, LoggerEmitter } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
-import { Worker, WorkerSettings } from './WorkerTypes';
+import type { Worker, WorkerSettings } from './WorkerTypes';
 import { WorkerImpl, workerBin } from './Worker';
 import * as utils from './utils';
 import { supportedRtpCapabilities } from './supportedRtpCapabilities';
-import { RtpCapabilities } from './rtpParametersTypes';
-import * as types from './types';
+import type { RtpCapabilities } from './rtpParametersTypes';
+import type * as types from './types';
 
 /**
  * Expose all types.

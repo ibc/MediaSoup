@@ -1,7 +1,7 @@
-import { EnhancedEventEmitter } from './enhancedEvents';
-import { WebRtcServer, WebRtcServerOptions } from './WebRtcServerTypes';
-import { Router, RouterOptions } from './RouterTypes';
-import { AppData } from './types';
+import type { EnhancedEventEmitter } from './enhancedEvents';
+import type { WebRtcServer, WebRtcServerOptions } from './WebRtcServerTypes';
+import type { Router, RouterOptions } from './RouterTypes';
+import type { AppData } from './types';
 
 export type WorkerLogLevel = 'debug' | 'warn' | 'error' | 'none';
 

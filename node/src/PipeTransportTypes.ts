@@ -1,5 +1,5 @@
-import { EnhancedEventEmitter } from './enhancedEvents';
-import {
+import type { EnhancedEventEmitter } from './enhancedEvents';
+import type {
 	Transport,
 	TransportListenInfo,
 	TransportListenIp,
@@ -10,10 +10,10 @@ import {
 	TransportEvents,
 	TransportObserverEvents,
 } from './TransportTypes';
-import { Consumer } from './ConsumerTypes';
-import { SrtpParameters } from './srtpParametersTypes';
-import { SctpParameters, NumSctpStreams } from './sctpParametersTypes';
-import { Either, AppData } from './types';
+import type { Consumer } from './ConsumerTypes';
+import type { SrtpParameters } from './srtpParametersTypes';
+import type { SctpParameters, NumSctpStreams } from './sctpParametersTypes';
+import type { Either, AppData } from './types';
 
 export type PipeTransportOptions<
 	PipeTransportAppData extends AppData = AppData,

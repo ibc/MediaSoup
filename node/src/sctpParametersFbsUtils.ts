@@ -1,5 +1,5 @@
 import * as flatbuffers from 'flatbuffers';
-import {
+import type {
 	SctpStreamParameters,
 	SctpParametersDump,
 } from './sctpParametersTypes';

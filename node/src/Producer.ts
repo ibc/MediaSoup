@@ -1,6 +1,6 @@
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
-import {
+import type {
 	Producer,
 	ProducerType,
 	ProducerScore,
@@ -14,11 +14,11 @@ import {
 	ProducerObserverEvents,
 } from './ProducerTypes';
 import { Channel } from './Channel';
-import { TransportInternal } from './Transport';
-import { MediaKind, RtpParameters } from './rtpParametersTypes';
+import type { TransportInternal } from './Transport';
+import type { MediaKind, RtpParameters } from './rtpParametersTypes';
 import { parseRtpParameters } from './rtpParametersFbsUtils';
 import { parseRtpStreamRecvStats } from './RtpStream';
-import { AppData } from './types';
+import type { AppData } from './types';
 import * as fbsUtils from './fbsUtils';
 import { Event, Notification } from './fbs/notification';
 import { TraceDirection as FbsTraceDirection } from './fbs/common';

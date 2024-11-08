@@ -1,12 +1,12 @@
-import { EnhancedEventEmitter } from './enhancedEvents';
-import {
+import type { EnhancedEventEmitter } from './enhancedEvents';
+import type {
 	Transport,
 	BaseTransportDump,
 	BaseTransportStats,
 	TransportEvents,
 	TransportObserverEvents,
 } from './TransportTypes';
-import { AppData } from './types';
+import type { AppData } from './types';
 
 export type DirectTransportOptions<
 	DirectTransportAppData extends AppData = AppData,

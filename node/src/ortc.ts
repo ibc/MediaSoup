@@ -2,7 +2,7 @@ import * as h264 from 'h264-profile-level-id';
 import * as flatbuffers from 'flatbuffers';
 import { supportedRtpCapabilities } from './supportedRtpCapabilities';
 import { parse as parseScalabilityMode } from './scalabilityModes';
-import {
+import type {
 	RtpCapabilities,
 	MediaKind,
 	RtpCodecCapability,
@@ -14,7 +14,7 @@ import {
 	RtpHeaderExtensionParameters,
 	RtcpParameters,
 } from './rtpParametersTypes';
-import { SctpStreamParameters } from './sctpParametersTypes';
+import type { SctpStreamParameters } from './sctpParametersTypes';
 import * as utils from './utils';
 import { UnsupportedError } from './errors';
 import * as FbsRtpParameters from './fbs/rtp-parameters';

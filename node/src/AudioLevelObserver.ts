@@ -1,16 +1,16 @@
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
-import {
+import type {
 	AudioLevelObserver,
 	AudioLevelObserverVolume,
 	AudioLevelObserverEvents,
 	AudioLevelObserverObserver,
 	AudioLevelObserverObserverEvents,
 } from './AudioLevelObserverTypes';
-import { RtpObserver } from './RtpObserverTypes';
+import type { RtpObserver } from './RtpObserverTypes';
 import { RtpObserverImpl, RtpObserverConstructorOptions } from './RtpObserver';
-import { Producer } from './ProducerTypes';
-import { AppData } from './types';
+import type { Producer } from './ProducerTypes';
+import type { AppData } from './types';
 import * as fbsUtils from './fbsUtils';
 import { Event, Notification } from './fbs/notification';
 import * as FbsAudioLevelObserver from './fbs/audio-level-observer';

@@ -3,7 +3,7 @@ import * as process from 'node:process';
 import * as path from 'node:path';
 import * as mediasoup from '../';
 import { enhancedOnce } from '../enhancedEvents';
-import { WorkerEvents } from '../types';
+import type { WorkerEvents } from '../types';
 import { InvalidStateError } from '../errors';
 
 test('Worker.workerBin matches mediasoup-worker absolute path', () => {

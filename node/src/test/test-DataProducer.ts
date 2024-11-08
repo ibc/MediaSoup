@@ -1,6 +1,6 @@
 import * as mediasoup from '../';
 import { enhancedOnce } from '../enhancedEvents';
-import { WorkerEvents, DataProducerEvents } from '../types';
+import type { WorkerEvents, DataProducerEvents } from '../types';
 import * as utils from '../utils';
 
 type TestContext = {

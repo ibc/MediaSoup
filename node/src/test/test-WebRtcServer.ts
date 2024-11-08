@@ -1,10 +1,10 @@
 import { pickPort } from 'pick-port';
 import * as mediasoup from '../';
 import { enhancedOnce } from '../enhancedEvents';
-import { WorkerImpl } from '../Worker';
-import { WorkerEvents, WebRtcServerEvents } from '../types';
-import { WebRtcServerImpl } from '../WebRtcServer';
-import { RouterImpl } from '../Router';
+import type { WorkerImpl } from '../Worker';
+import type { WorkerEvents, WebRtcServerEvents } from '../types';
+import type { WebRtcServerImpl } from '../WebRtcServer';
+import type { RouterImpl } from '../Router';
 import { InvalidStateError } from '../errors';
 
 type TestContext = {

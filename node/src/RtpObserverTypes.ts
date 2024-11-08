@@ -1,6 +1,6 @@
-import { EnhancedEventEmitter } from './enhancedEvents';
-import { Producer } from './ProducerTypes';
-import { AppData } from './types';
+import type { EnhancedEventEmitter } from './enhancedEvents';
+import type { Producer } from './ProducerTypes';
+import type { AppData } from './types';
 
 export type RtpObserverEvents = {
 	routerclose: [];

@@ -1,6 +1,6 @@
-import { EnhancedEventEmitter } from './enhancedEvents';
-import { SctpStreamParameters } from './sctpParametersTypes';
-import { AppData } from './types';
+import type { EnhancedEventEmitter } from './enhancedEvents';
+import type { SctpStreamParameters } from './sctpParametersTypes';
+import type { AppData } from './types';
 
 export type DataProducerOptions<DataProducerAppData extends AppData = AppData> =
 	{

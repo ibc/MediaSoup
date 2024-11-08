@@ -1,8 +1,8 @@
 import * as flatbuffers from 'flatbuffers';
 import * as mediasoup from '../';
 import { enhancedOnce } from '../enhancedEvents';
-import { WorkerEvents, ConsumerEvents } from '../types';
-import { ConsumerImpl } from '../Consumer';
+import type { WorkerEvents, ConsumerEvents } from '../types';
+import type { ConsumerImpl } from '../Consumer';
 import { UnsupportedError } from '../errors';
 import * as utils from '../utils';
 import {

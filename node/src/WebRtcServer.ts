@@ -1,7 +1,7 @@
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
-import { Channel } from './Channel';
-import {
+import type { Channel } from './Channel';
+import type {
 	WebRtcServer,
 	IpPort,
 	IceUserNameFragment,
@@ -11,8 +11,8 @@ import {
 	WebRtcServerObserver,
 	WebRtcServerObserverEvents,
 } from './WebRtcServerTypes';
-import { WebRtcTransport } from './WebRtcTransportTypes';
-import { AppData } from './types';
+import type { WebRtcTransport } from './WebRtcTransportTypes';
+import type { AppData } from './types';
 import * as fbsUtils from './fbsUtils';
 import { Body as RequestBody, Method } from './fbs/request';
 import * as FbsWorker from './fbs/worker';

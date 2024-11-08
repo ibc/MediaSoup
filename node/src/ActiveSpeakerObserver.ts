@@ -1,15 +1,15 @@
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
-import {
+import type {
 	ActiveSpeakerObserver,
 	ActiveSpeakerObserverDominantSpeaker,
 	ActiveSpeakerObserverEvents,
 	ActiveSpeakerObserverObserver,
 	ActiveSpeakerObserverObserverEvents,
 } from './ActiveSpeakerObserverTypes';
-import { RtpObserver } from './RtpObserverTypes';
+import type { RtpObserver } from './RtpObserverTypes';
 import { RtpObserverImpl, RtpObserverConstructorOptions } from './RtpObserver';
-import { AppData } from './types';
+import type { AppData } from './types';
 import { Event, Notification } from './fbs/notification';
 import * as FbsActiveSpeakerObserver from './fbs/active-speaker-observer';
 

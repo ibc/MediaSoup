@@ -1,10 +1,10 @@
-import { EnhancedEventEmitter } from './enhancedEvents';
-import { Producer, ProducerOptions } from './ProducerTypes';
-import { Consumer, ConsumerOptions } from './ConsumerTypes';
-import { DataProducer, DataProducerOptions } from './DataProducerTypes';
-import { DataConsumer, DataConsumerOptions } from './DataConsumerTypes';
-import { SctpParameters } from './sctpParametersTypes';
-import { AppData } from './types';
+import type { EnhancedEventEmitter } from './enhancedEvents';
+import type { Producer, ProducerOptions } from './ProducerTypes';
+import type { Consumer, ConsumerOptions } from './ConsumerTypes';
+import type { DataProducer, DataProducerOptions } from './DataProducerTypes';
+import type { DataConsumer, DataConsumerOptions } from './DataConsumerTypes';
+import type { SctpParameters } from './sctpParametersTypes';
+import type { AppData } from './types';
 
 export type TransportListenInfo = {
 	/**

@@ -1,7 +1,7 @@
 import { pickPort } from 'pick-port';
 import * as mediasoup from '../';
 import { enhancedOnce } from '../enhancedEvents';
-import {
+import type {
 	WorkerEvents,
 	ConsumerEvents,
 	ProducerObserverEvents,

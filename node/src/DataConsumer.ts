@@ -1,6 +1,6 @@
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
-import {
+import type {
 	DataConsumer,
 	DataConsumerType,
 	DataConsumerDump,
@@ -10,10 +10,10 @@ import {
 	DataConsumerObserverEvents,
 } from './DataConsumerTypes';
 import { Channel } from './Channel';
-import { TransportInternal } from './Transport';
-import { SctpStreamParameters } from './sctpParametersTypes';
+import type { TransportInternal } from './Transport';
+import type { SctpStreamParameters } from './sctpParametersTypes';
 import { parseSctpStreamParameters } from './sctpParametersFbsUtils';
-import { AppData } from './types';
+import type { AppData } from './types';
 import * as fbsUtils from './fbsUtils';
 import { Event, Notification } from './fbs/notification';
 import * as FbsTransport from './fbs/transport';

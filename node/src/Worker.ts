@@ -5,7 +5,7 @@ import { version } from './';
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
 import * as ortc from './ortc';
-import {
+import type {
 	Worker,
 	WorkerSettings,
 	WorkerUpdateableSettings,
@@ -16,15 +16,15 @@ import {
 	WorkerObserverEvents,
 } from './WorkerTypes';
 import { Channel } from './Channel';
-import { WebRtcServer, WebRtcServerOptions } from './WebRtcServerTypes';
+import type { WebRtcServer, WebRtcServerOptions } from './WebRtcServerTypes';
 import { WebRtcServerImpl } from './WebRtcServer';
-import { Router, RouterOptions } from './RouterTypes';
+import type { Router, RouterOptions } from './RouterTypes';
 import { RouterImpl } from './Router';
 import { portRangeToFbs, socketFlagsToFbs } from './Transport';
-import { RtpCodecCapability } from './rtpParametersTypes';
+import type { RtpCodecCapability } from './rtpParametersTypes';
 import * as utils from './utils';
 import * as fbsUtils from './fbsUtils';
-import { AppData } from './types';
+import type { AppData } from './types';
 import { Event } from './fbs/notification';
 import * as FbsRequest from './fbs/request';
 import * as FbsWorker from './fbs/worker';

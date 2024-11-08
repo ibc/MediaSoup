@@ -2,7 +2,7 @@ import * as flatbuffers from 'flatbuffers';
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
 import * as ortc from './ortc';
-import {
+import type {
 	PipeTransport,
 	PipeConsumerOptions,
 	PipeTransportDump,
@@ -11,7 +11,7 @@ import {
 	PipeTransportObserver,
 	PipeTransportObserverEvents,
 } from './PipeTransportTypes';
-import { Transport, TransportTuple, SctpState } from './TransportTypes';
+import type { Transport, TransportTuple, SctpState } from './TransportTypes';
 import {
 	TransportImpl,
 	TransportConstructorOptions,
@@ -21,21 +21,21 @@ import {
 	parseTuple,
 	parseTransportTraceEventData,
 } from './Transport';
-import { Producer } from './ProducerTypes';
-import { Consumer, ConsumerType } from './ConsumerTypes';
+import type { Producer } from './ProducerTypes';
+import type { Consumer, ConsumerType } from './ConsumerTypes';
 import { ConsumerImpl } from './Consumer';
-import { RtpParameters } from './rtpParametersTypes';
+import type { RtpParameters } from './rtpParametersTypes';
 import {
 	serializeRtpEncodingParameters,
 	serializeRtpParameters,
 } from './rtpParametersFbsUtils';
-import { SctpParameters } from './sctpParametersTypes';
-import { SrtpParameters } from './srtpParametersTypes';
+import type { SctpParameters } from './sctpParametersTypes';
+import type { SrtpParameters } from './srtpParametersTypes';
 import {
 	parseSrtpParameters,
 	serializeSrtpParameters,
 } from './srtpParametersFbsUtils';
-import { AppData } from './types';
+import type { AppData } from './types';
 import { generateUUIDv4 } from './utils';
 import { MediaKind as FbsMediaKind } from './fbs/rtp-parameters/media-kind';
 import * as FbsRtpParameters from './fbs/rtp-parameters';

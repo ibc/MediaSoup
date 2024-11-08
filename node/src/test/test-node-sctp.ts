@@ -3,7 +3,7 @@ import * as dgram from 'node:dgram';
 import * as sctp from 'sctp';
 import * as mediasoup from '../';
 import { enhancedOnce } from '../enhancedEvents';
-import { WorkerEvents } from '../types';
+import type { WorkerEvents } from '../types';
 
 type TestContext = {
 	worker?: mediasoup.types.Worker;

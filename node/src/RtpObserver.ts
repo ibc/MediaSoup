@@ -1,10 +1,13 @@
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
-import { RtpObserverEvents, RtpObserverObserver } from './RtpObserverTypes';
-import { Channel } from './Channel';
-import { RouterInternal } from './Router';
-import { Producer } from './ProducerTypes';
-import { AppData } from './types';
+import type {
+	RtpObserverEvents,
+	RtpObserverObserver,
+} from './RtpObserverTypes';
+import type { Channel } from './Channel';
+import type { RouterInternal } from './Router';
+import type { Producer } from './ProducerTypes';
+import type { AppData } from './types';
 import * as FbsRequest from './fbs/request';
 import * as FbsRouter from './fbs/router';
 import * as FbsRtpObserver from './fbs/rtp-observer';

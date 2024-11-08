@@ -1,11 +1,11 @@
-import { EnhancedEventEmitter } from './enhancedEvents';
-import {
+import type { EnhancedEventEmitter } from './enhancedEvents';
+import type {
 	RtpObserver,
 	RtpObserverEvents,
 	RtpObserverObserverEvents,
 } from './RtpObserverTypes';
-import { Producer } from './ProducerTypes';
-import { AppData } from './types';
+import type { Producer } from './ProducerTypes';
+import type { AppData } from './types';
 
 export type ActiveSpeakerObserverOptions<
 	ActiveSpeakerObserverAppData extends AppData = AppData,

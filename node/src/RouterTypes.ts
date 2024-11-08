@@ -1,35 +1,38 @@
-import { EnhancedEventEmitter } from './enhancedEvents';
-import {
+import type { EnhancedEventEmitter } from './enhancedEvents';
+import type {
 	Transport,
 	TransportListenInfo,
 	TransportListenIp,
 } from './TransportTypes';
-import {
+import type {
 	WebRtcTransport,
 	WebRtcTransportOptions,
 } from './WebRtcTransportTypes';
-import { PlainTransport, PlainTransportOptions } from './PlainTransportTypes';
-import { PipeTransport, PipeTransportOptions } from './PipeTransportTypes';
-import {
+import type {
+	PlainTransport,
+	PlainTransportOptions,
+} from './PlainTransportTypes';
+import type { PipeTransport, PipeTransportOptions } from './PipeTransportTypes';
+import type {
 	DirectTransport,
 	DirectTransportOptions,
 } from './DirectTransportTypes';
-import { Producer } from './ProducerTypes';
-import { Consumer } from './ConsumerTypes';
-import { DataProducer } from './DataProducerTypes';
-import { DataConsumer } from './DataConsumerTypes';
-import { RtpObserver } from './RtpObserverTypes';
-import {
+import type { Producer } from './ProducerTypes';
+import type { Consumer } from './ConsumerTypes';
+import type { DataProducer } from './DataProducerTypes';
+import type { DataConsumer } from './DataConsumerTypes';
+import type { RtpObserver } from './RtpObserverTypes';
+import type {
 	ActiveSpeakerObserver,
 	ActiveSpeakerObserverOptions,
 } from './ActiveSpeakerObserverTypes';
-import {
+import type {
 	AudioLevelObserver,
 	AudioLevelObserverOptions,
 } from './AudioLevelObserverTypes';
-import { RtpCapabilities, RtpCodecCapability } from './rtpParametersTypes';
-import { NumSctpStreams } from './sctpParametersTypes';
-import { Either, AppData } from './types';
+import type { RtpCapabilities, RtpCodecCapability } from './rtpParametersTypes';
+import type { NumSctpStreams } from './sctpParametersTypes';
+import type { Either, AppData } from './types';
 
 export type RouterOptions<RouterAppData extends AppData = AppData> = {
 	/**

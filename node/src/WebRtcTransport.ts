@@ -1,7 +1,7 @@
 import * as flatbuffers from 'flatbuffers';
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
-import {
+import type {
 	WebRtcTransport,
 	IceParameters,
 	IceCandidate,
@@ -20,7 +20,7 @@ import {
 	WebRtcTransportObserver,
 	WebRtcTransportObserverEvents,
 } from './WebRtcTransportTypes';
-import { Transport, TransportTuple, SctpState } from './TransportTypes';
+import type { Transport, TransportTuple, SctpState } from './TransportTypes';
 import {
 	TransportImpl,
 	TransportConstructorOptions,
@@ -31,8 +31,8 @@ import {
 	parseTransportTraceEventData,
 	parseTuple,
 } from './Transport';
-import { SctpParameters } from './sctpParametersTypes';
-import { AppData } from './types';
+import type { SctpParameters } from './sctpParametersTypes';
+import type { AppData } from './types';
 import * as fbsUtils from './fbsUtils';
 import { Event, Notification } from './fbs/notification';
 import * as FbsRequest from './fbs/request';

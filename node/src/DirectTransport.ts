@@ -1,6 +1,6 @@
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
-import {
+import type {
 	DirectTransport,
 	DirectTransportDump,
 	DirectTransportStat,
@@ -8,7 +8,7 @@ import {
 	DirectTransportObserver,
 	DirectTransportObserverEvents,
 } from './DirectTransportTypes';
-import { Transport, BaseTransportDump } from './TransportTypes';
+import type { Transport, BaseTransportDump } from './TransportTypes';
 import {
 	TransportImpl,
 	TransportConstructorOptions,
@@ -16,8 +16,8 @@ import {
 	parseBaseTransportStats,
 	parseTransportTraceEventData,
 } from './Transport';
-import { SctpParameters } from './sctpParametersTypes';
-import { AppData } from './types';
+import type { SctpParameters } from './sctpParametersTypes';
+import type { AppData } from './types';
 import { UnsupportedError } from './errors';
 import { Event, Notification } from './fbs/notification';
 import * as FbsDirectTransport from './fbs/direct-transport';

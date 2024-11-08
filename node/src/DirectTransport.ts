@@ -16,7 +16,7 @@ import {
 	parseBaseTransportStats,
 	parseTransportTraceEventData,
 } from './Transport';
-import { SctpParameters } from './SctpParameters';
+import { SctpParameters } from './sctpParametersTypes';
 import { AppData } from './types';
 import { UnsupportedError } from './errors';
 import { Event, Notification } from './fbs/notification';

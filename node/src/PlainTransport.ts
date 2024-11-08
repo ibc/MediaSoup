@@ -19,12 +19,12 @@ import {
 	parseBaseTransportStats,
 	parseTransportTraceEventData,
 } from './Transport';
-import { SctpParameters } from './SctpParameters';
+import { SctpParameters } from './sctpParametersTypes';
+import { SrtpParameters } from './srtpParametersTypes';
 import {
 	parseSrtpParameters,
 	serializeSrtpParameters,
-	SrtpParameters,
-} from './SrtpParameters';
+} from './srtpParametersFbsUtils';
 import { AppData } from './types';
 import { Event, Notification } from './fbs/notification';
 import * as FbsRequest from './fbs/request';

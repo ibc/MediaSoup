@@ -11,8 +11,8 @@ import {
 	TransportObserverEvents,
 } from './TransportTypes';
 import { Consumer } from './ConsumerTypes';
-import { SrtpParameters } from './SrtpParameters';
-import { SctpParameters, NumSctpStreams } from './SctpParameters';
+import { SrtpParameters } from './srtpParametersTypes';
+import { SctpParameters, NumSctpStreams } from './sctpParametersTypes';
 import { Either, AppData } from './types';
 
 export type PipeTransportOptions<

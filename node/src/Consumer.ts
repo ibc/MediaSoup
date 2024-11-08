@@ -25,15 +25,14 @@ import {
 import { Channel } from './Channel';
 import { TransportInternal } from './Transport';
 import { ProducerStat } from './ProducerTypes';
+import { MediaKind, RtpParameters } from './rtpParametersTypes';
 import {
-	MediaKind,
-	RtpParameters,
 	parseRtpEncodingParameters,
 	parseRtpParameters,
-} from './RtpParameters';
+} from './rtpParametersFbsUtils';
 import { parseRtpStreamStats } from './RtpStream';
 import { AppData } from './types';
-import * as utils from './utils';
+import * as fbsUtils from './fbsUtils';
 import { Event, Notification } from './fbs/notification';
 import { TraceDirection as FbsTraceDirection } from './fbs/common';
 import * as FbsRequest from './fbs/request';
@@ -765,18 +764,18 @@ function parseBaseConsumerDump(
 		rtpParameters: parseRtpParameters(data.rtpParameters()!),
 		consumableRtpEncodings:
 			data.consumableRtpEncodingsLength() > 0
-				? utils.parseVector(
+				? fbsUtils.parseVector(
 						data,
 						'consumableRtpEncodings',
 						parseRtpEncodingParameters
 					)
 				: undefined,
-		traceEventTypes: utils.parseVector(
+		traceEventTypes: fbsUtils.parseVector(
 			data,
 			'traceEventTypes',
 			consumerTraceEventTypeFromFbs
 		),
-		supportedCodecPayloadTypes: utils.parseVector(
+		supportedCodecPayloadTypes: fbsUtils.parseVector(
 			data,
 			'supportedCodecPayloadTypes'
 		),
@@ -830,7 +829,7 @@ function parsePipeConsumerDump(
 	data: FbsConsumer.ConsumerDump
 ): PipeConsumerDump {
 	const base = parseBaseConsumerDump(data.base()!);
-	const rtpStreams = utils.parseVector(data, 'rtpStreams', parseRtpStream);
+	const rtpStreams = fbsUtils.parseVector(data, 'rtpStreams', parseRtpStream);
 
 	return {
 		...base,
@@ -886,5 +885,5 @@ function parseConsumerDumpResponse(
 function parseConsumerStats(
 	binary: FbsConsumer.GetStatsResponse
 ): (ConsumerStat | ProducerStat)[] {
-	return utils.parseVector(binary, 'stats', parseRtpStreamStats);
+	return fbsUtils.parseVector(binary, 'stats', parseRtpStreamStats);
 }

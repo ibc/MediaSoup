@@ -1,5 +1,5 @@
 import { EnhancedEventEmitter } from './enhancedEvents';
-import { MediaKind, RtpParameters } from './RtpParameters';
+import { MediaKind, RtpParameters } from './rtpParametersTypes';
 import { RtpStreamRecvStats } from './RtpStream';
 import { AppData } from './types';
 

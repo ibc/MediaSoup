@@ -15,11 +15,12 @@ import {
 } from './ProducerTypes';
 import { Channel } from './Channel';
 import { TransportInternal } from './Transport';
-import { MediaKind, RtpParameters, parseRtpParameters } from './RtpParameters';
-import { Event, Notification } from './fbs/notification';
+import { MediaKind, RtpParameters } from './rtpParametersTypes';
+import { parseRtpParameters } from './rtpParametersFbsUtils';
 import { parseRtpStreamRecvStats } from './RtpStream';
 import { AppData } from './types';
-import * as utils from './utils';
+import * as fbsUtils from './fbsUtils';
+import { Event, Notification } from './fbs/notification';
 import { TraceDirection as FbsTraceDirection } from './fbs/common';
 import * as FbsNotification from './fbs/notification';
 import * as FbsRequest from './fbs/request';
@@ -340,7 +341,7 @@ export class ProducerImpl<ProducerAppData extends AppData = AppData>
 
 						data!.body(notification);
 
-						const score: ProducerScore[] = utils.parseVector(
+						const score: ProducerScore[] = fbsUtils.parseVector(
 							notification,
 							'scores',
 							parseProducerScore
@@ -517,11 +518,11 @@ export function parseProducerDump(
 		// TODO: Make flatbuffers TS return undefined instead of null.
 		rtpStreams:
 			data.rtpStreamsLength() > 0
-				? utils.parseVector(data, 'rtpStreams', (rtpStream: any) =>
+				? fbsUtils.parseVector(data, 'rtpStreams', (rtpStream: any) =>
 						rtpStream.unpack()
 					)
 				: undefined,
-		traceEventTypes: utils.parseVector<ProducerTraceEventType>(
+		traceEventTypes: fbsUtils.parseVector<ProducerTraceEventType>(
 			data,
 			'traceEventTypes',
 			producerTraceEventTypeFromFbs
@@ -533,7 +534,7 @@ export function parseProducerDump(
 function parseProducerStats(
 	binary: FbsProducer.GetStatsResponse
 ): ProducerStat[] {
-	return utils.parseVector(binary, 'stats', parseRtpStreamRecvStats);
+	return fbsUtils.parseVector(binary, 'stats', parseRtpStreamRecvStats);
 }
 
 function parseProducerScore(binary: FbsProducer.Score): ProducerScore {

@@ -10,8 +10,8 @@ import {
 	TransportEvents,
 	TransportObserverEvents,
 } from './TransportTypes';
-import { SrtpParameters, SrtpCryptoSuite } from './SrtpParameters';
-import { SctpParameters, NumSctpStreams } from './SctpParameters';
+import { SrtpParameters, SrtpCryptoSuite } from './srtpParametersTypes';
+import { SctpParameters, NumSctpStreams } from './sctpParametersTypes';
 import { Either, AppData } from './types';
 
 export type PlainTransportOptions<

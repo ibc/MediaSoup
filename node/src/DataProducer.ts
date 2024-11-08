@@ -11,10 +11,8 @@ import {
 } from './DataProducerTypes';
 import { Channel } from './Channel';
 import { TransportInternal } from './Transport';
-import {
-	SctpStreamParameters,
-	parseSctpStreamParameters,
-} from './SctpParameters';
+import { SctpStreamParameters } from './sctpParametersTypes';
+import { parseSctpStreamParameters } from './sctpParametersFbsUtils';
 import { AppData } from './types';
 import * as FbsTransport from './fbs/transport';
 import * as FbsNotification from './fbs/notification';

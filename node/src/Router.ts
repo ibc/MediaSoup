@@ -60,16 +60,11 @@ import {
 	AudioLevelObserverOptions,
 } from './AudioLevelObserverTypes';
 import { AudioLevelObserverImpl } from './AudioLevelObserver';
-import { RtpCapabilities } from './RtpParameters';
-import { cryptoSuiteToFbs } from './SrtpParameters';
+import { RtpCapabilities } from './rtpParametersTypes';
+import { cryptoSuiteToFbs } from './srtpParametersFbsUtils';
 import { AppData } from './types';
-import {
-	clone,
-	generateUUIDv4,
-	parseVector,
-	parseStringStringVector,
-	parseStringStringArrayVector,
-} from './utils';
+import * as utils from './utils';
+import * as fbsUtils from './fbsUtils';
 import * as FbsActiveSpeakerObserver from './fbs/active-speaker-observer';
 import * as FbsAudioLevelObserver from './fbs/audio-level-observer';
 import * as FbsRequest from './fbs/request';
@@ -382,7 +377,7 @@ export class RouterImpl<RouterAppData extends AppData = AppData>
 			}
 		}
 
-		const transportId = generateUUIDv4();
+		const transportId = utils.generateUUIDv4();
 
 		/* Build Request. */
 		let webRtcTransportListenServer:
@@ -570,7 +565,7 @@ export class RouterImpl<RouterAppData extends AppData = AppData>
 			};
 		}
 
-		const transportId = generateUUIDv4();
+		const transportId = utils.generateUUIDv4();
 
 		/* Build Request. */
 		const baseTransportOptions = new FbsTransport.OptionsT(
@@ -723,7 +718,7 @@ export class RouterImpl<RouterAppData extends AppData = AppData>
 			};
 		}
 
-		const transportId = generateUUIDv4();
+		const transportId = utils.generateUUIDv4();
 
 		/* Build Request. */
 		const baseTransportOptions = new FbsTransport.OptionsT(
@@ -835,7 +830,7 @@ export class RouterImpl<RouterAppData extends AppData = AppData>
 			throw new TypeError('if given, appData must be an object');
 		}
 
-		const transportId = generateUUIDv4();
+		const transportId = utils.generateUUIDv4();
 
 		/* Build Request. */
 		const baseTransportOptions = new FbsTransport.OptionsT(
@@ -1223,7 +1218,7 @@ export class RouterImpl<RouterAppData extends AppData = AppData>
 			throw new TypeError('if given, appData must be an object');
 		}
 
-		const rtpObserverId = generateUUIDv4();
+		const rtpObserverId = utils.generateUUIDv4();
 
 		/* Build Request. */
 		const activeRtpObserverOptions =
@@ -1292,7 +1287,7 @@ export class RouterImpl<RouterAppData extends AppData = AppData>
 			throw new TypeError('if given, appData must be an object');
 		}
 
-		const rtpObserverId = generateUUIDv4();
+		const rtpObserverId = utils.generateUUIDv4();
 
 		/* Build Request. */
 		const audioLevelObserverOptions =
@@ -1353,7 +1348,7 @@ export class RouterImpl<RouterAppData extends AppData = AppData>
 		}
 
 		// Clone given RTP capabilities to not modify input data.
-		const clonedRtpCapabilities = clone<RtpCapabilities>(rtpCapabilities);
+		const clonedRtpCapabilities = utils.clone<RtpCapabilities>(rtpCapabilities);
 
 		try {
 			return ortc.canConsume(
@@ -1373,25 +1368,25 @@ export function parseRouterDumpResponse(
 ): RouterDump {
 	return {
 		id: binary.id()!,
-		transportIds: parseVector(binary, 'transportIds'),
-		rtpObserverIds: parseVector(binary, 'rtpObserverIds'),
-		mapProducerIdConsumerIds: parseStringStringArrayVector(
+		transportIds: fbsUtils.parseVector(binary, 'transportIds'),
+		rtpObserverIds: fbsUtils.parseVector(binary, 'rtpObserverIds'),
+		mapProducerIdConsumerIds: fbsUtils.parseStringStringArrayVector(
 			binary,
 			'mapProducerIdConsumerIds'
 		),
-		mapConsumerIdProducerId: parseStringStringVector(
+		mapConsumerIdProducerId: fbsUtils.parseStringStringVector(
 			binary,
 			'mapConsumerIdProducerId'
 		),
-		mapProducerIdObserverIds: parseStringStringArrayVector(
+		mapProducerIdObserverIds: fbsUtils.parseStringStringArrayVector(
 			binary,
 			'mapProducerIdObserverIds'
 		),
-		mapDataProducerIdDataConsumerIds: parseStringStringArrayVector(
+		mapDataProducerIdDataConsumerIds: fbsUtils.parseStringStringArrayVector(
 			binary,
 			'mapDataProducerIdDataConsumerIds'
 		),
-		mapDataConsumerIdDataProducerId: parseStringStringVector(
+		mapDataConsumerIdDataProducerId: fbsUtils.parseStringStringVector(
 			binary,
 			'mapDataConsumerIdDataProducerId'
 		),

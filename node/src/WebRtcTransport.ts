@@ -31,9 +31,9 @@ import {
 	parseTransportTraceEventData,
 	parseTuple,
 } from './Transport';
-import { SctpParameters } from './SctpParameters';
+import { SctpParameters } from './sctpParametersTypes';
 import { AppData } from './types';
-import { parseVector } from './utils';
+import * as fbsUtils from './fbsUtils';
 import { Event, Notification } from './fbs/notification';
 import * as FbsRequest from './fbs/request';
 import * as FbsTransport from './fbs/transport';
@@ -569,7 +569,7 @@ export function parseWebRtcTransportDumpResponse(
 	// Retrieve BaseTransportDump.
 	const baseTransportDump = parseBaseTransportDump(binary.base()!);
 	// Retrieve ICE candidates.
-	const iceCandidates = parseVector<IceCandidate>(
+	const iceCandidates = fbsUtils.parseVector<IceCandidate>(
 		binary,
 		'iceCandidates',
 		parseIceCandidate

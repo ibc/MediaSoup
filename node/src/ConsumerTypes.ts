@@ -5,7 +5,7 @@ import {
 	RtpCapabilities,
 	RtpEncodingParameters,
 	RtpParameters,
-} from './RtpParameters';
+} from './rtpParametersTypes';
 import { RtpStreamSendStats } from './RtpStream';
 import { AppData } from './types';
 

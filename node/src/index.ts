@@ -4,8 +4,7 @@ import { Worker, WorkerSettings } from './WorkerTypes';
 import { WorkerImpl, workerBin } from './Worker';
 import * as utils from './utils';
 import { supportedRtpCapabilities } from './supportedRtpCapabilities';
-import { RtpCapabilities } from './RtpParameters';
-
+import { RtpCapabilities } from './rtpParametersTypes';
 import * as types from './types';
 
 /**

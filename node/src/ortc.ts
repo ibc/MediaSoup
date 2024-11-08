@@ -13,8 +13,8 @@ import {
 	RtpEncodingParameters,
 	RtpHeaderExtensionParameters,
 	RtcpParameters,
-} from './RtpParameters';
-import { SctpStreamParameters } from './SctpParameters';
+} from './rtpParametersTypes';
+import { SctpStreamParameters } from './sctpParametersTypes';
 import * as utils from './utils';
 import { UnsupportedError } from './errors';
 import * as FbsRtpParameters from './fbs/rtp-parameters';

@@ -13,7 +13,7 @@ import {
 } from './WebRtcServerTypes';
 import { WebRtcTransport } from './WebRtcTransportTypes';
 import { AppData } from './types';
-import * as utils from './utils';
+import * as fbsUtils from './fbsUtils';
 import { Body as RequestBody, Method } from './fbs/request';
 import * as FbsWorker from './fbs/worker';
 import * as FbsWebRtcServer from './fbs/web-rtc-server';
@@ -209,14 +209,14 @@ function parseWebRtcServerDump(
 ): WebRtcServerDump {
 	return {
 		id: data.id()!,
-		udpSockets: utils.parseVector(data, 'udpSockets', parseIpPort),
-		tcpServers: utils.parseVector(data, 'tcpServers', parseIpPort),
-		webRtcTransportIds: utils.parseVector(data, 'webRtcTransportIds'),
-		localIceUsernameFragments: utils.parseVector(
+		udpSockets: fbsUtils.parseVector(data, 'udpSockets', parseIpPort),
+		tcpServers: fbsUtils.parseVector(data, 'tcpServers', parseIpPort),
+		webRtcTransportIds: fbsUtils.parseVector(data, 'webRtcTransportIds'),
+		localIceUsernameFragments: fbsUtils.parseVector(
 			data,
 			'localIceUsernameFragments',
 			parseIceUserNameFragment
 		),
-		tupleHashes: utils.parseVector(data, 'tupleHashes', parseTupleHash),
+		tupleHashes: fbsUtils.parseVector(data, 'tupleHashes', parseTupleHash),
 	};
 }

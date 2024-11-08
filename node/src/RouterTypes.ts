@@ -27,8 +27,8 @@ import {
 	AudioLevelObserver,
 	AudioLevelObserverOptions,
 } from './AudioLevelObserverTypes';
-import { RtpCapabilities, RtpCodecCapability } from './RtpParameters';
-import { NumSctpStreams } from './SctpParameters';
+import { RtpCapabilities, RtpCodecCapability } from './rtpParametersTypes';
+import { NumSctpStreams } from './sctpParametersTypes';
 import { Either, AppData } from './types';
 
 export type RouterOptions<RouterAppData extends AppData = AppData> = {

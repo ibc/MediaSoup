@@ -24,17 +24,17 @@ import {
 import { Producer } from './ProducerTypes';
 import { Consumer, ConsumerType } from './ConsumerTypes';
 import { ConsumerImpl } from './Consumer';
+import { RtpParameters } from './rtpParametersTypes';
 import {
-	RtpParameters,
 	serializeRtpEncodingParameters,
 	serializeRtpParameters,
-} from './RtpParameters';
-import { SctpParameters } from './SctpParameters';
+} from './rtpParametersFbsUtils';
+import { SctpParameters } from './sctpParametersTypes';
+import { SrtpParameters } from './srtpParametersTypes';
 import {
 	parseSrtpParameters,
 	serializeSrtpParameters,
-	SrtpParameters,
-} from './SrtpParameters';
+} from './srtpParametersFbsUtils';
 import { AppData } from './types';
 import { generateUUIDv4 } from './utils';
 import { MediaKind as FbsMediaKind } from './fbs/rtp-parameters/media-kind';

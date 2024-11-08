@@ -14,9 +14,9 @@ export type * from './DataConsumerTypes';
 export type * from './RtpObserverTypes';
 export type * from './ActiveSpeakerObserverTypes';
 export type * from './AudioLevelObserverTypes';
-export type * from './RtpParameters';
-export type * from './SctpParameters';
-export type * from './SrtpParameters';
+export type * from './rtpParametersTypes';
+export type * from './sctpParametersTypes';
+export type * from './srtpParametersTypes';
 export type * from './scalabilityModes';
 
 // TODO: Here we are exporting real classes rather than types. This should

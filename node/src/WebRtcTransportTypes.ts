@@ -12,7 +12,7 @@ import {
 	TransportObserverEvents,
 } from './TransportTypes';
 import { WebRtcServer } from './WebRtcServerTypes';
-import { SctpParameters, NumSctpStreams } from './SctpParameters';
+import { SctpParameters, NumSctpStreams } from './sctpParametersTypes';
 import { Either, AppData } from './types';
 
 export type WebRtcTransportOptions<

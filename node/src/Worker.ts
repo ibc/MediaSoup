@@ -21,9 +21,10 @@ import { WebRtcServerImpl } from './WebRtcServer';
 import { Router, RouterOptions } from './RouterTypes';
 import { RouterImpl } from './Router';
 import { portRangeToFbs, socketFlagsToFbs } from './Transport';
-import { RtpCodecCapability } from './RtpParameters';
-import { AppData } from './types';
+import { RtpCodecCapability } from './rtpParametersTypes';
 import * as utils from './utils';
+import * as fbsUtils from './fbsUtils';
+import { AppData } from './types';
 import { Event } from './fbs/notification';
 import * as FbsRequest from './fbs/request';
 import * as FbsWorker from './fbs/worker';
@@ -590,14 +591,14 @@ export function parseWorkerDumpResponse(
 ): WorkerDump {
 	const dump: WorkerDump = {
 		pid: binary.pid(),
-		webRtcServerIds: utils.parseVector(binary, 'webRtcServerIds'),
-		routerIds: utils.parseVector(binary, 'routerIds'),
+		webRtcServerIds: fbsUtils.parseVector(binary, 'webRtcServerIds'),
+		routerIds: fbsUtils.parseVector(binary, 'routerIds'),
 		channelMessageHandlers: {
-			channelRequestHandlers: utils.parseVector(
+			channelRequestHandlers: fbsUtils.parseVector(
 				binary.channelMessageHandlers()!,
 				'channelRequestHandlers'
 			),
-			channelNotificationHandlers: utils.parseVector(
+			channelNotificationHandlers: fbsUtils.parseVector(
 				binary.channelMessageHandlers()!,
 				'channelNotificationHandlers'
 			),

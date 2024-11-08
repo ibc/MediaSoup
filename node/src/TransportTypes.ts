@@ -3,7 +3,7 @@ import { Producer, ProducerOptions } from './ProducerTypes';
 import { Consumer, ConsumerOptions } from './ConsumerTypes';
 import { DataProducer, DataProducerOptions } from './DataProducerTypes';
 import { DataConsumer, DataConsumerOptions } from './DataConsumerTypes';
-import { SctpParameters } from './SctpParameters';
+import { SctpParameters } from './sctpParametersTypes';
 import { AppData } from './types';
 
 export type TransportListenInfo = {

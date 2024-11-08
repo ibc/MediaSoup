@@ -1,5 +1,5 @@
 import { EnhancedEventEmitter } from './enhancedEvents';
-import { SctpStreamParameters } from './SctpParameters';
+import { SctpStreamParameters } from './sctpParametersTypes';
 import { AppData } from './types';
 
 export type DataConsumerOptions<DataConsumerAppData extends AppData = AppData> =

@@ -11,7 +11,7 @@ import { RtpObserver } from './RtpObserverTypes';
 import { RtpObserverImpl, RtpObserverConstructorOptions } from './RtpObserver';
 import { Producer } from './ProducerTypes';
 import { AppData } from './types';
-import * as utils from './utils';
+import * as fbsUtils from './fbsUtils';
 import { Event, Notification } from './fbs/notification';
 import * as FbsAudioLevelObserver from './fbs/audio-level-observer';
 
@@ -66,7 +66,7 @@ export class AudioLevelObserverImpl<
 
 						// Get the corresponding Producer instance and remove entries with
 						// no Producer (it may have been closed in the meanwhile).
-						const volumes: AudioLevelObserverVolume[] = utils
+						const volumes: AudioLevelObserverVolume[] = fbsUtils
 							.parseVector(notification, 'volumes', parseVolume)
 							.map(
 								({

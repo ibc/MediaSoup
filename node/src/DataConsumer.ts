@@ -11,12 +11,10 @@ import {
 } from './DataConsumerTypes';
 import { Channel } from './Channel';
 import { TransportInternal } from './Transport';
-import {
-	SctpStreamParameters,
-	parseSctpStreamParameters,
-} from './SctpParameters';
+import { SctpStreamParameters } from './sctpParametersTypes';
+import { parseSctpStreamParameters } from './sctpParametersFbsUtils';
 import { AppData } from './types';
-import * as utils from './utils';
+import * as fbsUtils from './fbsUtils';
 import { Event, Notification } from './fbs/notification';
 import * as FbsTransport from './fbs/transport';
 import * as FbsRequest from './fbs/request';
@@ -399,7 +397,7 @@ export class DataConsumerImpl<DataConsumerAppData extends AppData = AppData>
 		response.body(data);
 
 		// Update subchannels.
-		this.#subchannels = utils.parseVector(data, 'subchannels');
+		this.#subchannels = fbsUtils.parseVector(data, 'subchannels');
 	}
 
 	async addSubchannel(subchannel: number): Promise<void> {
@@ -425,7 +423,7 @@ export class DataConsumerImpl<DataConsumerAppData extends AppData = AppData>
 		response.body(data);
 
 		// Update subchannels.
-		this.#subchannels = utils.parseVector(data, 'subchannels');
+		this.#subchannels = fbsUtils.parseVector(data, 'subchannels');
 	}
 
 	async removeSubchannel(subchannel: number): Promise<void> {
@@ -451,7 +449,7 @@ export class DataConsumerImpl<DataConsumerAppData extends AppData = AppData>
 		response.body(data);
 
 		// Update subchannels.
-		this.#subchannels = utils.parseVector(data, 'subchannels');
+		this.#subchannels = fbsUtils.parseVector(data, 'subchannels');
 	}
 
 	private handleWorkerNotifications(): void {
@@ -606,7 +604,7 @@ export function parseDataConsumerDumpResponse(
 		bufferedAmountLowThreshold: data.bufferedAmountLowThreshold(),
 		paused: data.paused(),
 		dataProducerPaused: data.dataProducerPaused(),
-		subchannels: utils.parseVector(data, 'subchannels'),
+		subchannels: fbsUtils.parseVector(data, 'subchannels'),
 	};
 }
 

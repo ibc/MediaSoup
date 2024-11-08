@@ -62,17 +62,19 @@ import {
 	MediaKind,
 	RtpCapabilities,
 	RtpParameters,
+} from './rtpParametersTypes';
+import {
 	serializeRtpEncodingParameters,
 	serializeRtpParameters,
-} from './RtpParameters';
+} from './rtpParametersFbsUtils';
+import { SctpParameters, SctpStreamParameters } from './sctpParametersTypes';
 import {
 	parseSctpParametersDump,
 	serializeSctpStreamParameters,
-	SctpParameters,
-	SctpStreamParameters,
-} from './SctpParameters';
+} from './sctpParametersFbsUtils';
 import { AppData } from './types';
 import * as utils from './utils';
+import * as fbsUtils from './fbsUtils';
 import { TraceDirection as FbsTraceDirection } from './fbs/common';
 import * as FbsRequest from './fbs/request';
 import { MediaKind as FbsMediaKind } from './fbs/rtp-parameters/media-kind';
@@ -1088,23 +1090,29 @@ export function parseBaseTransportDump(
 	binary: FbsTransport.Dump
 ): BaseTransportDump {
 	// Retrieve producerIds.
-	const producerIds = utils.parseVector<string>(binary, 'producerIds');
+	const producerIds = fbsUtils.parseVector<string>(binary, 'producerIds');
 	// Retrieve consumerIds.
-	const consumerIds = utils.parseVector<string>(binary, 'consumerIds');
+	const consumerIds = fbsUtils.parseVector<string>(binary, 'consumerIds');
 	// Retrieve map SSRC consumerId.
-	const mapSsrcConsumerId = utils.parseUint32StringVector(
+	const mapSsrcConsumerId = fbsUtils.parseUint32StringVector(
 		binary,
 		'mapSsrcConsumerId'
 	);
 	// Retrieve map RTX SSRC consumerId.
-	const mapRtxSsrcConsumerId = utils.parseUint32StringVector(
+	const mapRtxSsrcConsumerId = fbsUtils.parseUint32StringVector(
 		binary,
 		'mapRtxSsrcConsumerId'
 	);
 	// Retrieve dataProducerIds.
-	const dataProducerIds = utils.parseVector<string>(binary, 'dataProducerIds');
+	const dataProducerIds = fbsUtils.parseVector<string>(
+		binary,
+		'dataProducerIds'
+	);
 	// Retrieve dataConsumerIds.
-	const dataConsumerIds = utils.parseVector<string>(binary, 'dataConsumerIds');
+	const dataConsumerIds = fbsUtils.parseVector<string>(
+		binary,
+		'dataConsumerIds'
+	);
 	// Retrieve recvRtpHeaderExtesions.
 	const recvRtpHeaderExtensions = parseRecvRtpHeaderExtensions(
 		binary.recvRtpHeaderExtensions()!
@@ -1132,7 +1140,7 @@ export function parseBaseTransportDump(
 		: undefined;
 
 	// Retrieve traceEventTypes.
-	const traceEventTypes = utils.parseVector<TransportTraceEventType>(
+	const traceEventTypes = fbsUtils.parseVector<TransportTraceEventType>(
 		binary,
 		'traceEventTypes',
 		transportTraceEventTypeFromFbs
@@ -1557,11 +1565,11 @@ function parseRtpListenerDump(
 	binary: FbsTransport.RtpListener
 ): RtpListenerDump {
 	// Retrieve ssrcTable.
-	const ssrcTable = utils.parseUint32StringVector(binary, 'ssrcTable');
+	const ssrcTable = fbsUtils.parseUint32StringVector(binary, 'ssrcTable');
 	// Retrieve midTable.
-	const midTable = utils.parseUint32StringVector(binary, 'midTable');
+	const midTable = fbsUtils.parseUint32StringVector(binary, 'midTable');
 	// Retrieve ridTable.
-	const ridTable = utils.parseUint32StringVector(binary, 'ridTable');
+	const ridTable = fbsUtils.parseUint32StringVector(binary, 'ridTable');
 
 	return {
 		ssrcTable,
@@ -1574,7 +1582,10 @@ function parseSctpListenerDump(
 	binary: FbsTransport.SctpListener
 ): SctpListenerDump {
 	// Retrieve streamIdTable.
-	const streamIdTable = utils.parseUint32StringVector(binary, 'streamIdTable');
+	const streamIdTable = fbsUtils.parseUint32StringVector(
+		binary,
+		'streamIdTable'
+	);
 
 	return { streamIdTable };
 }

@@ -2,7 +2,7 @@ import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
 import { Channel } from './Channel';
 import {
-	WebRtcServerInterface,
+	WebRtcServer,
 	IpPort,
 	IceUserNameFragment,
 	TupleHash,
@@ -11,7 +11,7 @@ import {
 	WebRtcServerObserver,
 	WebRtcServerObserverEvents,
 } from './WebRtcServerTypes';
-import { WebRtcTransportInterface } from './WebRtcTransportTypes';
+import { WebRtcTransport } from './WebRtcTransportTypes';
 import { AppData } from './types';
 import * as utils from './utils';
 import { Body as RequestBody, Method } from './fbs/request';
@@ -26,7 +26,7 @@ const logger = new Logger('WebRtcServer');
 
 export class WebRtcServerImpl<WebRtcServerAppData extends AppData = AppData>
 	extends EnhancedEventEmitter<WebRtcServerEvents>
-	implements WebRtcServerInterface
+	implements WebRtcServer
 {
 	// Internal data.
 	readonly #internal: WebRtcServerInternal;
@@ -41,7 +41,7 @@ export class WebRtcServerImpl<WebRtcServerAppData extends AppData = AppData>
 	#appData: WebRtcServerAppData;
 
 	// Transports map.
-	readonly #webRtcTransports: Map<string, WebRtcTransportInterface> = new Map();
+	readonly #webRtcTransports: Map<string, WebRtcTransport> = new Map();
 
 	// Observer instance.
 	readonly #observer: WebRtcServerObserver =
@@ -88,7 +88,7 @@ export class WebRtcServerImpl<WebRtcServerAppData extends AppData = AppData>
 	/**
 	 * Just for testing purposes.
 	 */
-	get webRtcTransportsForTesting(): Map<string, WebRtcTransportInterface> {
+	get webRtcTransportsForTesting(): Map<string, WebRtcTransport> {
 		return this.#webRtcTransports;
 	}
 
@@ -166,7 +166,7 @@ export class WebRtcServerImpl<WebRtcServerAppData extends AppData = AppData>
 		return parseWebRtcServerDump(dump);
 	}
 
-	handleWebRtcTransport(webRtcTransport: WebRtcTransportInterface): void {
+	handleWebRtcTransport(webRtcTransport: WebRtcTransport): void {
 		this.#webRtcTransports.set(webRtcTransport.id, webRtcTransport);
 
 		// Emit observer event.

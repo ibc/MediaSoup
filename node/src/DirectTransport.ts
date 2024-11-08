@@ -1,14 +1,14 @@
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
 import {
-	DirectTransportInterface,
+	DirectTransport,
 	DirectTransportDump,
 	DirectTransportStat,
 	DirectTransportEvents,
 	DirectTransportObserver,
 	DirectTransportObserverEvents,
 } from './DirectTransportTypes';
-import { TransportInterface, BaseTransportDump } from './TransportTypes';
+import { Transport, BaseTransportDump } from './TransportTypes';
 import {
 	TransportImpl,
 	TransportConstructorOptions,
@@ -44,7 +44,7 @@ export class DirectTransportImpl<
 		DirectTransportEvents,
 		DirectTransportObserver
 	>
-	implements TransportInterface, DirectTransportInterface
+	implements Transport, DirectTransport
 {
 	// DirectTransport data.
 	// eslint-disable-next-line no-unused-private-class-members

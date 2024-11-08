@@ -3,7 +3,7 @@ import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
 import * as ortc from './ortc';
 import {
-	PipeTransportInterface,
+	PipeTransport,
 	PipeConsumerOptions,
 	PipeTransportDump,
 	PipeTransportStat,
@@ -11,11 +11,7 @@ import {
 	PipeTransportObserver,
 	PipeTransportObserverEvents,
 } from './PipeTransportTypes';
-import {
-	TransportInterface,
-	TransportTuple,
-	SctpState,
-} from './TransportTypes';
+import { Transport, TransportTuple, SctpState } from './TransportTypes';
 import {
 	TransportImpl,
 	TransportConstructorOptions,
@@ -25,8 +21,8 @@ import {
 	parseTuple,
 	parseTransportTraceEventData,
 } from './Transport';
-import { ProducerInterface } from './ProducerTypes';
-import { ConsumerInterface, ConsumerType } from './ConsumerTypes';
+import { Producer } from './ProducerTypes';
+import { Consumer, ConsumerType } from './ConsumerTypes';
 import { ConsumerImpl } from './Consumer';
 import {
 	RtpParameters,
@@ -63,13 +59,13 @@ export type PipeTransportData = {
 
 const logger = new Logger('PipeTransport');
 
-export class PipeTransport<PipeTransportAppData extends AppData = AppData>
+export class PipeTransportImpl<PipeTransportAppData extends AppData = AppData>
 	extends TransportImpl<
 		PipeTransportAppData,
 		PipeTransportEvents,
 		PipeTransportObserver
 	>
-	implements TransportInterface, PipeTransportInterface
+	implements Transport, PipeTransport
 {
 	// PipeTransport data.
 	readonly #data: PipeTransportData;
@@ -215,9 +211,7 @@ export class PipeTransport<PipeTransportAppData extends AppData = AppData>
 	async consume<ConsumerAppData extends AppData = AppData>({
 		producerId,
 		appData,
-	}: PipeConsumerOptions<ConsumerAppData>): Promise<
-		ConsumerInterface<ConsumerAppData>
-	> {
+	}: PipeConsumerOptions<ConsumerAppData>): Promise<Consumer<ConsumerAppData>> {
 		logger.debug('consume()');
 
 		if (!producerId || typeof producerId !== 'string') {
@@ -268,7 +262,7 @@ export class PipeTransport<PipeTransportAppData extends AppData = AppData>
 			type: 'pipe' as ConsumerType,
 		};
 
-		const consumer: ConsumerInterface<ConsumerAppData> = new ConsumerImpl({
+		const consumer: Consumer<ConsumerAppData> = new ConsumerImpl({
 			internal: {
 				...this.internal,
 				consumerId,
@@ -383,7 +377,7 @@ function createConsumeRequest({
 }: {
 	builder: flatbuffers.Builder;
 	consumerId: string;
-	producer: ProducerInterface;
+	producer: Producer;
 	rtpParameters: RtpParameters;
 }): number {
 	// Build the request.

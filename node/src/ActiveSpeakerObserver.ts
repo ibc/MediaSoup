@@ -1,13 +1,13 @@
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
 import {
-	ActiveSpeakerObserverInterface,
+	ActiveSpeakerObserver,
 	ActiveSpeakerObserverDominantSpeaker,
 	ActiveSpeakerObserverEvents,
 	ActiveSpeakerObserverObserver,
 	ActiveSpeakerObserverObserverEvents,
 } from './ActiveSpeakerObserverTypes';
-import { RtpObserverInterface } from './RtpObserverTypes';
+import { RtpObserver } from './RtpObserverTypes';
 import { RtpObserverImpl, RtpObserverConstructorOptions } from './RtpObserver';
 import { AppData } from './types';
 import { Event, Notification } from './fbs/notification';
@@ -26,7 +26,7 @@ export class ActiveSpeakerObserverImpl<
 		ActiveSpeakerObserverEvents,
 		ActiveSpeakerObserverObserver
 	>
-	implements RtpObserverInterface, ActiveSpeakerObserverInterface
+	implements RtpObserver, ActiveSpeakerObserver
 {
 	/**
 	 * @private

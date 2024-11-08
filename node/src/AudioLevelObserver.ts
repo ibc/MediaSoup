@@ -1,15 +1,15 @@
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
 import {
-	AudioLevelObserverInterface,
+	AudioLevelObserver,
 	AudioLevelObserverVolume,
 	AudioLevelObserverEvents,
 	AudioLevelObserverObserver,
 	AudioLevelObserverObserverEvents,
 } from './AudioLevelObserverTypes';
-import { RtpObserverInterface } from './RtpObserverTypes';
+import { RtpObserver } from './RtpObserverTypes';
 import { RtpObserverImpl, RtpObserverConstructorOptions } from './RtpObserver';
-import { ProducerInterface } from './ProducerTypes';
+import { Producer } from './ProducerTypes';
 import { AppData } from './types';
 import * as utils from './utils';
 import { Event, Notification } from './fbs/notification';
@@ -28,7 +28,7 @@ export class AudioLevelObserverImpl<
 		AudioLevelObserverEvents,
 		AudioLevelObserverObserver
 	>
-	implements RtpObserverInterface, AudioLevelObserverInterface
+	implements RtpObserver, AudioLevelObserver
 {
 	/**
 	 * @private
@@ -80,9 +80,7 @@ export class AudioLevelObserverImpl<
 									volume,
 								})
 							)
-							.filter(
-								({ producer }: { producer: ProducerInterface }) => producer
-							);
+							.filter(({ producer }: { producer: Producer }) => producer);
 
 						if (volumes.length > 0) {
 							this.safeEmit('volumes', volumes);

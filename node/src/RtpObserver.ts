@@ -3,7 +3,7 @@ import { EnhancedEventEmitter } from './enhancedEvents';
 import { RtpObserverEvents, RtpObserverObserver } from './RtpObserverTypes';
 import { Channel } from './Channel';
 import { RouterInternal } from './Router';
-import { ProducerInterface } from './ProducerTypes';
+import { Producer } from './ProducerTypes';
 import { AppData } from './types';
 import * as FbsRequest from './fbs/request';
 import * as FbsRouter from './fbs/router';
@@ -13,7 +13,7 @@ export type RtpObserverConstructorOptions<RtpObserverAppData> = {
 	internal: RtpObserverObserverInternal;
 	channel: Channel;
 	appData?: RtpObserverAppData;
-	getProducerById: (producerId: string) => ProducerInterface | undefined;
+	getProducerById: (producerId: string) => Producer | undefined;
 };
 
 type RtpObserverObserverInternal = RouterInternal & {
@@ -45,7 +45,7 @@ export abstract class RtpObserverImpl<
 	// Method to retrieve a Producer.
 	protected readonly getProducerById: (
 		producerId: string
-	) => ProducerInterface | undefined;
+	) => Producer | undefined;
 
 	// Observer instance.
 	readonly #observer: Observer;

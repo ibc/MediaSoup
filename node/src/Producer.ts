@@ -1,7 +1,7 @@
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
 import {
-	ProducerInterface,
+	Producer,
 	ProducerType,
 	ProducerScore,
 	ProducerVideoOrientation,
@@ -43,7 +43,7 @@ type ProducerData = {
 
 export class ProducerImpl<ProducerAppData extends AppData = AppData>
 	extends EnhancedEventEmitter<ProducerEvents>
-	implements ProducerInterface
+	implements Producer
 {
 	// Internal data.
 	readonly #internal: ProducerInternal;

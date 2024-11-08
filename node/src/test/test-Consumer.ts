@@ -17,12 +17,12 @@ type TestContext = {
 	audioProducerOptions: mediasoup.types.ProducerOptions;
 	videoProducerOptions: mediasoup.types.ProducerOptions;
 	consumerDeviceCapabilities: mediasoup.types.RtpCapabilities;
-	worker?: mediasoup.types.WorkerInterface;
-	router?: mediasoup.types.RouterInterface;
-	webRtcTransport1?: mediasoup.types.WebRtcTransportInterface;
-	webRtcTransport2?: mediasoup.types.WebRtcTransportInterface;
-	audioProducer?: mediasoup.types.ProducerInterface;
-	videoProducer?: mediasoup.types.ProducerInterface;
+	worker?: mediasoup.types.Worker;
+	router?: mediasoup.types.Router;
+	webRtcTransport1?: mediasoup.types.WebRtcTransport;
+	webRtcTransport2?: mediasoup.types.WebRtcTransport;
+	audioProducer?: mediasoup.types.Producer;
+	videoProducer?: mediasoup.types.Producer;
 };
 
 const ctx: TestContext = {

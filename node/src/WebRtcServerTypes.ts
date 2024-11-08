@@ -1,6 +1,6 @@
 import { EnhancedEventEmitter } from './enhancedEvents';
 import { TransportListenInfo } from './TransportTypes';
-import { WebRtcTransportInterface } from './WebRtcTransportTypes';
+import { WebRtcTransport } from './WebRtcTransportTypes';
 import { AppData } from './types';
 
 export type WebRtcServerOptions<WebRtcServerAppData extends AppData = AppData> =
@@ -57,13 +57,12 @@ export type WebRtcServerObserver =
 
 export type WebRtcServerObserverEvents = {
 	close: [];
-	webrtctransporthandled: [WebRtcTransportInterface];
-	webrtctransportunhandled: [WebRtcTransportInterface];
+	webrtctransporthandled: [WebRtcTransport];
+	webrtctransportunhandled: [WebRtcTransport];
 };
 
-export interface WebRtcServerInterface<
-	WebRtcServerAppData extends AppData = AppData,
-> extends EnhancedEventEmitter<WebRtcServerEvents> {
+export interface WebRtcServer<WebRtcServerAppData extends AppData = AppData>
+	extends EnhancedEventEmitter<WebRtcServerEvents> {
 	/**
 	 * WebRtcServer id.
 	 */
@@ -109,5 +108,5 @@ export interface WebRtcServerInterface<
 	/**
 	 * @private
 	 */
-	handleWebRtcTransport(webRtcTransport: WebRtcTransportInterface): void;
+	handleWebRtcTransport(webRtcTransport: WebRtcTransport): void;
 }

@@ -2,7 +2,7 @@ import * as flatbuffers from 'flatbuffers';
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
 import {
-	WebRtcTransportInterface,
+	WebRtcTransport,
 	IceParameters,
 	IceCandidate,
 	DtlsParameters,
@@ -20,11 +20,7 @@ import {
 	WebRtcTransportObserver,
 	WebRtcTransportObserverEvents,
 } from './WebRtcTransportTypes';
-import {
-	TransportInterface,
-	TransportTuple,
-	SctpState,
-} from './TransportTypes';
+import { Transport, TransportTuple, SctpState } from './TransportTypes';
 import {
 	TransportImpl,
 	TransportConstructorOptions,
@@ -78,7 +74,7 @@ export class WebRtcTransportImpl<
 		WebRtcTransportEvents,
 		WebRtcTransportObserver
 	>
-	implements TransportInterface, WebRtcTransportInterface
+	implements Transport, WebRtcTransport
 {
 	// WebRtcTransport data.
 	readonly #data: WebRtcTransportData;

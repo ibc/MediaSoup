@@ -16,10 +16,10 @@ type TestContext = {
 	mediaCodecs: mediasoup.types.RtpCodecCapability[];
 	audioProducerOptions: mediasoup.types.ProducerOptions;
 	videoProducerOptions: mediasoup.types.ProducerOptions;
-	worker?: mediasoup.types.WorkerInterface;
-	router?: mediasoup.types.RouterInterface;
-	webRtcTransport1?: mediasoup.types.WebRtcTransportInterface;
-	webRtcTransport2?: mediasoup.types.WebRtcTransportInterface;
+	worker?: mediasoup.types.Worker;
+	router?: mediasoup.types.Router;
+	webRtcTransport1?: mediasoup.types.WebRtcTransport;
+	webRtcTransport2?: mediasoup.types.WebRtcTransport;
 };
 
 const ctx: TestContext = {

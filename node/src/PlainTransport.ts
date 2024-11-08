@@ -2,18 +2,14 @@ import * as flatbuffers from 'flatbuffers';
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
 import {
-	PlainTransportInterface,
+	PlainTransport,
 	PlainTransportDump,
 	PlainTransportStat,
 	PlainTransportEvents,
 	PlainTransportObserver,
 	PlainTransportObserverEvents,
 } from './PlainTransportTypes';
-import {
-	TransportInterface,
-	TransportTuple,
-	SctpState,
-} from './TransportTypes';
+import { Transport, TransportTuple, SctpState } from './TransportTypes';
 import {
 	TransportImpl,
 	TransportConstructorOptions,
@@ -58,7 +54,7 @@ export class PlainTransportImpl<PlainTransportAppData extends AppData = AppData>
 		PlainTransportEvents,
 		PlainTransportObserver
 	>
-	implements TransportInterface, PlainTransportInterface
+	implements Transport, PlainTransport
 {
 	// PlainTransport data.
 	readonly #data: PlainTransportData;

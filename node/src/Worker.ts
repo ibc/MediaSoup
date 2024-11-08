@@ -6,7 +6,7 @@ import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
 import * as ortc from './ortc';
 import {
-	WorkerInterface,
+	Worker,
 	WorkerSettings,
 	WorkerUpdateableSettings,
 	WorkerResourceUsage,
@@ -16,12 +16,9 @@ import {
 	WorkerObserverEvents,
 } from './WorkerTypes';
 import { Channel } from './Channel';
-import {
-	WebRtcServerInterface,
-	WebRtcServerOptions,
-} from './WebRtcServerTypes';
+import { WebRtcServer, WebRtcServerOptions } from './WebRtcServerTypes';
 import { WebRtcServerImpl } from './WebRtcServer';
-import { RouterInterface, RouterOptions } from './RouterTypes';
+import { Router, RouterOptions } from './RouterTypes';
 import { RouterImpl } from './Router';
 import { portRangeToFbs, socketFlagsToFbs } from './Transport';
 import { RtpCodecCapability } from './RtpParameters';
@@ -63,7 +60,7 @@ const workerLogger = new Logger('Worker');
 
 export class WorkerImpl<WorkerAppData extends AppData = AppData>
 	extends EnhancedEventEmitter<WorkerEvents>
-	implements WorkerInterface
+	implements Worker
 {
 	// mediasoup-worker child process.
 	#child: ChildProcess;
@@ -87,10 +84,10 @@ export class WorkerImpl<WorkerAppData extends AppData = AppData>
 	#appData: WorkerAppData;
 
 	// WebRtcServers set.
-	readonly #webRtcServers: Set<WebRtcServerInterface> = new Set();
+	readonly #webRtcServers: Set<WebRtcServer> = new Set();
 
 	// Routers set.
-	readonly #routers: Set<RouterInterface> = new Set();
+	readonly #routers: Set<Router> = new Set();
 
 	// Observer instance.
 	readonly #observer: WorkerObserver =
@@ -334,14 +331,14 @@ export class WorkerImpl<WorkerAppData extends AppData = AppData>
 	/**
 	 * Just for testing purposes.
 	 */
-	get webRtcServersForTesting(): Set<WebRtcServerInterface> {
+	get webRtcServersForTesting(): Set<WebRtcServer> {
 		return this.#webRtcServers;
 	}
 
 	/**
 	 * Just for testing purposes.
 	 */
-	get routersForTesting(): Set<RouterInterface> {
+	get routersForTesting(): Set<Router> {
 		return this.#routers;
 	}
 
@@ -447,7 +444,7 @@ export class WorkerImpl<WorkerAppData extends AppData = AppData>
 		listenInfos,
 		appData,
 	}: WebRtcServerOptions<WebRtcServerAppData>): Promise<
-		WebRtcServerInterface<WebRtcServerAppData>
+		WebRtcServer<WebRtcServerAppData>
 	> {
 		logger.debug('createWebRtcServer()');
 
@@ -489,7 +486,7 @@ export class WorkerImpl<WorkerAppData extends AppData = AppData>
 			createWebRtcServerRequestOffset
 		);
 
-		const webRtcServer: WebRtcServerInterface<WebRtcServerAppData> =
+		const webRtcServer: WebRtcServer<WebRtcServerAppData> =
 			new WebRtcServerImpl({
 				internal: { webRtcServerId },
 				channel: this.#channel,
@@ -508,9 +505,7 @@ export class WorkerImpl<WorkerAppData extends AppData = AppData>
 	async createRouter<RouterAppData extends AppData = AppData>({
 		mediaCodecs,
 		appData,
-	}: RouterOptions<RouterAppData> = {}): Promise<
-		RouterInterface<RouterAppData>
-	> {
+	}: RouterOptions<RouterAppData> = {}): Promise<Router<RouterAppData>> {
 		logger.debug('createRouter()');
 
 		if (appData && typeof appData !== 'object') {
@@ -540,7 +535,7 @@ export class WorkerImpl<WorkerAppData extends AppData = AppData>
 		);
 
 		const data = { rtpCapabilities };
-		const router: RouterInterface<RouterAppData> = new RouterImpl({
+		const router: Router<RouterAppData> = new RouterImpl({
 			internal: {
 				routerId,
 			},

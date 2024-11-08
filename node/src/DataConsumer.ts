@@ -1,7 +1,7 @@
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
 import {
-	DataConsumerInterface,
+	DataConsumer,
 	DataConsumerType,
 	DataConsumerDump,
 	DataConsumerStat,
@@ -40,7 +40,7 @@ const logger = new Logger('DataConsumer');
 
 export class DataConsumerImpl<DataConsumerAppData extends AppData = AppData>
 	extends EnhancedEventEmitter<DataConsumerEvents>
-	implements DataConsumerInterface
+	implements DataConsumer
 {
 	// Internal data.
 	readonly #internal: DataConsumerInternal;

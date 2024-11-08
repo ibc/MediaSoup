@@ -1,7 +1,7 @@
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
 import {
-	DataProducerInterface,
+	DataProducer,
 	DataProducerType,
 	DataProducerDump,
 	DataProducerStat,
@@ -36,7 +36,7 @@ const logger = new Logger('DataProducer');
 
 export class DataProducerImpl<DataProducerAppData extends AppData = AppData>
 	extends EnhancedEventEmitter<DataProducerEvents>
-	implements DataProducerInterface
+	implements DataProducer
 {
 	// Internal data.
 	readonly #internal: DataProducerInternal;

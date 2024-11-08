@@ -1,5 +1,5 @@
 import { EnhancedEventEmitter } from './enhancedEvents';
-import { ProducerInterface } from './ProducerTypes';
+import { Producer } from './ProducerTypes';
 import { AppData } from './types';
 
 export type RtpObserverEvents = {
@@ -16,11 +16,11 @@ export type RtpObserverObserverEvents = {
 	close: [];
 	pause: [];
 	resume: [];
-	addproducer: [ProducerInterface];
-	removeproducer: [ProducerInterface];
+	addproducer: [Producer];
+	removeproducer: [Producer];
 };
 
-export interface RtpObserverInterface<
+export interface RtpObserver<
 	RtpObserverAppData extends AppData = AppData,
 	Events extends RtpObserverEvents = RtpObserverEvents,
 	Observer extends RtpObserverObserver = RtpObserverObserver,

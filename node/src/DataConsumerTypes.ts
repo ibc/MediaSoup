@@ -102,9 +102,8 @@ export type DataConsumerObserverEvents = {
 	resume: [];
 };
 
-export interface DataConsumerInterface<
-	DataConsumerAppData extends AppData = AppData,
-> extends EnhancedEventEmitter<DataConsumerEvents> {
+export interface DataConsumer<DataConsumerAppData extends AppData = AppData>
+	extends EnhancedEventEmitter<DataConsumerEvents> {
 	/**
 	 * DataConsumer id.
 	 */

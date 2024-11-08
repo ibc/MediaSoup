@@ -8,7 +8,7 @@ import { RouterImpl } from '../Router';
 import { InvalidStateError } from '../errors';
 
 type TestContext = {
-	worker?: mediasoup.types.WorkerInterface;
+	worker?: mediasoup.types.Worker;
 };
 
 const ctx: TestContext = {};

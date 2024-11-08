@@ -1,6 +1,6 @@
 import { EnhancedEventEmitter } from './enhancedEvents';
 import {
-	TransportInterface,
+	Transport,
 	TransportListenInfo,
 	TransportListenIp,
 	TransportTuple,
@@ -10,7 +10,7 @@ import {
 	TransportEvents,
 	TransportObserverEvents,
 } from './TransportTypes';
-import { ConsumerInterface } from './ConsumerTypes';
+import { Consumer } from './ConsumerTypes';
 import { SrtpParameters } from './SrtpParameters';
 import { SctpParameters, NumSctpStreams } from './SctpParameters';
 import { Either, AppData } from './types';
@@ -119,9 +119,8 @@ export type PipeTransportObserverEvents = TransportObserverEvents & {
 	sctpstatechange: [SctpState];
 };
 
-export interface PipeTransportInterface<
-	PipeTransportAppData extends AppData = AppData,
-> extends TransportInterface<
+export interface PipeTransport<PipeTransportAppData extends AppData = AppData>
+	extends Transport<
 		PipeTransportAppData,
 		PipeTransportEvents,
 		PipeTransportObserver
@@ -190,7 +189,5 @@ export interface PipeTransportInterface<
 	consume<ConsumerAppData extends AppData = AppData>({
 		producerId,
 		appData,
-	}: PipeConsumerOptions<ConsumerAppData>): Promise<
-		ConsumerInterface<ConsumerAppData>
-	>;
+	}: PipeConsumerOptions<ConsumerAppData>): Promise<Consumer<ConsumerAppData>>;
 }

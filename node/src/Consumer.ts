@@ -1,7 +1,7 @@
 import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
 import {
-	ConsumerInterface,
+	Consumer,
 	ConsumerType,
 	ConsumerScore,
 	ConsumerLayers,
@@ -60,7 +60,7 @@ const logger = new Logger('Consumer');
 
 export class ConsumerImpl<ConsumerAppData extends AppData = AppData>
 	extends EnhancedEventEmitter<ConsumerEvents>
-	implements ConsumerInterface
+	implements Consumer
 {
 	// Internal data.
 	readonly #internal: ConsumerInternal;

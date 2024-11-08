@@ -15,17 +15,17 @@ type TestContext = {
 	videoProducerOptions: mediasoup.types.ProducerOptions;
 	dataProducerOptions: mediasoup.types.DataProducerOptions;
 	consumerDeviceCapabilities: mediasoup.types.RtpCapabilities;
-	worker1?: mediasoup.types.WorkerInterface;
-	worker2?: mediasoup.types.WorkerInterface;
-	router1?: mediasoup.types.RouterInterface;
-	router2?: mediasoup.types.RouterInterface;
-	webRtcTransport1?: mediasoup.types.WebRtcTransportInterface;
-	webRtcTransport2?: mediasoup.types.WebRtcTransportInterface;
-	audioProducer?: mediasoup.types.ProducerInterface;
-	videoProducer?: mediasoup.types.ProducerInterface;
-	videoConsumer?: mediasoup.types.ConsumerInterface;
-	dataProducer?: mediasoup.types.DataProducerInterface;
-	dataConsumer?: mediasoup.types.DataConsumerInterface;
+	worker1?: mediasoup.types.Worker;
+	worker2?: mediasoup.types.Worker;
+	router1?: mediasoup.types.Router;
+	router2?: mediasoup.types.Router;
+	webRtcTransport1?: mediasoup.types.WebRtcTransport;
+	webRtcTransport2?: mediasoup.types.WebRtcTransport;
+	audioProducer?: mediasoup.types.Producer;
+	videoProducer?: mediasoup.types.Producer;
+	videoConsumer?: mediasoup.types.Consumer;
+	dataProducer?: mediasoup.types.DataProducer;
+	dataConsumer?: mediasoup.types.DataConsumer;
 };
 
 const ctx: TestContext = {
@@ -221,8 +221,8 @@ test('router.pipeToRouter() succeeds with audio', async () => {
 		producerId: ctx.audioProducer!.id,
 		router: ctx.router2!,
 	})) as {
-		pipeConsumer: mediasoup.types.ConsumerInterface;
-		pipeProducer: mediasoup.types.ProducerInterface;
+		pipeConsumer: mediasoup.types.Consumer;
+		pipeProducer: mediasoup.types.Producer;
 	};
 
 	const dump1 = await ctx.router1!.dump();
@@ -336,8 +336,8 @@ test('router.pipeToRouter() succeeds with video', async () => {
 		producerId: ctx.videoProducer!.id,
 		router: ctx.router2!,
 	})) as {
-		pipeConsumer: mediasoup.types.ConsumerInterface;
-		pipeProducer: mediasoup.types.ProducerInterface;
+		pipeConsumer: mediasoup.types.Consumer;
+		pipeProducer: mediasoup.types.Producer;
 	};
 
 	const dump1 = await ctx.router1!.dump();
@@ -937,8 +937,8 @@ test('router.pipeToRouter() succeeds with data', async () => {
 			dataProducerId: ctx.dataProducer!.id,
 			router: ctx.router2!,
 		})) as {
-			pipeDataConsumer: mediasoup.types.DataConsumerInterface;
-			pipeDataProducer: mediasoup.types.DataProducerInterface;
+			pipeDataConsumer: mediasoup.types.DataConsumer;
+			pipeDataProducer: mediasoup.types.DataProducer;
 		};
 
 	const dump1 = await ctx.router1!.dump();
@@ -1081,7 +1081,7 @@ test('router.pipeToRouter() called in two Routers passing one to each other as a
 	const pipeTransportsB = new Map();
 
 	routerA.observer.on('newtransport', transport => {
-		if (transport.constructor.name !== 'PipeTransport') {
+		if (transport.constructor.name !== 'PipeTransportImpl') {
 			return;
 		}
 
@@ -1090,7 +1090,7 @@ test('router.pipeToRouter() called in two Routers passing one to each other as a
 	});
 
 	routerB.observer.on('newtransport', transport => {
-		if (transport.constructor.name !== 'PipeTransport') {
+		if (transport.constructor.name !== 'PipeTransportImpl') {
 			return;
 		}
 

@@ -4,8 +4,8 @@ import { DirectTransportEvents } from '../DirectTransportTypes';
 import { WorkerEvents } from '../types';
 
 type TestContext = {
-	worker?: mediasoup.types.WorkerInterface;
-	router?: mediasoup.types.RouterInterface;
+	worker?: mediasoup.types.Worker;
+	router?: mediasoup.types.Router;
 };
 
 const ctx: TestContext = {};

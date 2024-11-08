@@ -1,36 +1,30 @@
 import { EnhancedEventEmitter } from './enhancedEvents';
 import {
-	TransportInterface,
+	Transport,
 	TransportListenInfo,
 	TransportListenIp,
 } from './TransportTypes';
 import {
-	WebRtcTransportInterface,
+	WebRtcTransport,
 	WebRtcTransportOptions,
 } from './WebRtcTransportTypes';
+import { PlainTransport, PlainTransportOptions } from './PlainTransportTypes';
+import { PipeTransport, PipeTransportOptions } from './PipeTransportTypes';
 import {
-	PlainTransportInterface,
-	PlainTransportOptions,
-} from './PlainTransportTypes';
-import {
-	PipeTransportInterface,
-	PipeTransportOptions,
-} from './PipeTransportTypes';
-import {
-	DirectTransportInterface,
+	DirectTransport,
 	DirectTransportOptions,
 } from './DirectTransportTypes';
-import { ProducerInterface } from './ProducerTypes';
-import { ConsumerInterface } from './ConsumerTypes';
-import { DataProducerInterface } from './DataProducerTypes';
-import { DataConsumerInterface } from './DataConsumerTypes';
-import { RtpObserverInterface } from './RtpObserverTypes';
+import { Producer } from './ProducerTypes';
+import { Consumer } from './ConsumerTypes';
+import { DataProducer } from './DataProducerTypes';
+import { DataConsumer } from './DataConsumerTypes';
+import { RtpObserver } from './RtpObserverTypes';
 import {
-	ActiveSpeakerObserverInterface,
+	ActiveSpeakerObserver,
 	ActiveSpeakerObserverOptions,
 } from './ActiveSpeakerObserverTypes';
 import {
-	AudioLevelObserverInterface,
+	AudioLevelObserver,
 	AudioLevelObserverOptions,
 } from './AudioLevelObserverTypes';
 import { RtpCapabilities, RtpCodecCapability } from './RtpParameters';
@@ -63,7 +57,7 @@ export type PipeToRouterOptions = {
 	/**
 	 * Target Router instance.
 	 */
-	router: RouterInterface;
+	router: Router;
 
 	/**
 	 * Create a SCTP association. Default true.
@@ -103,26 +97,26 @@ export type PipeToRouterResult = {
 	/**
 	 * The Consumer created in the current Router.
 	 */
-	pipeConsumer?: ConsumerInterface;
+	pipeConsumer?: Consumer;
 
 	/**
 	 * The Producer created in the target Router.
 	 */
-	pipeProducer?: ProducerInterface;
+	pipeProducer?: Producer;
 
 	/**
 	 * The DataConsumer created in the current Router.
 	 */
-	pipeDataConsumer?: DataConsumerInterface;
+	pipeDataConsumer?: DataConsumer;
 
 	/**
 	 * The DataProducer created in the target Router.
 	 */
-	pipeDataProducer?: DataProducerInterface;
+	pipeDataProducer?: DataProducer;
 };
 
 export type PipeTransportPair = {
-	[key: string]: PipeTransportInterface;
+	[key: string]: PipeTransport;
 };
 
 export type RouterDump = {
@@ -171,11 +165,11 @@ export type RouterObserver = EnhancedEventEmitter<RouterObserverEvents>;
 
 export type RouterObserverEvents = {
 	close: [];
-	newtransport: [TransportInterface];
-	newrtpobserver: [RtpObserverInterface];
+	newtransport: [Transport];
+	newrtpobserver: [RtpObserver];
 };
 
-export interface RouterInterface<RouterAppData extends AppData = AppData>
+export interface Router<RouterAppData extends AppData = AppData>
 	extends EnhancedEventEmitter<RouterEvents> {
 	/**
 	 * Router id.
@@ -229,28 +223,28 @@ export interface RouterInterface<RouterAppData extends AppData = AppData>
 	 */
 	createWebRtcTransport<WebRtcTransportAppData extends AppData = AppData>(
 		options: WebRtcTransportOptions<WebRtcTransportAppData>
-	): Promise<WebRtcTransportInterface<WebRtcTransportAppData>>;
+	): Promise<WebRtcTransport<WebRtcTransportAppData>>;
 
 	/**
 	 * Create a PlainTransport.
 	 */
 	createPlainTransport<PlainTransportAppData extends AppData = AppData>(
 		options: PlainTransportOptions<PlainTransportAppData>
-	): Promise<PlainTransportInterface<PlainTransportAppData>>;
+	): Promise<PlainTransport<PlainTransportAppData>>;
 
 	/**
 	 * Create a PipeTransport.
 	 */
 	createPipeTransport<PipeTransportAppData extends AppData = AppData>(
 		options: PipeTransportOptions<PipeTransportAppData>
-	): Promise<PipeTransportInterface<PipeTransportAppData>>;
+	): Promise<PipeTransport<PipeTransportAppData>>;
 
 	/**
 	 * Create a DirectTransport.
 	 */
 	createDirectTransport<DirectTransportAppData extends AppData = AppData>(
 		options?: DirectTransportOptions<DirectTransportAppData>
-	): Promise<DirectTransportInterface<DirectTransportAppData>>;
+	): Promise<DirectTransport<DirectTransportAppData>>;
 
 	/**
 	 * Pipes the given Producer or DataProducer into another Router in same host.
@@ -272,14 +266,14 @@ export interface RouterInterface<RouterAppData extends AppData = AppData>
 		ActiveSpeakerObserverAppData extends AppData = AppData,
 	>(
 		options?: ActiveSpeakerObserverOptions<ActiveSpeakerObserverAppData>
-	): Promise<ActiveSpeakerObserverInterface<ActiveSpeakerObserverAppData>>;
+	): Promise<ActiveSpeakerObserver<ActiveSpeakerObserverAppData>>;
 
 	/**
 	 * Create an AudioLevelObserver.
 	 */
 	createAudioLevelObserver<AudioLevelObserverAppData extends AppData = AppData>(
 		options?: AudioLevelObserverOptions<AudioLevelObserverAppData>
-	): Promise<AudioLevelObserverInterface<AudioLevelObserverAppData>>;
+	): Promise<AudioLevelObserver<AudioLevelObserverAppData>>;
 
 	/**
 	 * Check whether the given RTP capabilities can consume the given Producer.

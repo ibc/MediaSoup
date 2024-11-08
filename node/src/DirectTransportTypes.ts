@@ -1,6 +1,6 @@
 import { EnhancedEventEmitter } from './enhancedEvents';
 import {
-	TransportInterface,
+	Transport,
 	BaseTransportDump,
 	BaseTransportStats,
 	TransportEvents,
@@ -40,9 +40,9 @@ export type DirectTransportObserverEvents = TransportObserverEvents & {
 	rtcp: [Buffer];
 };
 
-export interface DirectTransportInterface<
+export interface DirectTransport<
 	DirectTransportAppData extends AppData = AppData,
-> extends TransportInterface<
+> extends Transport<
 		DirectTransportAppData,
 		DirectTransportEvents,
 		DirectTransportObserver

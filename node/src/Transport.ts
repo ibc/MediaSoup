@@ -3,7 +3,7 @@ import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
 import * as ortc from './ortc';
 import {
-	TransportInterface,
+	Transport,
 	TransportProtocol,
 	TransportPortRange,
 	TransportSocketFlags,
@@ -25,21 +25,21 @@ import { WebRtcTransportData } from './WebRtcTransport';
 import { PlainTransportData } from './PlainTransport';
 import { PipeTransportData } from './PipeTransport';
 import { DirectTransportData } from './DirectTransport';
-import { ProducerInterface, ProducerOptions } from './ProducerTypes';
+import { Producer, ProducerOptions } from './ProducerTypes';
 import {
 	ProducerImpl,
 	producerTypeFromFbs,
 	producerTypeToFbs,
 } from './Producer';
 import {
-	ConsumerInterface,
+	Consumer,
 	ConsumerOptions,
 	ConsumerType,
 	ConsumerLayers,
 } from './ConsumerTypes';
 import { ConsumerImpl } from './Consumer';
 import {
-	DataProducerInterface,
+	DataProducer,
 	DataProducerOptions,
 	DataProducerType,
 } from './DataProducerTypes';
@@ -49,7 +49,7 @@ import {
 	parseDataProducerDumpResponse,
 } from './DataProducer';
 import {
-	DataConsumerInterface,
+	DataConsumer,
 	DataConsumerOptions,
 	DataConsumerType,
 } from './DataConsumerTypes';
@@ -90,10 +90,8 @@ export type TransportConstructorOptions<TransportAppData> = {
 	channel: Channel;
 	appData?: TransportAppData;
 	getRouterRtpCapabilities: () => RtpCapabilities;
-	getProducerById: (producerId: string) => ProducerInterface | undefined;
-	getDataProducerById: (
-		dataProducerId: string
-	) => DataProducerInterface | undefined;
+	getProducerById: (producerId: string) => Producer | undefined;
+	getDataProducerById: (dataProducerId: string) => DataProducer | undefined;
 };
 
 export type TransportInternal = RouterInternal & {
@@ -114,7 +112,7 @@ export abstract class TransportImpl<
 		Observer extends TransportObserver = TransportObserver,
 	>
 	extends EnhancedEventEmitter<Events>
-	implements TransportInterface
+	implements Transport
 {
 	// Internal data.
 	protected readonly internal: TransportInternal;
@@ -137,26 +135,24 @@ export abstract class TransportImpl<
 	// Method to retrieve a Producer.
 	protected readonly getProducerById: (
 		producerId: string
-	) => ProducerInterface | undefined;
+	) => Producer | undefined;
 
 	// Method to retrieve a DataProducer.
 	protected readonly getDataProducerById: (
 		dataProducerId: string
-	) => DataProducerInterface | undefined;
+	) => DataProducer | undefined;
 
 	// Producers map.
-	readonly #producers: Map<string, ProducerInterface> = new Map();
+	readonly #producers: Map<string, Producer> = new Map();
 
 	// Consumers map.
-	protected readonly consumers: Map<string, ConsumerInterface> = new Map();
+	protected readonly consumers: Map<string, Consumer> = new Map();
 
 	// DataProducers map.
-	protected readonly dataProducers: Map<string, DataProducerInterface> =
-		new Map();
+	protected readonly dataProducers: Map<string, DataProducer> = new Map();
 
 	// DataConsumers map.
-	protected readonly dataConsumers: Map<string, DataConsumerInterface> =
-		new Map();
+	protected readonly dataConsumers: Map<string, DataConsumer> = new Map();
 
 	// RTCP CNAME for Producers.
 	#cnameForProducers?: string;
@@ -173,10 +169,6 @@ export abstract class TransportImpl<
 	// Observer instance.
 	readonly #observer: Observer;
 
-	/**
-	 * @private
-	 * @interface
-	 */
 	constructor(
 		{
 			internal,
@@ -456,9 +448,7 @@ export abstract class TransportImpl<
 		paused = false,
 		keyFrameRequestDelay,
 		appData,
-	}: ProducerOptions<ProducerAppData>): Promise<
-		ProducerInterface<ProducerAppData>
-	> {
+	}: ProducerOptions<ProducerAppData>): Promise<Producer<ProducerAppData>> {
 		logger.debug('produce()');
 
 		if (id && this.#producers.has(id)) {
@@ -486,7 +476,8 @@ export abstract class TransportImpl<
 
 		// Don't do this in PipeTransports since there we must keep CNAME value in
 		// each Producer.
-		if (this.constructor.name !== 'PipeTransport') {
+		// TODO: This is error prune if we rename the class name.
+		if (this.constructor.name !== 'PipeTransportImpl') {
 			// If CNAME is given and we don't have yet a CNAME for Producers in this
 			// Transport, take it.
 			if (!this.#cnameForProducers && clonedRtpParameters.rtcp?.cname) {
@@ -551,7 +542,7 @@ export abstract class TransportImpl<
 			consumableRtpParameters,
 		};
 
-		const producer: ProducerInterface<ProducerAppData> = new ProducerImpl({
+		const producer: Producer<ProducerAppData> = new ProducerImpl({
 			internal: {
 				...this.internal,
 				producerId,
@@ -586,9 +577,7 @@ export abstract class TransportImpl<
 		enableRtx,
 		pipe = false,
 		appData,
-	}: ConsumerOptions<ConsumerAppData>): Promise<
-		ConsumerInterface<ConsumerAppData>
-	> {
+	}: ConsumerOptions<ConsumerAppData>): Promise<Consumer<ConsumerAppData>> {
 		logger.debug('consume()');
 
 		if (!producerId || typeof producerId !== 'string') {
@@ -675,7 +664,7 @@ export abstract class TransportImpl<
 			type: pipe ? 'pipe' : (producer.type as ConsumerType),
 		};
 
-		const consumer: ConsumerInterface<ConsumerAppData> = new ConsumerImpl({
+		const consumer: Consumer<ConsumerAppData> = new ConsumerImpl({
 			internal: {
 				...this.internal,
 				consumerId,
@@ -712,7 +701,7 @@ export abstract class TransportImpl<
 		paused = false,
 		appData,
 	}: DataProducerOptions<DataProducerAppData> = {}): Promise<
-		DataProducerInterface<DataProducerAppData>
+		DataProducer<DataProducerAppData>
 	> {
 		logger.debug('produceData()');
 
@@ -730,7 +719,8 @@ export abstract class TransportImpl<
 		>(sctpStreamParameters);
 
 		// If this is not a DirectTransport, sctpStreamParameters are required.
-		if (this.constructor.name !== 'DirectTransport') {
+		// TODO: This is error prune if we rename the class name.
+		if (this.constructor.name !== 'DirectTransportImpl') {
 			type = 'sctp';
 
 			// This may throw.
@@ -774,7 +764,7 @@ export abstract class TransportImpl<
 
 		const dump = parseDataProducerDumpResponse(produceDataResponse);
 
-		const dataProducer: DataProducerInterface<DataProducerAppData> =
+		const dataProducer: DataProducer<DataProducerAppData> =
 			new DataProducerImpl({
 				internal: {
 					...this.internal,
@@ -814,7 +804,7 @@ export abstract class TransportImpl<
 		subchannels,
 		appData,
 	}: DataConsumerOptions<DataConsumerAppData>): Promise<
-		DataConsumerInterface<DataConsumerAppData>
+		DataConsumer<DataConsumerAppData>
 	> {
 		logger.debug('consumeData()');
 
@@ -836,7 +826,8 @@ export abstract class TransportImpl<
 
 		// If this is not a DirectTransport, use sctpStreamParameters from the
 		// DataProducer (if type 'sctp') unless they are given in method parameters.
-		if (this.constructor.name !== 'DirectTransport') {
+		// TODO: This is error prune if we rename the class name.
+		if (this.constructor.name !== 'DirectTransportImpl') {
 			type = 'sctp';
 
 			sctpStreamParameters =
@@ -907,7 +898,7 @@ export abstract class TransportImpl<
 
 		const dump = parseDataConsumerDumpResponse(consumeDataResponse);
 
-		const dataConsumer: DataConsumerInterface<DataConsumerAppData> =
+		const dataConsumer: DataConsumer<DataConsumerAppData> =
 			new DataConsumerImpl({
 				internal: {
 					...this.internal,
@@ -1333,7 +1324,7 @@ function createConsumeRequest({
 	pipe,
 }: {
 	builder: flatbuffers.Builder;
-	producer: ProducerInterface;
+	producer: Producer;
 	consumerId: string;
 	rtpParameters: RtpParameters;
 	paused: boolean;

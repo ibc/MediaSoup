@@ -1,10 +1,10 @@
 import { EnhancedEventEmitter } from './enhancedEvents';
 import {
-	RtpObserverInterface,
+	RtpObserver,
 	RtpObserverEvents,
 	RtpObserverObserverEvents,
 } from './RtpObserverTypes';
-import { ProducerInterface } from './ProducerTypes';
+import { Producer } from './ProducerTypes';
 import { AppData } from './types';
 
 export type AudioLevelObserverOptions<
@@ -36,7 +36,7 @@ export type AudioLevelObserverVolume = {
 	/**
 	 * The audio Producer instance.
 	 */
-	producer: ProducerInterface;
+	producer: Producer;
 
 	/**
 	 * The average volume (in dBvo from -127 to 0) of the audio Producer in the
@@ -58,9 +58,9 @@ export type AudioLevelObserverObserverEvents = RtpObserverObserverEvents & {
 	silence: [];
 };
 
-export interface AudioLevelObserverInterface<
+export interface AudioLevelObserver<
 	AudioLevelObserverAppData extends AppData = AppData,
-> extends RtpObserverInterface<
+> extends RtpObserver<
 		AudioLevelObserverAppData,
 		AudioLevelObserverEvents,
 		AudioLevelObserverObserver

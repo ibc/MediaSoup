@@ -1,6 +1,6 @@
 import { EnhancedEventEmitter } from './enhancedEvents';
 import {
-	TransportInterface,
+	Transport,
 	TransportListenInfo,
 	TransportListenIp,
 	TransportProtocol,
@@ -11,7 +11,7 @@ import {
 	TransportEvents,
 	TransportObserverEvents,
 } from './TransportTypes';
-import { WebRtcServerInterface } from './WebRtcServerTypes';
+import { WebRtcServer } from './WebRtcServerTypes';
 import { SctpParameters, NumSctpStreams } from './SctpParameters';
 import { Either, AppData } from './types';
 
@@ -111,7 +111,7 @@ type WebRtcTransportListenServer = {
 	/**
 	 * Instance of WebRtcServer.
 	 */
-	webRtcServer: WebRtcServerInterface;
+	webRtcServer: WebRtcServer;
 };
 
 export type IceParameters = {
@@ -216,9 +216,9 @@ export type WebRtcTransportObserverEvents = TransportObserverEvents & {
 	sctpstatechange: [SctpState];
 };
 
-export interface WebRtcTransportInterface<
+export interface WebRtcTransport<
 	WebRtcTransportAppData extends AppData = AppData,
-> extends TransportInterface<
+> extends Transport<
 		WebRtcTransportAppData,
 		WebRtcTransportEvents,
 		WebRtcTransportObserver

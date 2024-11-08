@@ -43,7 +43,7 @@ test('createWorker() succeeds', async () => {
 
 	expect(onObserverNewWorker).toHaveBeenCalledTimes(1);
 	expect(onObserverNewWorker).toHaveBeenCalledWith(worker1);
-	expect(worker1.constructor.name).toBe('Worker');
+	expect(worker1.constructor.name).toBe('WorkerImpl');
 	expect(typeof worker1.pid).toBe('number');
 	expect(worker1.closed).toBe(false);
 	expect(worker1.died).toBe(false);
@@ -67,7 +67,7 @@ test('createWorker() succeeds', async () => {
 		appData: { foo: 456 },
 	});
 
-	expect(worker2.constructor.name).toBe('Worker');
+	expect(worker2.constructor.name).toBe('WorkerImpl');
 	expect(typeof worker2.pid).toBe('number');
 	expect(worker2.closed).toBe(false);
 	expect(worker2.died).toBe(false);

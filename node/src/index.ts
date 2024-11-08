@@ -1,6 +1,6 @@
 import { Logger, LoggerEmitter } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
-import { WorkerInterface, WorkerSettings } from './WorkerTypes';
+import { Worker, WorkerSettings } from './WorkerTypes';
 import { WorkerImpl, workerBin } from './Worker';
 import * as utils from './utils';
 import { supportedRtpCapabilities } from './supportedRtpCapabilities';
@@ -27,7 +27,7 @@ export { parse as parseScalabilityMode } from './scalabilityModes';
 export type Observer = EnhancedEventEmitter<ObserverEvents>;
 
 export type ObserverEvents = {
-	newworker: [WorkerInterface];
+	newworker: [Worker];
 };
 
 const observer: Observer = new EnhancedEventEmitter<ObserverEvents>();
@@ -110,16 +110,14 @@ export async function createWorker<
 	libwebrtcFieldTrials,
 	disableLiburing,
 	appData,
-}: WorkerSettings<WorkerAppData> = {}): Promise<
-	WorkerInterface<WorkerAppData>
-> {
+}: WorkerSettings<WorkerAppData> = {}): Promise<Worker<WorkerAppData>> {
 	logger.debug('createWorker()');
 
 	if (appData && typeof appData !== 'object') {
 		throw new TypeError('if given, appData must be an object');
 	}
 
-	const worker: WorkerInterface<WorkerAppData> = new WorkerImpl({
+	const worker: Worker<WorkerAppData> = new WorkerImpl({
 		logLevel,
 		logTags,
 		rtcMinPort,

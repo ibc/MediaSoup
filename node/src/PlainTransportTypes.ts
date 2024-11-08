@@ -1,6 +1,6 @@
 import { EnhancedEventEmitter } from './enhancedEvents';
 import {
-	TransportInterface,
+	Transport,
 	TransportListenInfo,
 	TransportListenIp,
 	TransportTuple,
@@ -131,9 +131,8 @@ export type PlainTransportObserverEvents = TransportObserverEvents & {
 	sctpstatechange: [SctpState];
 };
 
-export interface PlainTransportInterface<
-	PlainTransportAppData extends AppData = AppData,
-> extends TransportInterface<
+export interface PlainTransport<PlainTransportAppData extends AppData = AppData>
+	extends Transport<
 		PlainTransportAppData,
 		PlainTransportEvents,
 		PlainTransportObserver

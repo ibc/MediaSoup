@@ -7,7 +7,7 @@ import * as utils from '../utils';
 
 type TestContext = {
 	mediaCodecs: mediasoup.types.RtpCodecCapability[];
-	worker?: mediasoup.types.WorkerInterface;
+	worker?: mediasoup.types.Worker;
 };
 
 const ctx: TestContext = {

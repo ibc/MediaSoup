@@ -1,14 +1,8 @@
 import { EnhancedEventEmitter } from './enhancedEvents';
-import { ProducerInterface, ProducerOptions } from './ProducerTypes';
-import { ConsumerInterface, ConsumerOptions } from './ConsumerTypes';
-import {
-	DataProducerInterface,
-	DataProducerOptions,
-} from './DataProducerTypes';
-import {
-	DataConsumerInterface,
-	DataConsumerOptions,
-} from './DataConsumerTypes';
+import { Producer, ProducerOptions } from './ProducerTypes';
+import { Consumer, ConsumerOptions } from './ConsumerTypes';
+import { DataProducer, DataProducerOptions } from './DataProducerTypes';
+import { DataConsumer, DataConsumerOptions } from './DataConsumerTypes';
 import { SctpParameters } from './SctpParameters';
 import { AppData } from './types';
 
@@ -231,10 +225,10 @@ export type TransportEvents = {
 	listenererror: [string, Error];
 	// Private events.
 	'@close': [];
-	'@newproducer': [ProducerInterface];
-	'@producerclose': [ProducerInterface];
-	'@newdataproducer': [DataProducerInterface];
-	'@dataproducerclose': [DataProducerInterface];
+	'@newproducer': [Producer];
+	'@producerclose': [Producer];
+	'@newdataproducer': [DataProducer];
+	'@dataproducerclose': [DataProducer];
 	'@listenserverclose': [];
 };
 
@@ -242,14 +236,14 @@ export type TransportObserver = EnhancedEventEmitter<TransportObserverEvents>;
 
 export type TransportObserverEvents = {
 	close: [];
-	newproducer: [ProducerInterface];
-	newconsumer: [ConsumerInterface];
-	newdataproducer: [DataProducerInterface];
-	newdataconsumer: [DataConsumerInterface];
+	newproducer: [Producer];
+	newconsumer: [Consumer];
+	newdataproducer: [DataProducer];
+	newdataconsumer: [DataConsumer];
 	trace: [TransportTraceEventData];
 };
 
-export interface TransportInterface<
+export interface Transport<
 	TransportAppData extends AppData = AppData,
 	Events extends TransportEvents = TransportEvents,
 	Observer extends TransportObserver = TransportObserver,
@@ -358,7 +352,7 @@ export interface TransportInterface<
 	 */
 	produce<ProducerAppData extends AppData = AppData>(
 		options: ProducerOptions<ProducerAppData>
-	): Promise<ProducerInterface<ProducerAppData>>;
+	): Promise<Producer<ProducerAppData>>;
 
 	/**
 	 * Create a Consumer.
@@ -369,21 +363,21 @@ export interface TransportInterface<
 	 */
 	consume<ConsumerAppData extends AppData = AppData>(
 		options: ConsumerOptions<ConsumerAppData>
-	): Promise<ConsumerInterface<ConsumerAppData>>;
+	): Promise<Consumer<ConsumerAppData>>;
 
 	/**
 	 * Create a DataProducer.
 	 */
 	produceData<DataProducerAppData extends AppData = AppData>(
 		options?: DataProducerOptions<DataProducerAppData>
-	): Promise<DataProducerInterface<DataProducerAppData>>;
+	): Promise<DataProducer<DataProducerAppData>>;
 
 	/**
 	 * Create a DataConsumer.
 	 */
 	consumeData<DataConsumerAppData extends AppData = AppData>(
 		options: DataConsumerOptions<DataConsumerAppData>
-	): Promise<DataConsumerInterface<DataConsumerAppData>>;
+	): Promise<DataConsumer<DataConsumerAppData>>;
 
 	/**
 	 * Enable 'trace' event.

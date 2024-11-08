@@ -6,10 +6,10 @@ import * as utils from '../utils';
 type TestContext = {
 	dataProducerOptions1: mediasoup.types.DataProducerOptions;
 	dataProducerOptions2: mediasoup.types.DataProducerOptions;
-	worker?: mediasoup.types.WorkerInterface;
-	router?: mediasoup.types.RouterInterface;
-	webRtcTransport1?: mediasoup.types.WebRtcTransportInterface;
-	webRtcTransport2?: mediasoup.types.WebRtcTransportInterface;
+	worker?: mediasoup.types.Worker;
+	router?: mediasoup.types.Router;
+	webRtcTransport1?: mediasoup.types.WebRtcTransport;
+	webRtcTransport2?: mediasoup.types.WebRtcTransport;
 };
 
 const ctx: TestContext = {

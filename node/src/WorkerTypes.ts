@@ -1,9 +1,6 @@
 import { EnhancedEventEmitter } from './enhancedEvents';
-import {
-	WebRtcServerInterface,
-	WebRtcServerOptions,
-} from './WebRtcServerTypes';
-import { RouterInterface, RouterOptions } from './RouterTypes';
+import { WebRtcServer, WebRtcServerOptions } from './WebRtcServerTypes';
+import { Router, RouterOptions } from './RouterTypes';
 import { AppData } from './types';
 
 export type WorkerLogLevel = 'debug' | 'warn' | 'error' | 'none';
@@ -203,11 +200,11 @@ export type WorkerObserver = EnhancedEventEmitter<WorkerObserverEvents>;
 
 export type WorkerObserverEvents = {
 	close: [];
-	newwebrtcserver: [WebRtcServerInterface];
-	newrouter: [RouterInterface];
+	newwebrtcserver: [WebRtcServer];
+	newrouter: [Router];
 };
 
-export interface WorkerInterface<WorkerAppData extends AppData = AppData>
+export interface Worker<WorkerAppData extends AppData = AppData>
 	extends EnhancedEventEmitter<WorkerEvents> {
 	/**
 	 * Worker process identifier (PID).
@@ -271,12 +268,12 @@ export interface WorkerInterface<WorkerAppData extends AppData = AppData>
 	 */
 	createWebRtcServer<WebRtcServerAppData extends AppData = AppData>(
 		options: WebRtcServerOptions<WebRtcServerAppData>
-	): Promise<WebRtcServerInterface<WebRtcServerAppData>>;
+	): Promise<WebRtcServer<WebRtcServerAppData>>;
 
 	/**
 	 * Create a Router.
 	 */
 	createRouter<RouterAppData extends AppData = AppData>(
 		options?: RouterOptions<RouterAppData>
-	): Promise<RouterInterface<RouterAppData>>;
+	): Promise<Router<RouterAppData>>;
 }

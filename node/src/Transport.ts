@@ -203,52 +203,33 @@ export abstract class TransportImpl<
 		this.#observer = observer;
 	}
 
-	/**
-	 * Transport id.
-	 */
 	get id(): string {
 		return this.internal.transportId;
 	}
 
-	/**
-	 * Whether the Transport is closed.
-	 */
 	get closed(): boolean {
 		return this.#closed;
 	}
 
-	/**
-	 * App custom data.
-	 */
 	get appData(): TransportAppData {
 		return this.#appData;
 	}
 
-	/**
-	 * App custom data setter.
-	 */
 	set appData(appData: TransportAppData) {
 		this.#appData = appData;
 	}
 
-	/**
-	 * Observer.
-	 */
 	get observer(): Observer {
 		return this.#observer;
 	}
 
 	/**
-	 * @private
 	 * Just for testing purposes.
 	 */
 	get channelForTesting(): Channel {
 		return this.channel;
 	}
 
-	/**
-	 * Close the Transport.
-	 */
 	close(): void {
 		if (this.#closed) {
 			return;
@@ -311,12 +292,6 @@ export abstract class TransportImpl<
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Router was closed.
-	 *
-	 * @private
-	 * @virtual
-	 */
 	routerClosed(): void {
 		if (this.#closed) {
 			return;
@@ -365,12 +340,6 @@ export abstract class TransportImpl<
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Listen server was closed (this just happens in WebRtcTransports when their
-	 * associated WebRtcServer is closed).
-	 *
-	 * @private
-	 */
 	listenServerClosed(): void {
 		if (this.#closed) {
 			return;
@@ -424,42 +393,12 @@ export abstract class TransportImpl<
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Dump Transport.
-	 *
-	 * @abstract
-	 */
-	// eslint-disable-next-line @typescript-eslint/require-await
-	async dump(): Promise<any> {
-		// Should not happen.
-		throw new Error('method implemented in the subclass');
-	}
+	abstract dump(): Promise<any>;
 
-	/**
-	 * Get Transport stats.
-	 *
-	 * @abstract
-	 */
-	// eslint-disable-next-line @typescript-eslint/require-await
-	async getStats(): Promise<any[]> {
-		// Should not happen.
-		throw new Error('method implemented in the subclass');
-	}
+	abstract getStats(): Promise<any[]>;
 
-	/**
-	 * Provide the Transport remote parameters.
-	 *
-	 * @abstract
-	 */
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/require-await
-	async connect(params: any): Promise<void> {
-		// Should not happen.
-		throw new Error('method implemented in the subclass');
-	}
+	abstract connect(params: any): Promise<void>;
 
-	/**
-	 * Set maximum incoming bitrate for receiving media.
-	 */
 	async setMaxIncomingBitrate(bitrate: number): Promise<void> {
 		logger.debug(`setMaxIncomingBitrate() [bitrate:${bitrate}]`);
 
@@ -478,9 +417,6 @@ export abstract class TransportImpl<
 		);
 	}
 
-	/**
-	 * Set maximum outgoing bitrate for sending media.
-	 */
 	async setMaxOutgoingBitrate(bitrate: number): Promise<void> {
 		logger.debug(`setMaxOutgoingBitrate() [bitrate:${bitrate}]`);
 
@@ -497,9 +433,6 @@ export abstract class TransportImpl<
 		);
 	}
 
-	/**
-	 * Set minimum outgoing bitrate for sending media.
-	 */
 	async setMinOutgoingBitrate(bitrate: number): Promise<void> {
 		logger.debug(`setMinOutgoingBitrate() [bitrate:${bitrate}]`);
 
@@ -516,9 +449,6 @@ export abstract class TransportImpl<
 		);
 	}
 
-	/**
-	 * Create a Producer.
-	 */
 	async produce<ProducerAppData extends AppData = AppData>({
 		id = undefined,
 		kind,
@@ -646,11 +576,6 @@ export abstract class TransportImpl<
 		return producer;
 	}
 
-	/**
-	 * Create a Consumer.
-	 *
-	 * @virtual
-	 */
 	async consume<ConsumerAppData extends AppData = AppData>({
 		producerId,
 		rtpCapabilities,
@@ -779,9 +704,6 @@ export abstract class TransportImpl<
 		return consumer;
 	}
 
-	/**
-	 * Create a DataProducer.
-	 */
 	async produceData<DataProducerAppData extends AppData = AppData>({
 		id = undefined,
 		sctpStreamParameters,
@@ -883,9 +805,6 @@ export abstract class TransportImpl<
 		return dataProducer;
 	}
 
-	/**
-	 * Create a DataConsumer.
-	 */
 	async consumeData<DataConsumerAppData extends AppData = AppData>({
 		dataProducerId,
 		ordered,
@@ -1031,9 +950,6 @@ export abstract class TransportImpl<
 		return dataConsumer;
 	}
 
-	/**
-	 * Enable 'trace' event.
-	 */
 	async enableTraceEvent(types: TransportTraceEventType[] = []): Promise<void> {
 		logger.debug('enableTraceEvent()');
 

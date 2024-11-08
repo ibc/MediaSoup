@@ -63,9 +63,6 @@ export class PlainTransportImpl<PlainTransportAppData extends AppData = AppData>
 	// PlainTransport data.
 	readonly #data: PlainTransportData;
 
-	/**
-	 * @private
-	 */
 	constructor(
 		options: PlainTransportConstructorOptions<PlainTransportAppData>
 	) {
@@ -91,55 +88,30 @@ export class PlainTransportImpl<PlainTransportAppData extends AppData = AppData>
 		this.handleWorkerNotifications();
 	}
 
-	/**
-	 * Observer.
-	 *
-	 * @override
-	 */
 	get observer(): PlainTransportObserver {
 		return super.observer;
 	}
 
-	/**
-	 * Transport tuple.
-	 */
 	get tuple(): TransportTuple {
 		return this.#data.tuple;
 	}
 
-	/**
-	 * Transport RTCP tuple.
-	 */
 	get rtcpTuple(): TransportTuple | undefined {
 		return this.#data.rtcpTuple;
 	}
 
-	/**
-	 * SCTP parameters.
-	 */
 	get sctpParameters(): SctpParameters | undefined {
 		return this.#data.sctpParameters;
 	}
 
-	/**
-	 * SCTP state.
-	 */
 	get sctpState(): SctpState | undefined {
 		return this.#data.sctpState;
 	}
 
-	/**
-	 * SRTP parameters.
-	 */
 	get srtpParameters(): SrtpParameters | undefined {
 		return this.#data.srtpParameters;
 	}
 
-	/**
-	 * Close the PlainTransport.
-	 *
-	 * @override
-	 */
 	close(): void {
 		if (this.closed) {
 			return;
@@ -152,12 +124,6 @@ export class PlainTransportImpl<PlainTransportAppData extends AppData = AppData>
 		super.close();
 	}
 
-	/**
-	 * Router was closed.
-	 *
-	 * @private
-	 * @override
-	 */
 	routerClosed(): void {
 		if (this.closed) {
 			return;
@@ -170,9 +136,6 @@ export class PlainTransportImpl<PlainTransportAppData extends AppData = AppData>
 		super.routerClosed();
 	}
 
-	/**
-	 * Dump PlainTransport.
-	 */
 	async dump(): Promise<PlainTransportDump> {
 		logger.debug('dump()');
 
@@ -191,11 +154,6 @@ export class PlainTransportImpl<PlainTransportAppData extends AppData = AppData>
 		return parsePlainTransportDumpResponse(data);
 	}
 
-	/**
-	 * Get PlainTransport stats.
-	 *
-	 * @override
-	 */
 	async getStats(): Promise<PlainTransportStat[]> {
 		logger.debug('getStats()');
 
@@ -214,11 +172,6 @@ export class PlainTransportImpl<PlainTransportAppData extends AppData = AppData>
 		return [parseGetStatsResponse(data)];
 	}
 
-	/**
-	 * Provide the PlainTransport remote parameters.
-	 *
-	 * @override
-	 */
 	async connect({
 		ip,
 		port,

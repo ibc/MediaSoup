@@ -47,13 +47,36 @@ export interface DirectTransportInterface<
 		DirectTransportEvents,
 		DirectTransportObserver
 	> {
+	/**
+	 * Observer.
+	 *
+	 * @override
+	 */
 	get observer(): DirectTransportObserver;
 
+	/**
+	 * Dump DirectTransport.
+	 *
+	 * @override
+	 */
 	dump(): Promise<DirectTransportDump>;
 
+	/**
+	 * Get DirectTransport stats.
+	 *
+	 * @override
+	 */
 	getStats(): Promise<DirectTransportStat[]>;
 
+	/**
+	 * NO-OP method in DirectTransport.
+	 *
+	 * @override
+	 */
 	connect(): Promise<void>;
 
+	/**
+	 * Send RTCP packet.
+	 */
 	sendRtcp(rtcpPacket: Buffer): void;
 }

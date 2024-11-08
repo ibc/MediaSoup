@@ -223,14 +223,31 @@ export interface WebRtcTransportInterface<
 		WebRtcTransportEvents,
 		WebRtcTransportObserver
 	> {
+	/**
+	 * Observer.
+	 *
+	 * @override
+	 */
 	get observer(): WebRtcTransportObserver;
 
+	/**
+	 * ICE role.
+	 */
 	get iceRole(): 'controlled';
 
+	/**
+	 * ICE parameters.
+	 */
 	get iceParameters(): IceParameters;
 
+	/**
+	 * ICE candidates.
+	 */
 	get iceCandidates(): IceCandidate[];
 
+	/**
+	 * ICE state.
+	 */
 	get iceState(): IceState;
 
 	/**
@@ -263,15 +280,33 @@ export interface WebRtcTransportInterface<
 	 */
 	get sctpState(): SctpState | undefined;
 
+	/**
+	 * Dump WebRtcTransport.
+	 *
+	 * @override
+	 */
 	dump(): Promise<WebRtcTransportDump>;
 
+	/**
+	 * Get WebRtcTransport stats.
+	 *
+	 * @override
+	 */
 	getStats(): Promise<WebRtcTransportStat[]>;
 
+	/**
+	 * Provide the WebRtcTransport remote parameters.
+	 *
+	 * @override
+	 */
 	connect({
 		dtlsParameters,
 	}: {
 		dtlsParameters: DtlsParameters;
 	}): Promise<void>;
 
+	/**
+	 * Restart ICE.
+	 */
 	restartIce(): Promise<IceParameters>;
 }

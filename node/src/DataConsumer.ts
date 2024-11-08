@@ -70,9 +70,6 @@ export class DataConsumerImpl<DataConsumerAppData extends AppData = AppData>
 	readonly #observer: DataConsumerObserver =
 		new EnhancedEventEmitter<DataConsumerObserverEvents>();
 
-	/**
-	 * @private
-	 */
 	constructor({
 		internal,
 		data,
@@ -105,100 +102,58 @@ export class DataConsumerImpl<DataConsumerAppData extends AppData = AppData>
 		this.handleWorkerNotifications();
 	}
 
-	/**
-	 * DataConsumer id.
-	 */
 	get id(): string {
 		return this.#internal.dataConsumerId;
 	}
 
-	/**
-	 * Associated DataProducer id.
-	 */
 	get dataProducerId(): string {
 		return this.#data.dataProducerId;
 	}
 
-	/**
-	 * Whether the DataConsumer is closed.
-	 */
 	get closed(): boolean {
 		return this.#closed;
 	}
 
-	/**
-	 * DataConsumer type.
-	 */
 	get type(): DataConsumerType {
 		return this.#data.type;
 	}
 
-	/**
-	 * SCTP stream parameters.
-	 */
 	get sctpStreamParameters(): SctpStreamParameters | undefined {
 		return this.#data.sctpStreamParameters;
 	}
 
-	/**
-	 * DataChannel label.
-	 */
 	get label(): string {
 		return this.#data.label;
 	}
 
-	/**
-	 * DataChannel protocol.
-	 */
 	get protocol(): string {
 		return this.#data.protocol;
 	}
 
-	/**
-	 * Whether the DataConsumer is paused.
-	 */
 	get paused(): boolean {
 		return this.#paused;
 	}
 
-	/**
-	 * Whether the associate DataProducer is paused.
-	 */
 	get dataProducerPaused(): boolean {
 		return this.#dataProducerPaused;
 	}
 
-	/**
-	 * Get current subchannels this data consumer is subscribed to.
-	 */
 	get subchannels(): number[] {
 		return Array.from(this.#subchannels);
 	}
 
-	/**
-	 * App custom data.
-	 */
 	get appData(): DataConsumerAppData {
 		return this.#appData;
 	}
 
-	/**
-	 * App custom data setter.
-	 */
 	set appData(appData: DataConsumerAppData) {
 		this.#appData = appData;
 	}
 
-	/**
-	 * Observer.
-	 */
 	get observer(): DataConsumerObserver {
 		return this.#observer;
 	}
 
-	/**
-	 * Close the DataConsumer.
-	 */
 	close(): void {
 		if (this.#closed) {
 			return;
@@ -231,11 +186,6 @@ export class DataConsumerImpl<DataConsumerAppData extends AppData = AppData>
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Transport was closed.
-	 *
-	 * @private
-	 */
 	transportClosed(): void {
 		if (this.#closed) {
 			return;
@@ -254,9 +204,6 @@ export class DataConsumerImpl<DataConsumerAppData extends AppData = AppData>
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Dump DataConsumer.
-	 */
 	async dump(): Promise<DataConsumerDump> {
 		logger.debug('dump()');
 
@@ -275,9 +222,6 @@ export class DataConsumerImpl<DataConsumerAppData extends AppData = AppData>
 		return parseDataConsumerDumpResponse(dumpResponse);
 	}
 
-	/**
-	 * Get DataConsumer stats.
-	 */
 	async getStats(): Promise<DataConsumerStat[]> {
 		logger.debug('getStats()');
 
@@ -296,9 +240,6 @@ export class DataConsumerImpl<DataConsumerAppData extends AppData = AppData>
 		return [parseDataConsumerStats(data)];
 	}
 
-	/**
-	 * Pause the DataConsumer.
-	 */
 	async pause(): Promise<void> {
 		logger.debug('pause()');
 
@@ -319,9 +260,6 @@ export class DataConsumerImpl<DataConsumerAppData extends AppData = AppData>
 		}
 	}
 
-	/**
-	 * Resume the DataConsumer.
-	 */
 	async resume(): Promise<void> {
 		logger.debug('resume()');
 
@@ -342,9 +280,6 @@ export class DataConsumerImpl<DataConsumerAppData extends AppData = AppData>
 		}
 	}
 
-	/**
-	 * Set buffered amount low threshold.
-	 */
 	async setBufferedAmountLowThreshold(threshold: number): Promise<void> {
 		logger.debug(`setBufferedAmountLowThreshold() [threshold:${threshold}]`);
 
@@ -363,9 +298,6 @@ export class DataConsumerImpl<DataConsumerAppData extends AppData = AppData>
 		);
 	}
 
-	/**
-	 * Get buffered amount size.
-	 */
 	async getBufferedAmount(): Promise<number> {
 		logger.debug('getBufferedAmount()');
 
@@ -383,9 +315,6 @@ export class DataConsumerImpl<DataConsumerAppData extends AppData = AppData>
 		return data.bufferedAmount();
 	}
 
-	/**
-	 * Send data.
-	 */
 	async send(message: string | Buffer, ppid?: number): Promise<void> {
 		if (typeof message !== 'string' && !Buffer.isBuffer(message)) {
 			throw new TypeError('message must be a string or a Buffer');
@@ -449,9 +378,6 @@ export class DataConsumerImpl<DataConsumerAppData extends AppData = AppData>
 		);
 	}
 
-	/**
-	 * Set subchannels.
-	 */
 	async setSubchannels(subchannels: number[]): Promise<void> {
 		logger.debug('setSubchannels()');
 
@@ -476,9 +402,6 @@ export class DataConsumerImpl<DataConsumerAppData extends AppData = AppData>
 		this.#subchannels = utils.parseVector(data, 'subchannels');
 	}
 
-	/**
-	 * Add a subchannel.
-	 */
 	async addSubchannel(subchannel: number): Promise<void> {
 		logger.debug('addSubchannel()');
 
@@ -505,9 +428,6 @@ export class DataConsumerImpl<DataConsumerAppData extends AppData = AppData>
 		this.#subchannels = utils.parseVector(data, 'subchannels');
 	}
 
-	/**
-	 * Remove a subchannel.
-	 */
 	async removeSubchannel(subchannel: number): Promise<void> {
 		logger.debug('removeSubchannel()');
 

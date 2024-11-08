@@ -25,18 +25,41 @@ export interface RtpObserverInterface<
 	Events extends RtpObserverEvents = RtpObserverEvents,
 	Observer extends RtpObserverObserver = RtpObserverObserver,
 > extends EnhancedEventEmitter<Events> {
+	/**
+	 * RtpObserver id.
+	 */
 	get id(): string;
 
+	/**
+	 * Whether the RtpObserver is closed.
+	 */
 	get closed(): boolean;
 
+	/**
+	 * Whether the RtpObserver is paused.
+	 */
 	get paused(): boolean;
 
+	/**
+	 * App custom data.
+	 */
 	get appData(): RtpObserverAppData;
 
+	/**
+	 * App custom data setter.
+	 */
 	set appData(appData: RtpObserverAppData);
 
+	/**
+	 * Observer.
+	 *
+	 * @virtual
+	 */
 	get observer(): Observer;
 
+	/**
+	 * Close the RtpObserver.
+	 */
 	close(): void;
 
 	/**
@@ -46,11 +69,23 @@ export interface RtpObserverInterface<
 	 */
 	routerClosed(): void;
 
+	/**
+	 * Pause the RtpObserver.
+	 */
 	pause(): Promise<void>;
 
+	/**
+	 * Resume the RtpObserver.
+	 */
 	resume(): Promise<void>;
 
+	/**
+	 * Add a Producer to the RtpObserver.
+	 */
 	addProducer({ producerId }: { producerId: string }): Promise<void>;
 
+	/**
+	 * Remove a Producer from the RtpObserver.
+	 */
 	removeProducer({ producerId }: { producerId: string }): Promise<void>;
 }

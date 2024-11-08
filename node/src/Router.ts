@@ -138,9 +138,6 @@ export class RouterImpl<RouterAppData extends AppData = AppData>
 	readonly #observer: RouterObserver =
 		new EnhancedEventEmitter<RouterObserverEvents>();
 
-	/**
-	 * @private
-	 */
 	constructor({
 		internal,
 		data,
@@ -162,59 +159,39 @@ export class RouterImpl<RouterAppData extends AppData = AppData>
 		this.#appData = appData ?? ({} as RouterAppData);
 	}
 
-	/**
-	 * Router id.
-	 */
 	get id(): string {
 		return this.#internal.routerId;
 	}
 
-	/**
-	 * Whether the Router is closed.
-	 */
 	get closed(): boolean {
 		return this.#closed;
 	}
 
-	/**
-	 * RTP capabilities of the Router.
-	 */
 	get rtpCapabilities(): RtpCapabilities {
 		return this.#data.rtpCapabilities;
 	}
 
-	/**
-	 * App custom data.
-	 */
 	get appData(): RouterAppData {
 		return this.#appData;
 	}
 
-	/**
-	 * App custom data setter.
-	 */
 	set appData(appData: RouterAppData) {
 		this.#appData = appData;
 	}
 
-	/**
-	 * Observer.
-	 */
 	get observer(): RouterObserver {
 		return this.#observer;
 	}
 
 	/**
-	 * @private
 	 * Just for testing purposes.
+	 *
+	 * @private
 	 */
 	get transportsForTesting(): Map<string, TransportInterface> {
 		return this.#transports;
 	}
 
-	/**
-	 * Close the Router.
-	 */
 	close(): void {
 		if (this.#closed) {
 			return;
@@ -260,11 +237,6 @@ export class RouterImpl<RouterAppData extends AppData = AppData>
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Worker was closed.
-	 *
-	 * @private
-	 */
 	workerClosed(): void {
 		if (this.#closed) {
 			return;
@@ -298,9 +270,6 @@ export class RouterImpl<RouterAppData extends AppData = AppData>
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Dump Router.
-	 */
 	async dump(): Promise<RouterDump> {
 		logger.debug('dump()');
 
@@ -320,9 +289,6 @@ export class RouterImpl<RouterAppData extends AppData = AppData>
 		return parseRouterDumpResponse(dump);
 	}
 
-	/**
-	 * Create a WebRtcTransport.
-	 */
 	async createWebRtcTransport<
 		WebRtcTransportAppData extends AppData = AppData,
 	>({
@@ -555,9 +521,6 @@ export class RouterImpl<RouterAppData extends AppData = AppData>
 		return transport;
 	}
 
-	/**
-	 * Create a PlainTransport.
-	 */
 	async createPlainTransport<PlainTransportAppData extends AppData = AppData>({
 		listenInfo,
 		rtcpListenInfo,
@@ -724,9 +687,6 @@ export class RouterImpl<RouterAppData extends AppData = AppData>
 		return transport;
 	}
 
-	/**
-	 * Create a PipeTransport.
-	 */
 	async createPipeTransport<PipeTransportAppData extends AppData = AppData>({
 		listenInfo,
 		listenIp,
@@ -865,9 +825,6 @@ export class RouterImpl<RouterAppData extends AppData = AppData>
 		return transport;
 	}
 
-	/**
-	 * Create a DirectTransport.
-	 */
 	async createDirectTransport<DirectTransportAppData extends AppData = AppData>(
 		{
 			maxMessageSize = 262144,
@@ -963,9 +920,6 @@ export class RouterImpl<RouterAppData extends AppData = AppData>
 		return transport;
 	}
 
-	/**
-	 * Pipes the given Producer or DataProducer into another Router in same host.
-	 */
 	async pipeToRouter({
 		producerId,
 		dataProducerId,
@@ -1226,9 +1180,6 @@ export class RouterImpl<RouterAppData extends AppData = AppData>
 		}
 	}
 
-	/**
-	 * @private
-	 */
 	addPipeTransportPair(
 		pipeTransportPairKey: string,
 		pipeTransportPairPromise: Promise<PipeTransportPair>
@@ -1263,9 +1214,6 @@ export class RouterImpl<RouterAppData extends AppData = AppData>
 			});
 	}
 
-	/**
-	 * Create an ActiveSpeakerObserver
-	 */
 	async createActiveSpeakerObserver<
 		ActiveSpeakerObserverAppData extends AppData = AppData,
 	>({
@@ -1323,9 +1271,6 @@ export class RouterImpl<RouterAppData extends AppData = AppData>
 		return activeSpeakerObserver;
 	}
 
-	/**
-	 * Create an AudioLevelObserver.
-	 */
 	async createAudioLevelObserver<
 		AudioLevelObserverAppData extends AppData = AppData,
 	>({
@@ -1399,9 +1344,6 @@ export class RouterImpl<RouterAppData extends AppData = AppData>
 		return audioLevelObserver;
 	}
 
-	/**
-	 * Check whether the given RTP capabilities can consume the given Producer.
-	 */
 	canConsume({
 		producerId,
 		rtpCapabilities,

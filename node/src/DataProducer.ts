@@ -60,9 +60,6 @@ export class DataProducerImpl<DataProducerAppData extends AppData = AppData>
 	readonly #observer: DataProducerObserver =
 		new EnhancedEventEmitter<DataProducerObserverEvents>();
 
-	/**
-	 * @private
-	 */
 	constructor({
 		internal,
 		data,
@@ -89,79 +86,46 @@ export class DataProducerImpl<DataProducerAppData extends AppData = AppData>
 		this.handleWorkerNotifications();
 	}
 
-	/**
-	 * DataProducer id.
-	 */
 	get id(): string {
 		return this.#internal.dataProducerId;
 	}
 
-	/**
-	 * Whether the DataProducer is closed.
-	 */
 	get closed(): boolean {
 		return this.#closed;
 	}
 
-	/**
-	 * DataProducer type.
-	 */
 	get type(): DataProducerType {
 		return this.#data.type;
 	}
 
-	/**
-	 * SCTP stream parameters.
-	 */
 	get sctpStreamParameters(): SctpStreamParameters | undefined {
 		return this.#data.sctpStreamParameters;
 	}
 
-	/**
-	 * DataChannel label.
-	 */
 	get label(): string {
 		return this.#data.label;
 	}
 
-	/**
-	 * DataChannel protocol.
-	 */
 	get protocol(): string {
 		return this.#data.protocol;
 	}
 
-	/**
-	 * Whether the DataProducer is paused.
-	 */
 	get paused(): boolean {
 		return this.#paused;
 	}
 
-	/**
-	 * App custom data.
-	 */
 	get appData(): DataProducerAppData {
 		return this.#appData;
 	}
 
-	/**
-	 * App custom data setter.
-	 */
 	set appData(appData: DataProducerAppData) {
 		this.#appData = appData;
 	}
 
-	/**
-	 * Observer.
-	 */
 	get observer(): DataProducerObserver {
 		return this.#observer;
 	}
 
-	/**
-	 * Close the DataProducer.
-	 */
 	close(): void {
 		if (this.#closed) {
 			return;
@@ -194,11 +158,6 @@ export class DataProducerImpl<DataProducerAppData extends AppData = AppData>
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Transport was closed.
-	 *
-	 * @private
-	 */
 	transportClosed(): void {
 		if (this.#closed) {
 			return;
@@ -217,9 +176,6 @@ export class DataProducerImpl<DataProducerAppData extends AppData = AppData>
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Dump DataProducer.
-	 */
 	async dump(): Promise<DataProducerDump> {
 		logger.debug('dump()');
 
@@ -238,9 +194,6 @@ export class DataProducerImpl<DataProducerAppData extends AppData = AppData>
 		return parseDataProducerDumpResponse(produceResponse);
 	}
 
-	/**
-	 * Get DataProducer stats.
-	 */
 	async getStats(): Promise<DataProducerStat[]> {
 		logger.debug('getStats()');
 
@@ -259,9 +212,6 @@ export class DataProducerImpl<DataProducerAppData extends AppData = AppData>
 		return [parseDataProducerStats(data)];
 	}
 
-	/**
-	 * Pause the DataProducer.
-	 */
 	async pause(): Promise<void> {
 		logger.debug('pause()');
 
@@ -282,9 +232,6 @@ export class DataProducerImpl<DataProducerAppData extends AppData = AppData>
 		}
 	}
 
-	/**
-	 * Resume the DataProducer.
-	 */
 	async resume(): Promise<void> {
 		logger.debug('resume()');
 
@@ -305,9 +252,6 @@ export class DataProducerImpl<DataProducerAppData extends AppData = AppData>
 		}
 	}
 
-	/**
-	 * Send data (just valid for DataProducers created on a DirectTransport).
-	 */
 	send(
 		message: string | Buffer,
 		ppid?: number,

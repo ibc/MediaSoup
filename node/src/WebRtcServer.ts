@@ -47,9 +47,6 @@ export class WebRtcServerImpl<WebRtcServerAppData extends AppData = AppData>
 	readonly #observer: WebRtcServerObserver =
 		new EnhancedEventEmitter<WebRtcServerObserverEvents>();
 
-	/**
-	 * @private
-	 */
 	constructor({
 		internal,
 		channel,
@@ -68,52 +65,33 @@ export class WebRtcServerImpl<WebRtcServerAppData extends AppData = AppData>
 		this.#appData = appData ?? ({} as WebRtcServerAppData);
 	}
 
-	/**
-	 * WebRtcServer id.
-	 */
 	get id(): string {
 		return this.#internal.webRtcServerId;
 	}
 
-	/**
-	 * Whether the WebRtcServer is closed.
-	 */
 	get closed(): boolean {
 		return this.#closed;
 	}
 
-	/**
-	 * App custom data.
-	 */
 	get appData(): WebRtcServerAppData {
 		return this.#appData;
 	}
 
-	/**
-	 * App custom data setter.
-	 */
 	set appData(appData: WebRtcServerAppData) {
 		this.#appData = appData;
 	}
 
-	/**
-	 * Observer.
-	 */
 	get observer(): WebRtcServerObserver {
 		return this.#observer;
 	}
 
 	/**
-	 * @private
 	 * Just for testing purposes.
 	 */
 	get webRtcTransportsForTesting(): Map<string, WebRtcTransportInterface> {
 		return this.#webRtcTransports;
 	}
 
-	/**
-	 * Close the WebRtcServer.
-	 */
 	close(): void {
 		if (this.#closed) {
 			return;
@@ -151,11 +129,6 @@ export class WebRtcServerImpl<WebRtcServerAppData extends AppData = AppData>
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Worker was closed.
-	 *
-	 * @private
-	 */
 	workerClosed(): void {
 		if (this.#closed) {
 			return;
@@ -175,9 +148,6 @@ export class WebRtcServerImpl<WebRtcServerAppData extends AppData = AppData>
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Dump WebRtcServer.
-	 */
 	async dump(): Promise<WebRtcServerDump> {
 		logger.debug('dump()');
 
@@ -196,9 +166,6 @@ export class WebRtcServerImpl<WebRtcServerAppData extends AppData = AppData>
 		return parseWebRtcServerDump(dump);
 	}
 
-	/**
-	 * @private
-	 */
 	handleWebRtcTransport(webRtcTransport: WebRtcTransportInterface): void {
 		this.#webRtcTransports.set(webRtcTransport.id, webRtcTransport);
 

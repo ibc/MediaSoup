@@ -78,26 +78,59 @@ export type DataProducerObserverEvents = {
 export interface DataProducerInterface<
 	DataProducerAppData extends AppData = AppData,
 > extends EnhancedEventEmitter<DataProducerEvents> {
+	/**
+	 * DataProducer id.
+	 */
 	get id(): string;
 
+	/**
+	 * Whether the DataProducer is closed.
+	 */
 	get closed(): boolean;
 
+	/**
+	 * DataProducer type.
+	 */
 	get type(): DataProducerType;
 
+	/**
+	 * SCTP stream parameters.
+	 */
 	get sctpStreamParameters(): SctpStreamParameters | undefined;
 
+	/**
+	 * DataChannel label.
+	 */
 	get label(): string;
 
+	/**
+	 * DataChannel protocol.
+	 */
 	get protocol(): string;
 
+	/**
+	 * Whether the DataProducer is paused.
+	 */
 	get paused(): boolean;
 
+	/**
+	 * App custom data.
+	 */
 	get appData(): DataProducerAppData;
 
+	/**
+	 * App custom data setter.
+	 */
 	set appData(appData: DataProducerAppData);
 
+	/**
+	 * Observer.
+	 */
 	get observer(): DataProducerObserver;
 
+	/**
+	 * Close the DataProducer.
+	 */
 	close(): void;
 
 	/**
@@ -107,14 +140,29 @@ export interface DataProducerInterface<
 	 */
 	transportClosed(): void;
 
+	/**
+	 * Dump DataProducer.
+	 */
 	dump(): Promise<DataProducerDump>;
 
+	/**
+	 * Get DataProducer stats.
+	 */
 	getStats(): Promise<DataProducerStat[]>;
 
+	/**
+	 * Pause the DataProducer.
+	 */
 	pause(): Promise<void>;
 
+	/**
+	 * Resume the DataProducer.
+	 */
 	resume(): Promise<void>;
 
+	/**
+	 * Send data (just valid for DataProducers created on a DirectTransport).
+	 */
 	send(
 		message: string | Buffer,
 		ppid?: number,

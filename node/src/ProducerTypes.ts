@@ -152,14 +152,29 @@ export type ProducerObserverEvents = {
 
 export interface ProducerInterface<ProducerAppData extends AppData = AppData>
 	extends EnhancedEventEmitter<ProducerEvents> {
+	/**
+	 * Producer id.
+	 */
 	get id(): string;
 
+	/**
+	 * Whether the Producer is closed.
+	 */
 	get closed(): boolean;
 
+	/**
+	 * Media kind.
+	 */
 	get kind(): MediaKind;
 
+	/**
+	 * RTP parameters.
+	 */
 	get rtpParameters(): RtpParameters;
 
+	/**
+	 * Producer type.
+	 */
 	get type(): ProducerType;
 
 	/**
@@ -169,16 +184,34 @@ export interface ProducerInterface<ProducerAppData extends AppData = AppData>
 	 */
 	get consumableRtpParameters(): RtpParameters;
 
+	/**
+	 * Whether the Producer is paused.
+	 */
 	get paused(): boolean;
 
+	/**
+	 * Producer score list.
+	 */
 	get score(): ProducerScore[];
 
+	/**
+	 * App custom data.
+	 */
 	get appData(): ProducerAppData;
 
+	/**
+	 * App custom data setter.
+	 */
 	set appData(appData: ProducerAppData);
 
+	/**
+	 * Observer.
+	 */
 	get observer(): ProducerObserver;
 
+	/**
+	 * Close the Producer.
+	 */
 	close(): void;
 
 	/**
@@ -188,15 +221,33 @@ export interface ProducerInterface<ProducerAppData extends AppData = AppData>
 	 */
 	transportClosed(): void;
 
+	/**
+	 * Dump Producer.
+	 */
 	dump(): Promise<ProducerDump>;
 
+	/**
+	 * Get Producer stats.
+	 */
 	getStats(): Promise<ProducerStat[]>;
 
+	/**
+	 * Pause the Producer.
+	 */
 	pause(): Promise<void>;
 
+	/**
+	 * Resume the Producer.
+	 */
 	resume(): Promise<void>;
 
+	/**
+	 * Enable 'trace' event.
+	 */
 	enableTraceEvent(types?: ProducerTraceEventType[]): Promise<void>;
 
+	/**
+	 * Send RTP packet (just valid for Producers created on a DirectTransport).
+	 */
 	send(rtpPacket: Buffer): void;
 }

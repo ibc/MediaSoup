@@ -105,32 +105,74 @@ export type DataConsumerObserverEvents = {
 export interface DataConsumerInterface<
 	DataConsumerAppData extends AppData = AppData,
 > extends EnhancedEventEmitter<DataConsumerEvents> {
+	/**
+	 * DataConsumer id.
+	 */
 	get id(): string;
 
+	/**
+	 * Associated DataProducer id.
+	 */
 	get dataProducerId(): string;
 
+	/**
+	 * Whether the DataConsumer is closed.
+	 */
 	get closed(): boolean;
 
+	/**
+	 * DataConsumer type.
+	 */
 	get type(): DataConsumerType;
 
+	/**
+	 * SCTP stream parameters.
+	 */
 	get sctpStreamParameters(): SctpStreamParameters | undefined;
 
+	/**
+	 * DataChannel label.
+	 */
 	get label(): string;
 
+	/**
+	 * DataChannel protocol.
+	 */
 	get protocol(): string;
 
+	/**
+	 * Whether the DataConsumer is paused.
+	 */
 	get paused(): boolean;
 
+	/**
+	 * Whether the associate DataProducer is paused.
+	 */
 	get dataProducerPaused(): boolean;
 
+	/**
+	 * Get current subchannels this data consumer is subscribed to.
+	 */
 	get subchannels(): number[];
 
+	/**
+	 * App custom data.
+	 */
 	get appData(): DataConsumerAppData;
 
+	/**
+	 * App custom data setter.
+	 */
 	set appData(appData: DataConsumerAppData);
 
+	/**
+	 * Observer.
+	 */
 	get observer(): DataConsumerObserver;
 
+	/**
+	 * Close the DataConsumer.
+	 */
 	close(): void;
 
 	/**
@@ -140,23 +182,53 @@ export interface DataConsumerInterface<
 	 */
 	transportClosed(): void;
 
+	/**
+	 * Dump DataConsumer.
+	 */
 	dump(): Promise<DataConsumerDump>;
 
+	/**
+	 * Get DataConsumer stats.
+	 */
 	getStats(): Promise<DataConsumerStat[]>;
 
+	/**
+	 * Pause the DataConsumer.
+	 */
 	pause(): Promise<void>;
 
+	/**
+	 * Resume the DataConsumer.
+	 */
 	resume(): Promise<void>;
 
+	/**
+	 * Set buffered amount low threshold.
+	 */
 	setBufferedAmountLowThreshold(threshold: number): Promise<void>;
 
+	/**
+	 * Get buffered amount size.
+	 */
 	getBufferedAmount(): Promise<number>;
 
+	/**
+	 * Send a message.
+	 */
 	send(message: string | Buffer, ppid?: number): Promise<void>;
 
+	/**
+	 * Set subchannels.
+	 */
 	setSubchannels(subchannels: number[]): Promise<void>;
 
+	/**
+	 * Add a subchannel.
+	 */
 	addSubchannel(subchannel: number): Promise<void>;
 
+	/**
+	 * Remove a subchannel.
+	 */
 	removeSubchannel(subchannel: number): Promise<void>;
 }

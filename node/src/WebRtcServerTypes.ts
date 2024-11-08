@@ -64,10 +64,19 @@ export type WebRtcServerObserverEvents = {
 export interface WebRtcServerInterface<
 	WebRtcServerAppData extends AppData = AppData,
 > extends EnhancedEventEmitter<WebRtcServerEvents> {
+	/**
+	 * WebRtcServer id.
+	 */
 	get id(): string;
 
+	/**
+	 * Whether the WebRtcServer is closed.
+	 */
 	get closed(): boolean;
 
+	/**
+	 * App custom data.
+	 */
 	get appData(): WebRtcServerAppData;
 
 	/**
@@ -80,6 +89,9 @@ export interface WebRtcServerInterface<
 	 */
 	get observer(): WebRtcServerObserver;
 
+	/**
+	 * Close the WebRtcServer.
+	 */
 	close(): void;
 
 	/**
@@ -89,6 +101,9 @@ export interface WebRtcServerInterface<
 	 */
 	workerClosed(): void;
 
+	/**
+	 * Dump WebRtcServer.
+	 */
 	dump(): Promise<WebRtcServerDump>;
 
 	/**

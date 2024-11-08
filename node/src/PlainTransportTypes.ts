@@ -94,8 +94,8 @@ type PlainTransportListenIp = {
 	listenIp: TransportListenIp | string;
 
 	/**
-	 * Fixed port to listen on instead of selecting automatically from Worker's port
-	 * range.
+	 * Fixed port to listen on instead of selecting automatically from Worker's
+	 * port range.
 	 */
 	port?: number;
 };
@@ -138,12 +138,20 @@ export interface PlainTransportInterface<
 		PlainTransportEvents,
 		PlainTransportObserver
 	> {
+	/**
+	 * Observer.
+	 *
+	 * @override
+	 */
 	get observer(): PlainTransportObserver;
 
+	/**
+	 * PlainTransport tuple.
+	 */
 	get tuple(): TransportTuple;
 
 	/**
-	 * Transport RTCP tuple.
+	 * PlainTransport RTCP tuple.
 	 */
 	get rtcpTuple(): TransportTuple | undefined;
 
@@ -162,10 +170,25 @@ export interface PlainTransportInterface<
 	 */
 	get srtpParameters(): SrtpParameters | undefined;
 
+	/**
+	 * Dump PlainTransport.
+	 *
+	 * @override
+	 */
 	dump(): Promise<PlainTransportDump>;
 
+	/**
+	 * Get PlainTransport stats.
+	 *
+	 * @override
+	 */
 	getStats(): Promise<PlainTransportStat[]>;
 
+	/**
+	 * Provide the PlainTransport remote parameters.
+	 *
+	 * @override
+	 */
 	connect({
 		ip,
 		port,

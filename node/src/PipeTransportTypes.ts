@@ -79,8 +79,8 @@ type PipeTransportListenIp = {
 	listenIp: TransportListenIp | string;
 
 	/**
-	 * Fixed port to listen on instead of selecting automatically from Worker's port
-	 * range.
+	 * Fixed port to listen on instead of selecting automatically from Worker's
+	 * port range.
 	 */
 	port?: number;
 };
@@ -126,8 +126,16 @@ export interface PipeTransportInterface<
 		PipeTransportEvents,
 		PipeTransportObserver
 	> {
+	/**
+	 * Observer.
+	 *
+	 * @override
+	 */
 	get observer(): PipeTransportObserver;
 
+	/**
+	 * PipeTransport tuple.
+	 */
 	get tuple(): TransportTuple;
 
 	/**
@@ -145,10 +153,25 @@ export interface PipeTransportInterface<
 	 */
 	get srtpParameters(): SrtpParameters | undefined;
 
+	/**
+	 * Dump PipeTransport.
+	 *
+	 * @override
+	 */
 	dump(): Promise<PipeTransportDump>;
 
+	/**
+	 * Get PipeTransport stats.
+	 *
+	 * @override
+	 */
 	getStats(): Promise<PipeTransportStat[]>;
 
+	/**
+	 * Provide the PipeTransport remote parameters.
+	 *
+	 * @override
+	 */
 	connect({
 		ip,
 		port,

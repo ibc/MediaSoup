@@ -50,10 +50,6 @@ export abstract class RtpObserverImpl<
 	// Observer instance.
 	readonly #observer: Observer;
 
-	/**
-	 * @private
-	 * @interface
-	 */
 	constructor(
 		{
 			internal,
@@ -74,51 +70,30 @@ export abstract class RtpObserverImpl<
 		this.#observer = observer;
 	}
 
-	/**
-	 * RtpObserver id.
-	 */
 	get id(): string {
 		return this.internal.rtpObserverId;
 	}
 
-	/**
-	 * Whether the RtpObserver is closed.
-	 */
 	get closed(): boolean {
 		return this.#closed;
 	}
 
-	/**
-	 * Whether the RtpObserver is paused.
-	 */
 	get paused(): boolean {
 		return this.#paused;
 	}
 
-	/**
-	 * App custom data.
-	 */
 	get appData(): RtpObserverAppData {
 		return this.#appData;
 	}
 
-	/**
-	 * App custom data setter.
-	 */
 	set appData(appData: RtpObserverAppData) {
 		this.#appData = appData;
 	}
 
-	/**
-	 * Observer.
-	 */
 	get observer(): Observer {
 		return this.#observer;
 	}
 
-	/**
-	 * Close the RtpObserver.
-	 */
 	close(): void {
 		if (this.#closed) {
 			return;
@@ -151,11 +126,6 @@ export abstract class RtpObserverImpl<
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Router was closed.
-	 *
-	 * @private
-	 */
 	routerClosed(): void {
 		if (this.#closed) {
 			return;
@@ -174,9 +144,6 @@ export abstract class RtpObserverImpl<
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Pause the RtpObserver.
-	 */
 	async pause(): Promise<void> {
 		logger.debug('pause()');
 
@@ -197,9 +164,6 @@ export abstract class RtpObserverImpl<
 		}
 	}
 
-	/**
-	 * Resume the RtpObserver.
-	 */
 	async resume(): Promise<void> {
 		logger.debug('resume()');
 
@@ -220,9 +184,6 @@ export abstract class RtpObserverImpl<
 		}
 	}
 
-	/**
-	 * Add a Producer to the RtpObserver.
-	 */
 	async addProducer({ producerId }: { producerId: string }): Promise<void> {
 		logger.debug('addProducer()');
 
@@ -247,9 +208,6 @@ export abstract class RtpObserverImpl<
 		this.#observer.safeEmit('addproducer', producer);
 	}
 
-	/**
-	 * Remove a Producer from the RtpObserver.
-	 */
 	async removeProducer({ producerId }: { producerId: string }): Promise<void> {
 		logger.debug('removeProducer()');
 

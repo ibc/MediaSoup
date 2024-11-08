@@ -177,8 +177,14 @@ export type RouterObserverEvents = {
 
 export interface RouterInterface<RouterAppData extends AppData = AppData>
 	extends EnhancedEventEmitter<RouterEvents> {
+	/**
+	 * Router id.
+	 */
 	get id(): string;
 
+	/**
+	 * Whether the Router is closed.
+	 */
 	get closed(): boolean;
 
 	/**
@@ -201,6 +207,9 @@ export interface RouterInterface<RouterAppData extends AppData = AppData>
 	 */
 	get observer(): RouterObserver;
 
+	/**
+	 * Close the Router.
+	 */
 	close(): void;
 
 	/**
@@ -210,24 +219,42 @@ export interface RouterInterface<RouterAppData extends AppData = AppData>
 	 */
 	workerClosed(): void;
 
+	/**
+	 * Dump Router.
+	 */
 	dump(): Promise<RouterDump>;
 
+	/**
+	 * Create a WebRtcTransport.
+	 */
 	createWebRtcTransport<WebRtcTransportAppData extends AppData = AppData>(
 		options: WebRtcTransportOptions<WebRtcTransportAppData>
 	): Promise<WebRtcTransportInterface<WebRtcTransportAppData>>;
 
+	/**
+	 * Create a PlainTransport.
+	 */
 	createPlainTransport<PlainTransportAppData extends AppData = AppData>(
 		options: PlainTransportOptions<PlainTransportAppData>
 	): Promise<PlainTransportInterface<PlainTransportAppData>>;
 
+	/**
+	 * Create a PipeTransport.
+	 */
 	createPipeTransport<PipeTransportAppData extends AppData = AppData>(
 		options: PipeTransportOptions<PipeTransportAppData>
 	): Promise<PipeTransportInterface<PipeTransportAppData>>;
 
+	/**
+	 * Create a DirectTransport.
+	 */
 	createDirectTransport<DirectTransportAppData extends AppData = AppData>(
 		options?: DirectTransportOptions<DirectTransportAppData>
 	): Promise<DirectTransportInterface<DirectTransportAppData>>;
 
+	/**
+	 * Pipes the given Producer or DataProducer into another Router in same host.
+	 */
 	pipeToRouter(options: PipeToRouterOptions): Promise<PipeToRouterResult>;
 
 	/**
@@ -238,16 +265,25 @@ export interface RouterInterface<RouterAppData extends AppData = AppData>
 		pipeTransportPairPromise: Promise<PipeTransportPair>
 	): void;
 
+	/**
+	 * Create an ActiveSpeakerObserver
+	 */
 	createActiveSpeakerObserver<
 		ActiveSpeakerObserverAppData extends AppData = AppData,
 	>(
 		options?: ActiveSpeakerObserverOptions<ActiveSpeakerObserverAppData>
 	): Promise<ActiveSpeakerObserverInterface<ActiveSpeakerObserverAppData>>;
 
+	/**
+	 * Create an AudioLevelObserver.
+	 */
 	createAudioLevelObserver<AudioLevelObserverAppData extends AppData = AppData>(
 		options?: AudioLevelObserverOptions<AudioLevelObserverAppData>
 	): Promise<AudioLevelObserverInterface<AudioLevelObserverAppData>>;
 
+	/**
+	 * Check whether the given RTP capabilities can consume the given Producer.
+	 */
 	canConsume({
 		producerId,
 		rtpCapabilities,

@@ -43,5 +43,10 @@ export interface ActiveSpeakerObserverInterface<
 		ActiveSpeakerObserverEvents,
 		ActiveSpeakerObserverObserver
 	> {
+	/**
+	 * Observer.
+	 *
+	 * @override
+	 */
 	get observer(): ActiveSpeakerObserverObserver;
 }

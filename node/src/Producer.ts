@@ -70,9 +70,6 @@ export class ProducerImpl<ProducerAppData extends AppData = AppData>
 	readonly #observer: ProducerObserver =
 		new EnhancedEventEmitter<ProducerObserverEvents>();
 
-	/**
-	 * @private
-	 */
 	constructor({
 		internal,
 		data,
@@ -99,81 +96,46 @@ export class ProducerImpl<ProducerAppData extends AppData = AppData>
 		this.handleWorkerNotifications();
 	}
 
-	/**
-	 * Producer id.
-	 */
 	get id(): string {
 		return this.#internal.producerId;
 	}
 
-	/**
-	 * Whether the Producer is closed.
-	 */
 	get closed(): boolean {
 		return this.#closed;
 	}
 
-	/**
-	 * Media kind.
-	 */
 	get kind(): MediaKind {
 		return this.#data.kind;
 	}
 
-	/**
-	 * RTP parameters.
-	 */
 	get rtpParameters(): RtpParameters {
 		return this.#data.rtpParameters;
 	}
 
-	/**
-	 * Producer type.
-	 */
 	get type(): ProducerType {
 		return this.#data.type;
 	}
 
-	/**
-	 * Consumable RTP parameters.
-	 *
-	 * @private
-	 */
 	get consumableRtpParameters(): RtpParameters {
 		return this.#data.consumableRtpParameters;
 	}
 
-	/**
-	 * Whether the Producer is paused.
-	 */
 	get paused(): boolean {
 		return this.#paused;
 	}
 
-	/**
-	 * Producer score list.
-	 */
 	get score(): ProducerScore[] {
 		return this.#score;
 	}
 
-	/**
-	 * App custom data.
-	 */
 	get appData(): ProducerAppData {
 		return this.#appData;
 	}
 
-	/**
-	 * App custom data setter.
-	 */
 	set appData(appData: ProducerAppData) {
 		this.#appData = appData;
 	}
 
-	/**
-	 * Observer.
-	 */
 	get observer(): ProducerObserver {
 		return this.#observer;
 	}
@@ -187,9 +149,6 @@ export class ProducerImpl<ProducerAppData extends AppData = AppData>
 		return this.#channel;
 	}
 
-	/**
-	 * Close the Producer.
-	 */
 	close(): void {
 		if (this.#closed) {
 			return;
@@ -222,11 +181,6 @@ export class ProducerImpl<ProducerAppData extends AppData = AppData>
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Transport was closed.
-	 *
-	 * @private
-	 */
 	transportClosed(): void {
 		if (this.#closed) {
 			return;
@@ -245,9 +199,6 @@ export class ProducerImpl<ProducerAppData extends AppData = AppData>
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Dump Producer.
-	 */
 	async dump(): Promise<ProducerDump> {
 		logger.debug('dump()');
 
@@ -266,9 +217,6 @@ export class ProducerImpl<ProducerAppData extends AppData = AppData>
 		return parseProducerDump(dumpResponse);
 	}
 
-	/**
-	 * Get Producer stats.
-	 */
 	async getStats(): Promise<ProducerStat[]> {
 		logger.debug('getStats()');
 
@@ -287,9 +235,6 @@ export class ProducerImpl<ProducerAppData extends AppData = AppData>
 		return parseProducerStats(data);
 	}
 
-	/**
-	 * Pause the Producer.
-	 */
 	async pause(): Promise<void> {
 		logger.debug('pause()');
 
@@ -310,9 +255,6 @@ export class ProducerImpl<ProducerAppData extends AppData = AppData>
 		}
 	}
 
-	/**
-	 * Resume the Producer.
-	 */
 	async resume(): Promise<void> {
 		logger.debug('resume()');
 
@@ -333,9 +275,6 @@ export class ProducerImpl<ProducerAppData extends AppData = AppData>
 		}
 	}
 
-	/**
-	 * Enable 'trace' event.
-	 */
 	async enableTraceEvent(types: ProducerTraceEventType[] = []): Promise<void> {
 		logger.debug('enableTraceEvent()');
 
@@ -370,9 +309,6 @@ export class ProducerImpl<ProducerAppData extends AppData = AppData>
 		);
 	}
 
-	/**
-	 * Send RTP packet (just valid for Producers created on a DirectTransport).
-	 */
 	send(rtpPacket: Buffer): void {
 		if (!Buffer.isBuffer(rtpPacket)) {
 			throw new TypeError('rtpPacket must be a Buffer');

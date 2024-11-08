@@ -221,7 +221,7 @@ export type TransportTraceEventData = {
 	/**
 	 * Per type information.
 	 */
-	info: any;
+	info: unknown;
 };
 
 export type TransportEvents = {
@@ -254,22 +254,45 @@ export interface TransportInterface<
 	Events extends TransportEvents = TransportEvents,
 	Observer extends TransportObserver = TransportObserver,
 > extends EnhancedEventEmitter<Events> {
+	/**
+	 * Transport id.
+	 */
 	get id(): string;
 
+	/**
+	 * Whether the Transport is closed.
+	 */
 	get closed(): boolean;
 
+	/**
+	 * App custom data.
+	 */
 	get appData(): TransportAppData;
 
+	/**
+	 * App custom data setter.
+	 */
 	set appData(appData: TransportAppData);
 
+	/**
+	 * Observer.
+	 *
+	 * @virtual
+	 */
 	get observer(): Observer;
 
+	/**
+	 * Close the Transport.
+	 *
+	 * @virtual
+	 */
 	close(): void;
 
 	/**
 	 * Router was closed.
 	 *
 	 * @private
+	 * @virtual
 	 */
 	routerClosed(): void;
 
@@ -278,30 +301,92 @@ export interface TransportInterface<
 	 * associated WebRtcServer is closed).
 	 *
 	 * @private
+	 * @virtual
 	 */
 	listenServerClosed(): void;
 
+	/**
+	 * Dump Transport.
+	 *
+	 * @abstract
+	 */
+	dump(): Promise<unknown>;
+
+	/**
+	 * Get Transport stats.
+	 *
+	 * @abstract
+	 */
+	getStats(): Promise<unknown[]>;
+
+	/**
+	 * Provide the Transport remote parameters.
+	 *
+	 * @abstract
+	 */
+	connect(params: unknown): Promise<void>;
+
+	/**
+	 * Set maximum incoming bitrate for receiving media.
+	 *
+	 * @virtual
+	 * @privateRemarks
+	 * - It's marked as virtual method because DirectTransport overrides it.
+	 */
 	setMaxIncomingBitrate(bitrate: number): Promise<void>;
 
+	/**
+	 * Set maximum outgoing bitrate for sending media.
+	 *
+	 * @virtual
+	 * @privateRemarks
+	 * - It's marked as virtual method because DirectTransport overrides it.
+	 */
 	setMaxOutgoingBitrate(bitrate: number): Promise<void>;
 
+	/**
+	 * Set minimum outgoing bitrate for sending media.
+	 *
+	 * @virtual
+	 * @privateRemarks
+	 * - It's marked as virtual method because DirectTransport overrides it.
+	 */
 	setMinOutgoingBitrate(bitrate: number): Promise<void>;
 
+	/**
+	 * Create a Producer.
+	 */
 	produce<ProducerAppData extends AppData = AppData>(
 		options: ProducerOptions<ProducerAppData>
 	): Promise<ProducerInterface<ProducerAppData>>;
 
+	/**
+	 * Create a Consumer.
+	 *
+	 * @virtual
+	 * @privateRemarks
+	 * - It's marked as virtual method because PipeTransport overrides it.
+	 */
 	consume<ConsumerAppData extends AppData = AppData>(
 		options: ConsumerOptions<ConsumerAppData>
 	): Promise<ConsumerInterface<ConsumerAppData>>;
 
+	/**
+	 * Create a DataProducer.
+	 */
 	produceData<DataProducerAppData extends AppData = AppData>(
 		options?: DataProducerOptions<DataProducerAppData>
 	): Promise<DataProducerInterface<DataProducerAppData>>;
 
+	/**
+	 * Create a DataConsumer.
+	 */
 	consumeData<DataConsumerAppData extends AppData = AppData>(
 		options: DataConsumerOptions<DataConsumerAppData>
 	): Promise<DataConsumerInterface<DataConsumerAppData>>;
 
+	/**
+	 * Enable 'trace' event.
+	 */
 	enableTraceEvent(types?: TransportTraceEventType[]): Promise<void>;
 }

@@ -2,6 +2,8 @@
 
 ### NEXT
 
+- Node: Add TypeScript interfaces for all exported classes ([PR #1463](https://github.com/versatica/mediasoup/pull/1463)).
+
 ### 3.14.16
 
 - `SimulcastConsumer`: Fix cannot switch layers if initial `tsReferenceSpatialLayer disappears` disappears ([PR #1459](https://github.com/versatica/mediasoup/pull/1459) by @Lynnworld).

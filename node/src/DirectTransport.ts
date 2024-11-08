@@ -50,9 +50,6 @@ export class DirectTransportImpl<
 	// eslint-disable-next-line no-unused-private-class-members
 	readonly #data: DirectTransportData;
 
-	/**
-	 * @private
-	 */
 	constructor(
 		options: DirectTransportConstructorOptions<DirectTransportAppData>
 	) {
@@ -70,20 +67,10 @@ export class DirectTransportImpl<
 		this.handleWorkerNotifications();
 	}
 
-	/**
-	 * Observer.
-	 *
-	 * @override
-	 */
 	get observer(): DirectTransportObserver {
 		return super.observer;
 	}
 
-	/**
-	 * Close the DirectTransport.
-	 *
-	 * @override
-	 */
 	close(): void {
 		if (this.closed) {
 			return;
@@ -92,12 +79,6 @@ export class DirectTransportImpl<
 		super.close();
 	}
 
-	/**
-	 * Router was closed.
-	 *
-	 * @private
-	 * @override
-	 */
 	routerClosed(): void {
 		if (this.closed) {
 			return;
@@ -106,9 +87,6 @@ export class DirectTransportImpl<
 		super.routerClosed();
 	}
 
-	/**
-	 * Dump DirectTransport.
-	 */
 	async dump(): Promise<DirectTransportDump> {
 		logger.debug('dump()');
 
@@ -127,11 +105,6 @@ export class DirectTransportImpl<
 		return parseDirectTransportDumpResponse(data);
 	}
 
-	/**
-	 * Get DirectTransport stats.
-	 *
-	 * @override
-	 */
 	async getStats(): Promise<DirectTransportStat[]> {
 		logger.debug('getStats()');
 
@@ -150,19 +123,11 @@ export class DirectTransportImpl<
 		return [parseGetStatsResponse(data)];
 	}
 
-	/**
-	 * NO-OP method in DirectTransport.
-	 *
-	 * @override
-	 */
 	// eslint-disable-next-line @typescript-eslint/require-await
 	async connect(): Promise<void> {
 		logger.debug('connect()');
 	}
 
-	/**
-	 * @override
-	 */
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/require-await
 	async setMaxIncomingBitrate(bitrate: number): Promise<void> {
 		throw new UnsupportedError(
@@ -170,9 +135,6 @@ export class DirectTransportImpl<
 		);
 	}
 
-	/**
-	 * @override
-	 */
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/require-await
 	async setMaxOutgoingBitrate(bitrate: number): Promise<void> {
 		throw new UnsupportedError(
@@ -180,9 +142,6 @@ export class DirectTransportImpl<
 		);
 	}
 
-	/**
-	 * @override
-	 */
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/require-await
 	async setMinOutgoingBitrate(bitrate: number): Promise<void> {
 		throw new UnsupportedError(
@@ -190,9 +149,6 @@ export class DirectTransportImpl<
 		);
 	}
 
-	/**
-	 * Send RTCP packet.
-	 */
 	sendRtcp(rtcpPacket: Buffer): void {
 		if (!Buffer.isBuffer(rtcpPacket)) {
 			throw new TypeError('rtcpPacket must be a Buffer');

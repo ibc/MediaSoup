@@ -96,9 +96,6 @@ export class WorkerImpl<WorkerAppData extends AppData = AppData>
 	readonly #observer: WorkerObserver =
 		new EnhancedEventEmitter<WorkerObserverEvents>();
 
-	/**
-	 * @private
-	 */
 	constructor({
 		logLevel,
 		logTags,
@@ -306,59 +303,36 @@ export class WorkerImpl<WorkerAppData extends AppData = AppData>
 		});
 	}
 
-	/**
-	 * Worker process identifier (PID).
-	 */
 	get pid(): number {
 		return this.#pid;
 	}
 
-	/**
-	 * Whether the Worker is closed.
-	 */
 	get closed(): boolean {
 		return this.#closed;
 	}
 
-	/**
-	 * Whether the Worker died.
-	 */
 	get died(): boolean {
 		return this.#died;
 	}
 
-	/**
-	 * Whether the Worker subprocess is closed.
-	 */
 	get subprocessClosed(): boolean {
 		return this.#subprocessClosed;
 	}
 
-	/**
-	 * App custom data.
-	 */
 	get appData(): WorkerAppData {
 		return this.#appData;
 	}
 
-	/**
-	 * App custom data setter.
-	 */
 	set appData(appData: WorkerAppData) {
 		this.#appData = appData;
 	}
 
-	/**
-	 * Observer.
-	 */
 	get observer(): WorkerObserver {
 		return this.#observer;
 	}
 
 	/**
 	 * Just for testing purposes.
-	 *
-	 * @private
 	 */
 	get webRtcServersForTesting(): Set<WebRtcServerInterface> {
 		return this.#webRtcServers;
@@ -366,16 +340,11 @@ export class WorkerImpl<WorkerAppData extends AppData = AppData>
 
 	/**
 	 * Just for testing purposes.
-	 *
-	 * @private
 	 */
 	get routersForTesting(): Set<RouterInterface> {
 		return this.#routers;
 	}
 
-	/**
-	 * Close the Worker.
-	 */
 	close(): void {
 		if (this.#closed) {
 			return;
@@ -407,9 +376,6 @@ export class WorkerImpl<WorkerAppData extends AppData = AppData>
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Dump Worker.
-	 */
 	async dump(): Promise<WorkerDump> {
 		logger.debug('dump()');
 
@@ -424,9 +390,6 @@ export class WorkerImpl<WorkerAppData extends AppData = AppData>
 		return parseWorkerDumpResponse(dump);
 	}
 
-	/**
-	 * Get mediasoup-worker process resource usage.
-	 */
 	async getResourceUsage(): Promise<WorkerResourceUsage> {
 		logger.debug('getResourceUsage()');
 
@@ -461,9 +424,6 @@ export class WorkerImpl<WorkerAppData extends AppData = AppData>
 		};
 	}
 
-	/**
-	 * Update settings.
-	 */
 	async updateSettings({
 		logLevel,
 		logTags,
@@ -483,9 +443,6 @@ export class WorkerImpl<WorkerAppData extends AppData = AppData>
 		);
 	}
 
-	/**
-	 * Create a WebRtcServer.
-	 */
 	async createWebRtcServer<WebRtcServerAppData extends AppData = AppData>({
 		listenInfos,
 		appData,
@@ -548,9 +505,6 @@ export class WorkerImpl<WorkerAppData extends AppData = AppData>
 		return webRtcServer;
 	}
 
-	/**
-	 * Create a Router.
-	 */
 	async createRouter<RouterAppData extends AppData = AppData>({
 		mediaCodecs,
 		appData,

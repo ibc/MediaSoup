@@ -209,10 +209,19 @@ export type WorkerObserverEvents = {
 
 export interface WorkerInterface<WorkerAppData extends AppData = AppData>
 	extends EnhancedEventEmitter<WorkerEvents> {
+	/**
+	 * Worker process identifier (PID).
+	 */
 	get pid(): number;
 
+	/**
+	 * Whether the Worker is closed.
+	 */
 	get closed(): boolean;
 
+	/**
+	 * Whether the Worker died.
+	 */
 	get died(): boolean;
 
 	/**
@@ -235,20 +244,38 @@ export interface WorkerInterface<WorkerAppData extends AppData = AppData>
 	 */
 	get observer(): WorkerObserver;
 
+	/**
+	 * Close the Worker.
+	 */
 	close(): void;
 
+	/**
+	 * Dump Worker.
+	 */
 	dump(): Promise<WorkerDump>;
 
+	/**
+	 * Get mediasoup-worker process resource usage.
+	 */
 	getResourceUsage(): Promise<WorkerResourceUsage>;
 
+	/**
+	 * Update settings.
+	 */
 	updateSettings(
 		options?: WorkerUpdateableSettings<WorkerAppData>
 	): Promise<void>;
 
+	/**
+	 * Create a WebRtcServer.
+	 */
 	createWebRtcServer<WebRtcServerAppData extends AppData = AppData>(
 		options: WebRtcServerOptions<WebRtcServerAppData>
 	): Promise<WebRtcServerInterface<WebRtcServerAppData>>;
 
+	/**
+	 * Create a Router.
+	 */
 	createRouter<RouterAppData extends AppData = AppData>(
 		options?: RouterOptions<RouterAppData>
 	): Promise<RouterInterface<RouterAppData>>;

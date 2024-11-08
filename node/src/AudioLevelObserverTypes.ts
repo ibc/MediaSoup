@@ -65,5 +65,10 @@ export interface AudioLevelObserverInterface<
 		AudioLevelObserverEvents,
 		AudioLevelObserverObserver
 	> {
+	/**
+	 * Observer.
+	 *
+	 * @override
+	 */
 	get observer(): AudioLevelObserverObserver;
 }

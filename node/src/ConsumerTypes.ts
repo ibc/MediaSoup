@@ -256,36 +256,84 @@ export type ConsumerObserverEvents = {
 
 export interface ConsumerInterface<ConsumerAppData extends AppData = AppData>
 	extends EnhancedEventEmitter<ConsumerEvents> {
+	/**
+	 * Consumer id.
+	 */
 	get id(): string;
 
+	/**
+	 * Associated Producer id.
+	 */
 	get producerId(): string;
 
+	/**
+	 * Whether the Consumer is closed.
+	 */
 	get closed(): boolean;
 
+	/**
+	 * Media kind.
+	 */
 	get kind(): MediaKind;
 
+	/**
+	 * RTP parameters.
+	 */
 	get rtpParameters(): RtpParameters;
 
+	/**
+	 * Consumer type.
+	 */
 	get type(): ConsumerType;
 
+	/**
+	 * Whether the Consumer is paused.
+	 */
 	get paused(): boolean;
 
+	/**
+	 * Whether the associate Producer is paused.
+	 */
 	get producerPaused(): boolean;
 
+	/**
+	 * Current priority.
+	 */
 	get priority(): number;
 
+	/**
+	 * Consumer score.
+	 */
 	get score(): ConsumerScore;
 
+	/**
+	 * Preferred video layers.
+	 */
 	get preferredLayers(): ConsumerLayers | undefined;
 
+	/**
+	 * Current video layers.
+	 */
 	get currentLayers(): ConsumerLayers | undefined;
 
+	/**
+	 * App custom data.
+	 */
 	get appData(): ConsumerAppData;
 
+	/**
+	 * App custom data setter.
+	 */
 	set appData(appData: ConsumerAppData);
 
+	/**
+	 * Observer.
+	 */
 	get observer(): ConsumerObserver;
 
+	/**
+	 * Close the Consumer.
+	 */
 	close(): void;
 
 	/**
@@ -295,24 +343,51 @@ export interface ConsumerInterface<ConsumerAppData extends AppData = AppData>
 	 */
 	transportClosed(): void;
 
+	/**
+	 * Dump Consumer.
+	 */
 	dump(): Promise<ConsumerDump>;
 
+	/**
+	 * Get Consumer stats.
+	 */
 	getStats(): Promise<(ConsumerStat | ProducerStat)[]>;
 
+	/**
+	 * Pause the Consumer.
+	 */
 	pause(): Promise<void>;
 
+	/**
+	 * Resume the Consumer.
+	 */
 	resume(): Promise<void>;
 
+	/**
+	 * Set preferred video layers.
+	 */
 	setPreferredLayers({
 		spatialLayer,
 		temporalLayer,
 	}: ConsumerLayers): Promise<void>;
 
+	/**
+	 * Set priority.
+	 */
 	setPriority(priority: number): Promise<void>;
 
+	/**
+	 * Unset priority.
+	 */
 	unsetPriority(): Promise<void>;
 
+	/**
+	 * Request a key frame to the Producer.
+	 */
 	requestKeyFrame(): Promise<void>;
 
+	/**
+	 * Enable 'trace' event.
+	 */
 	enableTraceEvent(types?: ConsumerTraceEventType[]): Promise<void>;
 }

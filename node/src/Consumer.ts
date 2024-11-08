@@ -99,9 +99,6 @@ export class ConsumerImpl<ConsumerAppData extends AppData = AppData>
 	readonly #observer: ConsumerObserver =
 		new EnhancedEventEmitter<ConsumerObserverEvents>();
 
-	/**
-	 * @private
-	 */
 	constructor({
 		internal,
 		data,
@@ -137,122 +134,75 @@ export class ConsumerImpl<ConsumerAppData extends AppData = AppData>
 		this.handleWorkerNotifications();
 	}
 
-	/**
-	 * Consumer id.
-	 */
 	get id(): string {
 		return this.#internal.consumerId;
 	}
 
-	/**
-	 * Associated Producer id.
-	 */
 	get producerId(): string {
 		return this.#data.producerId;
 	}
 
-	/**
-	 * Whether the Consumer is closed.
-	 */
 	get closed(): boolean {
 		return this.#closed;
 	}
 
-	/**
-	 * Media kind.
-	 */
 	get kind(): MediaKind {
 		return this.#data.kind;
 	}
 
-	/**
-	 * RTP parameters.
-	 */
 	get rtpParameters(): RtpParameters {
 		return this.#data.rtpParameters;
 	}
 
-	/**
-	 * Consumer type.
-	 */
 	get type(): ConsumerType {
 		return this.#data.type;
 	}
 
-	/**
-	 * Whether the Consumer is paused.
-	 */
 	get paused(): boolean {
 		return this.#paused;
 	}
 
-	/**
-	 * Whether the associate Producer is paused.
-	 */
 	get producerPaused(): boolean {
 		return this.#producerPaused;
 	}
 
-	/**
-	 * Current priority.
-	 */
 	get priority(): number {
 		return this.#priority;
 	}
 
-	/**
-	 * Consumer score.
-	 */
 	get score(): ConsumerScore {
 		return this.#score;
 	}
 
-	/**
-	 * Preferred video layers.
-	 */
 	get preferredLayers(): ConsumerLayers | undefined {
 		return this.#preferredLayers;
 	}
 
-	/**
-	 * Current video layers.
-	 */
 	get currentLayers(): ConsumerLayers | undefined {
 		return this.#currentLayers;
 	}
 
-	/**
-	 * App custom data.
-	 */
 	get appData(): ConsumerAppData {
 		return this.#appData;
 	}
 
-	/**
-	 * App custom data setter.
-	 */
 	set appData(appData: ConsumerAppData) {
 		this.#appData = appData;
 	}
 
-	/**
-	 * Observer.
-	 */
 	get observer(): ConsumerObserver {
 		return this.#observer;
 	}
 
 	/**
-	 * @private
 	 * Just for testing purposes.
+	 *
+	 * @private
 	 */
 	get channelForTesting(): Channel {
 		return this.#channel;
 	}
 
-	/**
-	 * Close the Consumer.
-	 */
 	close(): void {
 		if (this.#closed) {
 			return;
@@ -285,11 +235,6 @@ export class ConsumerImpl<ConsumerAppData extends AppData = AppData>
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Transport was closed.
-	 *
-	 * @private
-	 */
 	transportClosed(): void {
 		if (this.#closed) {
 			return;
@@ -308,9 +253,6 @@ export class ConsumerImpl<ConsumerAppData extends AppData = AppData>
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Dump Consumer.
-	 */
 	async dump(): Promise<ConsumerDump> {
 		logger.debug('dump()');
 
@@ -329,9 +271,6 @@ export class ConsumerImpl<ConsumerAppData extends AppData = AppData>
 		return parseConsumerDumpResponse(data);
 	}
 
-	/**
-	 * Get Consumer stats.
-	 */
 	async getStats(): Promise<(ConsumerStat | ProducerStat)[]> {
 		logger.debug('getStats()');
 
@@ -350,9 +289,6 @@ export class ConsumerImpl<ConsumerAppData extends AppData = AppData>
 		return parseConsumerStats(data);
 	}
 
-	/**
-	 * Pause the Consumer.
-	 */
 	async pause(): Promise<void> {
 		logger.debug('pause()');
 
@@ -373,9 +309,6 @@ export class ConsumerImpl<ConsumerAppData extends AppData = AppData>
 		}
 	}
 
-	/**
-	 * Resume the Consumer.
-	 */
 	async resume(): Promise<void> {
 		logger.debug('resume()');
 
@@ -396,9 +329,6 @@ export class ConsumerImpl<ConsumerAppData extends AppData = AppData>
 		}
 	}
 
-	/**
-	 * Set preferred video layers.
-	 */
 	async setPreferredLayers({
 		spatialLayer,
 		temporalLayer,
@@ -453,9 +383,6 @@ export class ConsumerImpl<ConsumerAppData extends AppData = AppData>
 		this.#preferredLayers = preferredLayers;
 	}
 
-	/**
-	 * Set priority.
-	 */
 	async setPriority(priority: number): Promise<void> {
 		logger.debug('setPriority()');
 
@@ -485,18 +412,12 @@ export class ConsumerImpl<ConsumerAppData extends AppData = AppData>
 		this.#priority = status.priority;
 	}
 
-	/**
-	 * Unset priority.
-	 */
 	async unsetPriority(): Promise<void> {
 		logger.debug('unsetPriority()');
 
 		await this.setPriority(1);
 	}
 
-	/**
-	 * Request a key frame to the Producer.
-	 */
 	async requestKeyFrame(): Promise<void> {
 		logger.debug('requestKeyFrame()');
 
@@ -508,9 +429,6 @@ export class ConsumerImpl<ConsumerAppData extends AppData = AppData>
 		);
 	}
 
-	/**
-	 * Enable 'trace' event.
-	 */
 	async enableTraceEvent(types: ConsumerTraceEventType[] = []): Promise<void> {
 		logger.debug('enableTraceEvent()');
 

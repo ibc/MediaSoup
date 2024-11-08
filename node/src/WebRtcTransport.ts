@@ -114,90 +114,50 @@ export class WebRtcTransportImpl<
 		this.handleWorkerNotifications();
 	}
 
-	/**
-	 * Observer.
-	 *
-	 * @override
-	 */
 	get observer(): WebRtcTransportObserver {
 		return super.observer;
 	}
 
-	/**
-	 * ICE role.
-	 */
 	get iceRole(): 'controlled' {
 		return this.#data.iceRole;
 	}
 
-	/**
-	 * ICE parameters.
-	 */
 	get iceParameters(): IceParameters {
 		return this.#data.iceParameters;
 	}
 
-	/**
-	 * ICE candidates.
-	 */
 	get iceCandidates(): IceCandidate[] {
 		return this.#data.iceCandidates;
 	}
 
-	/**
-	 * ICE state.
-	 */
 	get iceState(): IceState {
 		return this.#data.iceState;
 	}
 
-	/**
-	 * ICE selected tuple.
-	 */
 	get iceSelectedTuple(): TransportTuple | undefined {
 		return this.#data.iceSelectedTuple;
 	}
 
-	/**
-	 * DTLS parameters.
-	 */
 	get dtlsParameters(): DtlsParameters {
 		return this.#data.dtlsParameters;
 	}
 
-	/**
-	 * DTLS state.
-	 */
 	get dtlsState(): DtlsState {
 		return this.#data.dtlsState;
 	}
 
-	/**
-	 * Remote certificate in PEM format.
-	 */
 	get dtlsRemoteCert(): string | undefined {
 		return this.#data.dtlsRemoteCert;
 	}
 
-	/**
-	 * SCTP parameters.
-	 */
 	get sctpParameters(): SctpParameters | undefined {
 		return this.#data.sctpParameters;
 	}
 
-	/**
-	 * SCTP state.
-	 */
 	get sctpState(): SctpState | undefined {
 		return this.#data.sctpState;
 	}
 
-	/**
-	 * Close the WebRtcTransport.
-	 *
-	 * @override
-	 */
 	close(): void {
 		if (this.closed) {
 			return;
@@ -214,12 +174,6 @@ export class WebRtcTransportImpl<
 		super.close();
 	}
 
-	/**
-	 * Router was closed.
-	 *
-	 * @private
-	 * @override
-	 */
 	routerClosed(): void {
 		if (this.closed) {
 			return;
@@ -236,11 +190,6 @@ export class WebRtcTransportImpl<
 		super.routerClosed();
 	}
 
-	/**
-	 * Called when closing the associated listenServer (WebRtcServer).
-	 *
-	 * @private
-	 */
 	listenServerClosed(): void {
 		if (this.closed) {
 			return;
@@ -257,9 +206,6 @@ export class WebRtcTransportImpl<
 		super.listenServerClosed();
 	}
 
-	/**
-	 * Dump WebRtcTransport.
-	 */
 	async dump(): Promise<WebRtcTransportDump> {
 		logger.debug('dump()');
 
@@ -278,11 +224,6 @@ export class WebRtcTransportImpl<
 		return parseWebRtcTransportDumpResponse(data);
 	}
 
-	/**
-	 * Get WebRtcTransport stats.
-	 *
-	 * @override
-	 */
 	async getStats(): Promise<WebRtcTransportStat[]> {
 		logger.debug('getStats()');
 
@@ -301,11 +242,6 @@ export class WebRtcTransportImpl<
 		return [parseGetStatsResponse(data)];
 	}
 
-	/**
-	 * Provide the WebRtcTransport remote parameters.
-	 *
-	 * @override
-	 */
 	async connect({
 		dtlsParameters,
 	}: {
@@ -335,9 +271,6 @@ export class WebRtcTransportImpl<
 		this.#data.dtlsParameters.role = dtlsRoleFromFbs(data.dtlsLocalRole());
 	}
 
-	/**
-	 * Restart ICE.
-	 */
 	async restartIce(): Promise<IceParameters> {
 		logger.debug('restartIce()');
 

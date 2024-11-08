@@ -74,9 +74,6 @@ export class PipeTransport<PipeTransportAppData extends AppData = AppData>
 	// PipeTransport data.
 	readonly #data: PipeTransportData;
 
-	/**
-	 * @private
-	 */
 	constructor(options: PipeTransportConstructorOptions<PipeTransportAppData>) {
 		const observer: PipeTransportObserver =
 			new EnhancedEventEmitter<PipeTransportObserverEvents>();
@@ -98,48 +95,26 @@ export class PipeTransport<PipeTransportAppData extends AppData = AppData>
 		this.handleWorkerNotifications();
 	}
 
-	/**
-	 * Observer.
-	 *
-	 * @override
-	 */
 	get observer(): PipeTransportObserver {
 		return super.observer;
 	}
 
-	/**
-	 * Transport tuple.
-	 */
 	get tuple(): TransportTuple {
 		return this.#data.tuple;
 	}
 
-	/**
-	 * SCTP parameters.
-	 */
 	get sctpParameters(): SctpParameters | undefined {
 		return this.#data.sctpParameters;
 	}
 
-	/**
-	 * SCTP state.
-	 */
 	get sctpState(): SctpState | undefined {
 		return this.#data.sctpState;
 	}
 
-	/**
-	 * SRTP parameters.
-	 */
 	get srtpParameters(): SrtpParameters | undefined {
 		return this.#data.srtpParameters;
 	}
 
-	/**
-	 * Close the PipeTransport.
-	 *
-	 * @override
-	 */
 	close(): void {
 		if (this.closed) {
 			return;
@@ -152,12 +127,6 @@ export class PipeTransport<PipeTransportAppData extends AppData = AppData>
 		super.close();
 	}
 
-	/**
-	 * Router was closed.
-	 *
-	 * @private
-	 * @override
-	 */
 	routerClosed(): void {
 		if (this.closed) {
 			return;
@@ -170,32 +139,6 @@ export class PipeTransport<PipeTransportAppData extends AppData = AppData>
 		super.routerClosed();
 	}
 
-	/**
-	 * Get PipeTransport stats.
-	 *
-	 * @override
-	 */
-	async getStats(): Promise<PipeTransportStat[]> {
-		logger.debug('getStats()');
-
-		const response = await this.channel.request(
-			FbsRequest.Method.TRANSPORT_GET_STATS,
-			undefined,
-			undefined,
-			this.internal.transportId
-		);
-
-		/* Decode Response. */
-		const data = new FbsPipeTransport.GetStatsResponse();
-
-		response.body(data);
-
-		return [parseGetStatsResponse(data)];
-	}
-
-	/**
-	 * Dump PipeTransport.
-	 */
 	async dump(): Promise<PipeTransportDump> {
 		logger.debug('dump()');
 
@@ -214,11 +157,24 @@ export class PipeTransport<PipeTransportAppData extends AppData = AppData>
 		return parsePipeTransportDumpResponse(data);
 	}
 
-	/**
-	 * Provide the PipeTransport remote parameters.
-	 *
-	 * @override
-	 */
+	async getStats(): Promise<PipeTransportStat[]> {
+		logger.debug('getStats()');
+
+		const response = await this.channel.request(
+			FbsRequest.Method.TRANSPORT_GET_STATS,
+			undefined,
+			undefined,
+			this.internal.transportId
+		);
+
+		/* Decode Response. */
+		const data = new FbsPipeTransport.GetStatsResponse();
+
+		response.body(data);
+
+		return [parseGetStatsResponse(data)];
+	}
+
 	async connect({
 		ip,
 		port,
@@ -256,11 +212,6 @@ export class PipeTransport<PipeTransportAppData extends AppData = AppData>
 		}
 	}
 
-	/**
-	 * Create a pipe Consumer.
-	 *
-	 * @override
-	 */
 	async consume<ConsumerAppData extends AppData = AppData>({
 		producerId,
 		appData,

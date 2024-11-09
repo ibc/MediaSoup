@@ -6,7 +6,7 @@ import type {
 	RtpEncodingParameters,
 	RtpParameters,
 } from './rtpParametersTypes';
-import type { RtpStreamSendStats } from './RtpStream';
+import type { RtpStreamSendStats } from './rtpStreamStatsTypes';
 import type { AppData } from './types';
 
 export type ConsumerOptions<ConsumerAppData extends AppData = AppData> = {

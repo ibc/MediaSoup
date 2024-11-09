@@ -1,14 +1,12 @@
+import { ScalabilityMode } from './scalabilityModesTypes';
+
 const ScalabilityModeRegex = new RegExp(
 	'^[LS]([1-9]\\d{0,1})T([1-9]\\d{0,1})(_KEY)?'
 );
 
-export type ScalabilityMode = {
-	spatialLayers: number;
-	temporalLayers: number;
-	ksvc: boolean;
-};
-
-export function parse(scalabilityMode?: string): ScalabilityMode {
+export function parseScalabilityMode(
+	scalabilityMode?: string
+): ScalabilityMode {
 	const match = ScalabilityModeRegex.exec(scalabilityMode ?? '');
 
 	if (match) {

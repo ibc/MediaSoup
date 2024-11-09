@@ -30,7 +30,7 @@ import {
 	parseRtpEncodingParameters,
 	parseRtpParameters,
 } from './rtpParametersFbsUtils';
-import { parseRtpStreamStats } from './RtpStream';
+import { parseRtpStreamStats } from './rtpStreamStatsFbsUtils';
 import type { AppData } from './types';
 import * as fbsUtils from './fbsUtils';
 import { Event, Notification } from './fbs/notification';

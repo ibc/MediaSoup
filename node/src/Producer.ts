@@ -17,7 +17,7 @@ import { Channel } from './Channel';
 import type { TransportInternal } from './Transport';
 import type { MediaKind, RtpParameters } from './rtpParametersTypes';
 import { parseRtpParameters } from './rtpParametersFbsUtils';
-import { parseRtpStreamRecvStats } from './RtpStream';
+import { parseRtpStreamRecvStats } from './rtpStreamStatsFbsUtils';
 import type { AppData } from './types';
 import * as fbsUtils from './fbsUtils';
 import { Event, Notification } from './fbs/notification';

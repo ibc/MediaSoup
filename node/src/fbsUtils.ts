@@ -1,5 +1,3 @@
-import type { Type as FbsRtpParametersType } from './fbs/rtp-parameters';
-
 /**
  * Parse flatbuffers vector into an array of the given T.
  */

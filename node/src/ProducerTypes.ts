@@ -1,6 +1,6 @@
 import type { EnhancedEventEmitter } from './enhancedEvents';
 import type { MediaKind, RtpParameters } from './rtpParametersTypes';
-import type { RtpStreamRecvStats } from './RtpStream';
+import type { RtpStreamRecvStats } from './rtpStreamStatsTypes';
 import type { AppData } from './types';
 
 export type ProducerOptions<ProducerAppData extends AppData = AppData> = {

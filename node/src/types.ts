@@ -15,9 +15,10 @@ export type * from './RtpObserverTypes';
 export type * from './ActiveSpeakerObserverTypes';
 export type * from './AudioLevelObserverTypes';
 export type * from './rtpParametersTypes';
+export type * from './rtpStreamStatsTypes';
 export type * from './sctpParametersTypes';
 export type * from './srtpParametersTypes';
-export type * from './scalabilityModes';
+export type * from './scalabilityModesTypes';
 
 // TODO: Here we are exporting real classes rather than types. This should
 // be exported somehow else rather than in mediasoup.types namespace.

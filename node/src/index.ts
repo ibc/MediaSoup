@@ -2,10 +2,10 @@ import { Logger, LoggerEmitter } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
 import type { Worker, WorkerSettings } from './WorkerTypes';
 import { WorkerImpl, workerBin } from './Worker';
-import * as utils from './utils';
 import { supportedRtpCapabilities } from './supportedRtpCapabilities';
 import type { RtpCapabilities } from './rtpParametersTypes';
 import type * as types from './types';
+import * as utils from './utils';
 
 /**
  * Expose all types.
@@ -17,11 +17,6 @@ export { types };
  */
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 export const version: string = require('../../package.json').version;
-
-/**
- * Expose parseScalabilityMode() function.
- */
-export { parse as parseScalabilityMode } from './scalabilityModes';
 
 export type Observer = EnhancedEventEmitter<ObserverEvents>;
 
@@ -146,3 +141,8 @@ export async function createWorker<
 export function getSupportedRtpCapabilities(): RtpCapabilities {
 	return utils.clone<RtpCapabilities>(supportedRtpCapabilities);
 }
+
+/**
+ * Expose parseScalabilityMode() function.
+ */
+export { parseScalabilityMode } from './scalabilityModesUtils';

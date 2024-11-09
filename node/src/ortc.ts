@@ -1,7 +1,7 @@
 import * as h264 from 'h264-profile-level-id';
 import * as flatbuffers from 'flatbuffers';
 import { supportedRtpCapabilities } from './supportedRtpCapabilities';
-import { parse as parseScalabilityMode } from './scalabilityModes';
+import { parseScalabilityMode } from './scalabilityModesUtils';
 import type {
 	RtpCapabilities,
 	MediaKind,

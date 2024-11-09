@@ -90,6 +90,7 @@ const config = tsEslint.config(
 				2,
 				{ vars: 'all', args: 'after-used', caughtErrors: 'none' },
 			],
+			'no-unused-private-class-members': 2,
 			'no-use-before-define': 0,
 			'no-useless-call': 2,
 			'no-useless-computed-key': 2,

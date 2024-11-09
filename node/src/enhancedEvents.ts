@@ -1,7 +1,4 @@
 import { EventEmitter, once } from 'node:events';
-import { Logger } from './Logger';
-
-const enhancedEventEmitterLogger = new Logger('EnhancedEventEmitter');
 
 type Events = Record<string, any[]>;
 
@@ -10,6 +7,7 @@ export class EnhancedEventEmitter<
 > extends EventEmitter {
 	constructor() {
 		super();
+
 		this.setMaxListeners(Infinity);
 	}
 
@@ -24,11 +22,6 @@ export class EnhancedEventEmitter<
 		try {
 			return super.emit(eventName, ...args);
 		} catch (error) {
-			enhancedEventEmitterLogger.error(
-				`safeEmit() | event listener threw an error [eventName:${eventName}]:`,
-				error as Error
-			);
-
 			try {
 				super.emit('listenererror', eventName, error);
 			} catch (error2) {

@@ -299,6 +299,8 @@ export class WorkerImpl<WorkerAppData extends AppData = AppData>
 				}
 			}
 		});
+
+		this.handleListenerError();
 	}
 
 	get pid(): number {
@@ -583,6 +585,15 @@ export class WorkerImpl<WorkerAppData extends AppData = AppData>
 
 		// Emit observer event.
 		this.#observer.safeEmit('close');
+	}
+
+	private handleListenerError(): void {
+		this.on('listenererror', (eventName, error) => {
+			logger.error(
+				`event listener threw an error [eventName:${eventName}]:`,
+				error
+			);
+		});
 	}
 }
 

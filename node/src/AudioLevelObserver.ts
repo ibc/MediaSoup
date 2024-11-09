@@ -42,6 +42,7 @@ export class AudioLevelObserverImpl<
 		super(options, observer);
 
 		this.handleWorkerNotifications();
+		this.handleListenerError();
 	}
 
 	/**
@@ -107,6 +108,15 @@ export class AudioLevelObserverImpl<
 				}
 			}
 		);
+	}
+
+	private handleListenerError(): void {
+		this.on('listenererror', (eventName, error) => {
+			logger.error(
+				`event listener threw an error [eventName:${eventName}]:`,
+				error
+			);
+		});
 	}
 }
 

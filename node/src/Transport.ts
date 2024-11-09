@@ -1421,7 +1421,7 @@ function createProduceRequest({
 	producerId: string;
 	kind: MediaKind;
 	rtpParameters: RtpParameters;
-	rtpMapping: ortc.RtpMapping;
+	rtpMapping: ortc.RtpCodecsEncodingsMapping;
 	keyFrameRequestDelay?: number;
 	paused: boolean;
 }): number {

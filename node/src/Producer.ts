@@ -95,6 +95,7 @@ export class ProducerImpl<ProducerAppData extends AppData = AppData>
 		this.#appData = appData ?? ({} as ProducerAppData);
 
 		this.handleWorkerNotifications();
+		this.handleListenerError();
 	}
 
 	get id(): string {
@@ -396,6 +397,15 @@ export class ProducerImpl<ProducerAppData extends AppData = AppData>
 				}
 			}
 		);
+	}
+
+	private handleListenerError(): void {
+		this.on('listenererror', (eventName, error) => {
+			logger.error(
+				`event listener threw an error [eventName:${eventName}]:`,
+				error
+			);
+		});
 	}
 }
 

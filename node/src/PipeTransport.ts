@@ -89,6 +89,7 @@ export class PipeTransportImpl<PipeTransportAppData extends AppData = AppData>
 		};
 
 		this.handleWorkerNotifications();
+		this.handleListenerError();
 	}
 
 	get observer(): PipeTransportObserver {
@@ -327,6 +328,15 @@ export class PipeTransportImpl<PipeTransportAppData extends AppData = AppData>
 				}
 			}
 		);
+	}
+
+	private handleListenerError(): void {
+		this.on('listenererror', (eventName, error) => {
+			logger.error(
+				`event listener threw an error [eventName:${eventName}]:`,
+				error
+			);
+		});
 	}
 }
 

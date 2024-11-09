@@ -65,6 +65,7 @@ export class DirectTransportImpl<
 		};
 
 		this.handleWorkerNotifications();
+		this.handleListenerError();
 	}
 
 	get observer(): DirectTransportObserver {
@@ -213,6 +214,15 @@ export class DirectTransportImpl<
 				}
 			}
 		);
+	}
+
+	private handleListenerError(): void {
+		this.on('listenererror', (eventName, error) => {
+			logger.error(
+				`event listener threw an error [eventName:${eventName}]:`,
+				error
+			);
+		});
 	}
 }
 

@@ -82,6 +82,7 @@ export class DataProducerImpl<DataProducerAppData extends AppData = AppData>
 		this.#appData = appData ?? ({} as DataProducerAppData);
 
 		this.handleWorkerNotifications();
+		this.handleListenerError();
 	}
 
 	get id(): string {
@@ -332,6 +333,15 @@ export class DataProducerImpl<DataProducerAppData extends AppData = AppData>
 
 	private handleWorkerNotifications(): void {
 		// No need to subscribe to any event.
+	}
+
+	private handleListenerError(): void {
+		this.on('listenererror', (eventName, error) => {
+			logger.error(
+				`event listener threw an error [eventName:${eventName}]:`,
+				error
+			);
+		});
 	}
 }
 

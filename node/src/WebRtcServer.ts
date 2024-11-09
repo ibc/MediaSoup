@@ -63,6 +63,8 @@ export class WebRtcServerImpl<WebRtcServerAppData extends AppData = AppData>
 		this.#internal = internal;
 		this.#channel = channel;
 		this.#appData = appData ?? ({} as WebRtcServerAppData);
+
+		this.handleListenerError();
 	}
 
 	get id(): string {
@@ -177,6 +179,15 @@ export class WebRtcServerImpl<WebRtcServerAppData extends AppData = AppData>
 
 			// Emit observer event.
 			this.#observer.safeEmit('webrtctransportunhandled', webRtcTransport);
+		});
+	}
+
+	private handleListenerError(): void {
+		this.on('listenererror', (eventName, error) => {
+			logger.error(
+				`event listener threw an error [eventName:${eventName}]:`,
+				error
+			);
 		});
 	}
 }

@@ -1,5 +1,5 @@
 import debug from 'debug';
-import { EnhancedEventEmitter } from './enhancedEvents';
+import type { EnhancedEventEmitter } from './enhancedEvents';
 
 const APP_NAME = 'mediasoup';
 

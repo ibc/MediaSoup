@@ -19,12 +19,11 @@ import * as utils from './utils';
 import { UnsupportedError } from './errors';
 import * as FbsRtpParameters from './fbs/rtp-parameters';
 
-export type RtpMapping = {
+export type RtpCodecsEncodingsMapping = {
 	codecs: {
 		payloadType: number;
 		mappedPayloadType: number;
 	}[];
-
 	encodings: {
 		ssrc?: number;
 		rid?: string;
@@ -309,8 +308,8 @@ export function generateRouterRtpCapabilities(
 export function getProducerRtpParametersMapping(
 	params: RtpParameters,
 	caps: RtpCapabilities
-): RtpMapping {
-	const rtpMapping: RtpMapping = {
+): RtpCodecsEncodingsMapping {
+	const rtpMapping: RtpCodecsEncodingsMapping = {
 		codecs: [],
 		encodings: [],
 	};
@@ -415,7 +414,7 @@ export function getConsumableRtpParameters(
 	kind: string,
 	params: RtpParameters,
 	caps: RtpCapabilities,
-	rtpMapping: RtpMapping
+	rtpMapping: RtpCodecsEncodingsMapping
 ): RtpParameters {
 	const consumableParams: RtpParameters = {
 		codecs: [],
@@ -915,7 +914,7 @@ function matchCodecs(
 
 export function serializeRtpMapping(
 	builder: flatbuffers.Builder,
-	rtpMapping: RtpMapping
+	rtpMapping: RtpCodecsEncodingsMapping
 ): number {
 	const codecs: number[] = [];
 

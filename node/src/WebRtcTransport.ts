@@ -108,6 +108,7 @@ export class WebRtcTransportImpl<
 		};
 
 		this.handleWorkerNotifications();
+		this.handleListenerError();
 	}
 
 	get observer(): WebRtcTransportObserver {
@@ -394,6 +395,15 @@ export class WebRtcTransportImpl<
 				}
 			}
 		);
+	}
+
+	private handleListenerError(): void {
+		this.on('listenererror', (eventName, error) => {
+			logger.error(
+				`event listener threw an error [eventName:${eventName}]:`,
+				error
+			);
+		});
 	}
 }
 

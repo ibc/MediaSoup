@@ -152,6 +152,8 @@ export class RouterImpl<RouterAppData extends AppData = AppData>
 		this.#data = data;
 		this.#channel = channel;
 		this.#appData = appData ?? ({} as RouterAppData);
+
+		this.handleListenerError();
 	}
 
 	get id(): string {
@@ -1363,6 +1365,15 @@ export class RouterImpl<RouterAppData extends AppData = AppData>
 
 			return false;
 		}
+	}
+
+	private handleListenerError(): void {
+		this.on('listenererror', (eventName, error) => {
+			logger.error(
+				`event listener threw an error [eventName:${eventName}]:`,
+				error
+			);
+		});
 	}
 }
 

@@ -48,6 +48,7 @@ test('router.createActiveSpeakerObserver() succeeds', async () => {
 	expect(onObserverNewRtpObserver).toHaveBeenCalledWith(activeSpeakerObserver);
 	expect(typeof activeSpeakerObserver.id).toBe('string');
 	expect(activeSpeakerObserver.closed).toBe(false);
+	expect(activeSpeakerObserver.type).toBe('activespeaker');
 	expect(activeSpeakerObserver.paused).toBe(false);
 	expect(activeSpeakerObserver.appData).toEqual({});
 

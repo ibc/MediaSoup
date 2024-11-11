@@ -2,6 +2,11 @@ import type { EnhancedEventEmitter } from './enhancedEvents';
 import type { Producer } from './ProducerTypes';
 import type { AppData } from './types';
 
+/**
+ * RtpObserver type.
+ */
+export type RtpObserverType = 'audiolevel' | 'activespeaker';
+
 export type RtpObserverEvents = {
 	routerclose: [];
 	listenererror: [string, Error];
@@ -34,6 +39,15 @@ export interface RtpObserver<
 	 * Whether the RtpObserver is closed.
 	 */
 	get closed(): boolean;
+
+	/**
+	 * RtpObserver type.
+	 *
+	 * @virtual
+	 * @privateRemarks
+	 * - It's marked as virtual getter since each RtpObserver class overrides it.
+	 */
+	get type(): RtpObserverType;
 
 	/**
 	 * Whether the RtpObserver is paused.

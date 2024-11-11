@@ -28,9 +28,6 @@ export class ActiveSpeakerObserverImpl<
 	>
 	implements RtpObserver, ActiveSpeakerObserver
 {
-	/**
-	 * @private
-	 */
 	constructor(
 		options: RtpObserverObserverConstructorOptions<ActiveSpeakerObserverAppData>
 	) {
@@ -43,11 +40,10 @@ export class ActiveSpeakerObserverImpl<
 		this.handleListenerError();
 	}
 
-	/**
-	 * Observer.
-	 *
-	 * @override
-	 */
+	get type(): 'activespeaker' {
+		return 'activespeaker';
+	}
+
 	get observer(): ActiveSpeakerObserverObserver {
 		return super.observer;
 	}

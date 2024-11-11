@@ -44,6 +44,13 @@ export interface ActiveSpeakerObserver<
 		ActiveSpeakerObserverObserver
 	> {
 	/**
+	 * RtpObserver type.
+	 *
+	 * @override
+	 */
+	get type(): 'activespeaker';
+
+	/**
 	 * Observer.
 	 *
 	 * @override

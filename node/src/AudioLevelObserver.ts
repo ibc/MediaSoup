@@ -30,9 +30,6 @@ export class AudioLevelObserverImpl<
 	>
 	implements RtpObserver, AudioLevelObserver
 {
-	/**
-	 * @private
-	 */
 	constructor(
 		options: AudioLevelObserverConstructorOptions<AudioLevelObserverAppData>
 	) {
@@ -45,11 +42,10 @@ export class AudioLevelObserverImpl<
 		this.handleListenerError();
 	}
 
-	/**
-	 * Observer.
-	 *
-	 * @override
-	 */
+	get type(): 'audiolevel' {
+		return 'audiolevel';
+	}
+
 	get observer(): AudioLevelObserverObserver {
 		return super.observer;
 	}

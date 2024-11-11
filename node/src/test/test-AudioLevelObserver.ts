@@ -48,6 +48,7 @@ test('router.createAudioLevelObserver() succeeds', async () => {
 	expect(onObserverNewRtpObserver).toHaveBeenCalledWith(audioLevelObserver);
 	expect(typeof audioLevelObserver.id).toBe('string');
 	expect(audioLevelObserver.closed).toBe(false);
+	expect(audioLevelObserver.type).toBe('audiolevel');
 	expect(audioLevelObserver.paused).toBe(false);
 	expect(audioLevelObserver.appData).toEqual({});
 

@@ -66,6 +66,13 @@ export interface AudioLevelObserver<
 		AudioLevelObserverObserver
 	> {
 	/**
+	 * RtpObserver type.
+	 *
+	 * @override
+	 */
+	get type(): 'audiolevel';
+
+	/**
 	 * Observer.
 	 *
 	 * @override

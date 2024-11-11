@@ -3,6 +3,7 @@
 ### NEXT
 
 - Node: Add TypeScript interfaces for all exported classes ([PR #1463](https://github.com/versatica/mediasoup/pull/1463)).
+- Node: Add new `transport.type` getter than returns `'webrtc' | 'plain' | 'pipe' | 'direct'` ([PR #1463](https://github.com/versatica/mediasoup/pull/1463)).
 
 ### 3.14.16
 

@@ -79,9 +79,6 @@ export class WebRtcTransportImpl<
 	// WebRtcTransport data.
 	readonly #data: WebRtcTransportData;
 
-	/**
-	 * @private
-	 */
 	constructor(
 		options: WebRtcTransportConstructorOptions<WebRtcTransportAppData>
 	) {

@@ -53,9 +53,6 @@ export class Channel extends EnhancedEventEmitter {
 	// flatbuffers builder.
 	#bufferBuilder: flatbuffers.Builder = new flatbuffers.Builder(1024);
 
-	/**
-	 * @private
-	 */
 	constructor({
 		producerSocket,
 		consumerSocket,
@@ -200,9 +197,6 @@ export class Channel extends EnhancedEventEmitter {
 		return this.#bufferBuilder;
 	}
 
-	/**
-	 * @private
-	 */
 	close(): void {
 		if (this.#closed) {
 			return;
@@ -236,9 +230,6 @@ export class Channel extends EnhancedEventEmitter {
 		} catch (error) {}
 	}
 
-	/**
-	 * @private
-	 */
 	notify(
 		event: Event,
 		bodyType?: NotificationBody,

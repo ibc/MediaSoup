@@ -111,6 +111,10 @@ export class WebRtcTransportImpl<
 		this.handleListenerError();
 	}
 
+	get type(): 'webrtc' {
+		return 'webrtc';
+	}
+
 	get observer(): WebRtcTransportObserver {
 		return super.observer;
 	}

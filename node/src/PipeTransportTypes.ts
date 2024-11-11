@@ -126,6 +126,13 @@ export interface PipeTransport<PipeTransportAppData extends AppData = AppData>
 		PipeTransportObserver
 	> {
 	/**
+	 * Transport type.
+	 *
+	 * @override
+	 */
+	get type(): 'pipe';
+
+	/**
 	 * Observer.
 	 *
 	 * @override

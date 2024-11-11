@@ -85,6 +85,10 @@ export class PlainTransportImpl<PlainTransportAppData extends AppData = AppData>
 		this.handleListenerError();
 	}
 
+	get type(): 'plain' {
+		return 'plain';
+	}
+
 	get observer(): PlainTransportObserver {
 		return super.observer;
 	}

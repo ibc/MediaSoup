@@ -524,6 +524,8 @@ test('router.createPipeTransport() with enableRtx succeeds', async () => {
 		enableRtx: true,
 	});
 
+	expect(pipeTransport.type).toBe('pipe');
+
 	const pipeConsumer = await pipeTransport.consume({
 		producerId: ctx.videoProducer!.id,
 	});

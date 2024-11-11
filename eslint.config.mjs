@@ -128,6 +128,7 @@ const config = tsEslint.config(
 			},
 		},
 		rules: {
+			'@typescript-eslint/class-literal-property-style': [2, 'getters'],
 			'@typescript-eslint/consistent-generic-constructors': [
 				2,
 				'type-annotation',

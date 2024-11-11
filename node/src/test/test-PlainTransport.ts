@@ -91,6 +91,7 @@ test('router.createPlainTransport() succeeds', async () => {
 	expect(onObserverNewTransport).toHaveBeenCalledWith(plainTransport2);
 	expect(typeof plainTransport2.id).toBe('string');
 	expect(plainTransport2.closed).toBe(false);
+	expect(plainTransport2.type).toBe('plain');
 	expect(plainTransport2.appData).toEqual({ foo: 'bar' });
 	expect(typeof plainTransport2.tuple).toBe('object');
 	// @deprecated Use tuple.localAddress instead.
@@ -111,7 +112,6 @@ test('router.createPlainTransport() succeeds', async () => {
 	const dump1 = await plainTransport2.dump();
 
 	expect(dump1.id).toBe(plainTransport2.id);
-	expect(dump1.direct).toBe(false);
 	expect(dump1.producerIds).toEqual([]);
 	expect(dump1.consumerIds).toEqual([]);
 	expect(dump1.tuple).toEqual(plainTransport2.tuple);
@@ -166,7 +166,6 @@ test('router.createPlainTransport() succeeds', async () => {
 	const dump2 = await transport2.dump();
 
 	expect(dump2.id).toBe(transport2.id);
-	expect(dump2.direct).toBe(false);
 	expect(dump2.tuple).toEqual(transport2.tuple);
 	expect(dump2.rtcpTuple).toEqual(transport2.rtcpTuple);
 	expect(dump2.sctpState).toBeUndefined();
@@ -196,7 +195,7 @@ test('router.createPlainTransport() with wrong arguments rejects with TypeError'
 	).rejects.toThrow(TypeError);
 
 	await expect(
-		ctx.router!.createPipeTransport({
+		ctx.router!.createPlainTransport({
 			listenInfo: { protocol: 'tcp', ip: '127.0.0.1' },
 		})
 	).rejects.toThrow(TypeError);

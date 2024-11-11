@@ -125,6 +125,7 @@ test('router.createWebRtcTransport() succeeds', async () => {
 	expect(onObserverNewTransport).toHaveBeenCalledWith(webRtcTransport);
 	expect(typeof webRtcTransport.id).toBe('string');
 	expect(webRtcTransport.closed).toBe(false);
+	expect(webRtcTransport.type).toBe('webrtc');
 	expect(webRtcTransport.appData).toEqual({ foo: 'bar' });
 	expect(webRtcTransport.iceRole).toBe('controlled');
 	expect(typeof webRtcTransport.iceParameters).toBe('object');
@@ -184,7 +185,6 @@ test('router.createWebRtcTransport() succeeds', async () => {
 	const dump = await webRtcTransport.dump();
 
 	expect(dump.id).toBe(webRtcTransport.id);
-	expect(dump.direct).toBe(false);
 	expect(dump.producerIds).toEqual([]);
 	expect(dump.consumerIds).toEqual([]);
 	expect(dump.iceRole).toBe(webRtcTransport.iceRole);

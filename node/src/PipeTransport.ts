@@ -92,6 +92,10 @@ export class PipeTransportImpl<PipeTransportAppData extends AppData = AppData>
 		this.handleListenerError();
 	}
 
+	get type(): 'pipe' {
+		return 'pipe';
+	}
+
 	get observer(): PipeTransportObserver {
 		return super.observer;
 	}

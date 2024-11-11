@@ -68,6 +68,10 @@ export class DirectTransportImpl<
 		this.handleListenerError();
 	}
 
+	get type(): 'direct' {
+		return 'direct';
+	}
+
 	get observer(): DirectTransportObserver {
 		return super.observer;
 	}

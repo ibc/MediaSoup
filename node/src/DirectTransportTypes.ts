@@ -48,6 +48,13 @@ export interface DirectTransport<
 		DirectTransportObserver
 	> {
 	/**
+	 * Transport type.
+	 *
+	 * @override
+	 */
+	get type(): 'direct';
+
+	/**
 	 * Observer.
 	 *
 	 * @override

@@ -6,6 +6,11 @@ import type { DataConsumer, DataConsumerOptions } from './DataConsumerTypes';
 import type { SctpParameters } from './sctpParametersTypes';
 import type { AppData } from './types';
 
+/**
+ * Transport type.
+ */
+export type TransportType = 'webrtc' | 'plain' | 'pipe' | 'direct';
+
 export type TransportListenInfo = {
 	/**
 	 * Network protocol.
@@ -145,7 +150,6 @@ export type RecvRtpHeaderExtensions = {
 
 export type BaseTransportDump = {
 	id: string;
-	direct: boolean;
 	producerIds: string[];
 	consumerIds: string[];
 	mapSsrcConsumerId: { key: number; value: string }[];
@@ -257,6 +261,15 @@ export interface Transport<
 	 * Whether the Transport is closed.
 	 */
 	get closed(): boolean;
+
+	/**
+	 * Transport type.
+	 *
+	 * @virtual
+	 * @privateRemarks
+	 * - It's marked as virtual getter since each Transport class overrides it.
+	 */
+	get type(): TransportType;
 
 	/**
 	 * App custom data.

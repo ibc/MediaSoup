@@ -224,6 +224,13 @@ export interface WebRtcTransport<
 		WebRtcTransportObserver
 	> {
 	/**
+	 * Transport type.
+	 *
+	 * @override
+	 */
+	get type(): 'webrtc';
+
+	/**
 	 * Observer.
 	 *
 	 * @override

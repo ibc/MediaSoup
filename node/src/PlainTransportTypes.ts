@@ -138,6 +138,13 @@ export interface PlainTransport<PlainTransportAppData extends AppData = AppData>
 		PlainTransportObserver
 	> {
 	/**
+	 * Transport type.
+	 *
+	 * @override
+	 */
+	get type(): 'plain';
+
+	/**
 	 * Observer.
 	 *
 	 * @override

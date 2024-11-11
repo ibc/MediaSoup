@@ -4,6 +4,7 @@ import { EnhancedEventEmitter } from './enhancedEvents';
 import * as ortc from './ortc';
 import type {
 	Transport,
+	TransportType,
 	TransportProtocol,
 	TransportPortRange,
 	TransportSocketFlags,
@@ -207,6 +208,8 @@ export abstract class TransportImpl<
 	get closed(): boolean {
 		return this.#closed;
 	}
+
+	abstract get type(): TransportType;
 
 	get appData(): TransportAppData {
 		return this.#appData;
@@ -481,8 +484,7 @@ export abstract class TransportImpl<
 
 		// Don't do this in PipeTransports since there we must keep CNAME value in
 		// each Producer.
-		// TODO: This is error prune if we rename the class name.
-		if (this.constructor.name !== 'PipeTransportImpl') {
+		if (this.type !== 'pipe') {
 			// If CNAME is given and we don't have yet a CNAME for Producers in this
 			// Transport, take it.
 			if (!this.#cnameForProducers && clonedRtpParameters.rtcp?.cname) {
@@ -724,8 +726,7 @@ export abstract class TransportImpl<
 		>(sctpStreamParameters);
 
 		// If this is not a DirectTransport, sctpStreamParameters are required.
-		// TODO: This is error prune if we rename the class name.
-		if (this.constructor.name !== 'DirectTransportImpl') {
+		if (this.type !== 'direct') {
 			type = 'sctp';
 
 			// This may throw.
@@ -831,8 +832,7 @@ export abstract class TransportImpl<
 
 		// If this is not a DirectTransport, use sctpStreamParameters from the
 		// DataProducer (if type 'sctp') unless they are given in method parameters.
-		// TODO: This is error prune if we rename the class name.
-		if (this.constructor.name !== 'DirectTransportImpl') {
+		if (this.type !== 'direct') {
 			type = 'sctp';
 
 			sctpStreamParameters =
@@ -1151,7 +1151,6 @@ export function parseBaseTransportDump(
 
 	return {
 		id: binary.id()!,
-		direct: binary.direct(),
 		producerIds: producerIds,
 		consumerIds: consumerIds,
 		mapSsrcConsumerId: mapSsrcConsumerId,

@@ -53,7 +53,7 @@ export abstract class RtpObserverImpl<
 	// Observer instance.
 	readonly #observer: Observer;
 
-	constructor(
+	protected constructor(
 		{
 			internal,
 			channel,

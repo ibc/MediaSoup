@@ -1,6 +1,6 @@
 import { EventEmitter, once } from 'node:events';
 
-type Events = Record<string, any[]>;
+export type Events = Record<string, any[]>;
 
 export class EnhancedEventEmitter<
 	E extends Events = Events,

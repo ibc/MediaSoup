@@ -2,6 +2,8 @@
 
 ### NEXT
 
+- Expose `extras` namespace which exports `EnhancedEventEmitter`, `Events` and `enhancedOnce()` for now ([PR #1464](https://github.com/versatica/mediasoup/pull/1464)).
+
 ### 3.15.0
 
 - Node: Add TypeScript interfaces for all exported classes ([PR #1463](https://github.com/versatica/mediasoup/pull/1463)).

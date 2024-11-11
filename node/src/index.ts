@@ -146,3 +146,8 @@ export function getSupportedRtpCapabilities(): RtpCapabilities {
  * Expose parseScalabilityMode() function.
  */
 export { parseScalabilityMode } from './scalabilityModesUtils';
+
+/**
+ * Expose extras module.
+ */
+export * as extras from './extras';

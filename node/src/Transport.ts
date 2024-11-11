@@ -175,7 +175,7 @@ export abstract class TransportImpl<
 	// Observer instance.
 	readonly #observer: Observer;
 
-	constructor(
+	protected constructor(
 		{
 			internal,
 			data,

@@ -1,1 +1,1 @@
-export { EnhancedEventEmitter, Events, enhancedOnce } from './enhancedEvents';
+export { EnhancedEventEmitter, enhancedOnce } from './enhancedEvents';

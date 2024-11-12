@@ -2,7 +2,7 @@
 
 ### NEXT
 
-- Expose `extras` namespace which exports `EnhancedEventEmitter`, `Events` and `enhancedOnce()` for now ([PR #1464](https://github.com/versatica/mediasoup/pull/1464)).
+- Expose `extras` namespace which exports `EnhancedEventEmitter` and `enhancedOnce()` for now ([PR #1464](https://github.com/versatica/mediasoup/pull/1464)).
 
 ### 3.15.0
 

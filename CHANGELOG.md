@@ -2,7 +2,7 @@
 
 ### NEXT
 
-- `Worker`: Fix crash when using colliding `portRange` values in different transports ([PR #](https://github.com/versatica/mediasoup/pull/)).
+- `Worker`: Fix crash when using colliding `portRange` values in different transports ([PR #1469](https://github.com/versatica/mediasoup/pull/1469)).
 
 ### 3.15.1
 

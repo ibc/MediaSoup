@@ -2,6 +2,8 @@
 
 ### NEXT
 
+- `Worker`: Fix crash when using colliding `portRange` values in different transports ([PR #](https://github.com/versatica/mediasoup/pull/)).
+
 ### 3.15.1
 
 - Expose `extras` namespace which exports `EnhancedEventEmitter` and `enhancedOnce()` for now ([PR #1464](https://github.com/versatica/mediasoup/pull/1464)).

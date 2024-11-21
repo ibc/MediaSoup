@@ -678,8 +678,8 @@ namespace RTC
 				// We want it in network order.
 				const uint64_t address = bindAddrIn->sin_addr.s_addr;
 
-				hash = static_cast<uint64_t>(minPort) << 48;
-				hash = static_cast<uint64_t>(maxPort) << 32;
+				hash |= static_cast<uint64_t>(minPort) << 48;
+				hash |= static_cast<uint64_t>(maxPort) << 32;
 				hash |= (address >> 2) << 2;
 				hash |= 0x0000; // AF_INET.
 
@@ -693,8 +693,8 @@ namespace RTC
 
 				const auto address = a[0] ^ a[1] ^ a[2] ^ a[3];
 
-				hash = static_cast<uint64_t>(minPort) << 48;
-				hash = static_cast<uint64_t>(maxPort) << 32;
+				hash |= static_cast<uint64_t>(minPort) << 48;
+				hash |= static_cast<uint64_t>(maxPort) << 32;
 				hash |= static_cast<uint64_t>(address) << 16;
 				hash |= (static_cast<uint64_t>(address) >> 2) << 2;
 				hash |= 0x0002; // AF_INET6.

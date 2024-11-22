@@ -1,0 +1,10 @@
+namespace FBS.RtpObserver;
+
+table AddProducerRequest {
+    producer_id: string (required);
+}
+
+table RemoveProducerRequest {
+    producer_id: string (required);
+}
+

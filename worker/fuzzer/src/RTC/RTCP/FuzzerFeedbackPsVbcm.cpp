@@ -12,8 +12,7 @@ void Fuzzer::RTC::RTCP::FeedbackPsVbcm::Fuzz(::RTC::RTCP::FeedbackPsVbcmPacket* 
 	// TODO.
 	// AddItem(Item* item);
 
-	auto it = packet->Begin();
-	for (; it != packet->End(); ++it)
+	for (auto it = packet->Begin(); it != packet->End(); ++it)
 	{
 		auto& item = (*it);
 

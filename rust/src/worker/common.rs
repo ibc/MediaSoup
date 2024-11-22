@@ -1,4 +1,5 @@
 use hash_hasher::HashedMap;
+use mediasoup_sys::fbs::notification;
 use nohash_hasher::IntMap;
 use parking_lot::Mutex;
 use serde::Deserialize;
@@ -34,9 +35,7 @@ impl<F: Sized + Send + Sync + 'static> EventHandlers<F> {
         let index;
         {
             let mut event_handlers = self.handlers.lock();
-            let list = event_handlers
-                .entry(target_id)
-                .or_insert_with(EventHandlersList::default);
+            let list = event_handlers.entry(target_id.clone()).or_default();
             index = list.index;
             list.index += 1;
             list.callbacks.insert(index, callback);
@@ -79,32 +78,16 @@ impl<F: Sized + Send + Sync + 'static> EventHandlers<F> {
     }
 }
 
-impl<V: ?Sized> EventHandlers<Arc<dyn Fn(&V) + Send + Sync + 'static>> {
+impl EventHandlers<Arc<dyn Fn(notification::NotificationRef<'_>) + Send + Sync + 'static>> {
     pub(super) fn call_callbacks_with_single_value(
         &self,
         target_id: &SubscriptionTarget,
-        value: &V,
+        value: notification::NotificationRef<'_>,
     ) {
         let handlers = self.handlers.lock();
         if let Some(list) = handlers.get(target_id) {
             for callback in list.callbacks.values() {
                 callback(value);
-            }
-        }
-    }
-}
-
-impl<V1: ?Sized, V2: ?Sized> EventHandlers<Arc<dyn Fn(&V1, &V2) + Send + Sync + 'static>> {
-    pub(super) fn call_callbacks_with_two_values(
-        &self,
-        target_id: &SubscriptionTarget,
-        value1: &V1,
-        value2: &V2,
-    ) {
-        let handlers = self.handlers.lock();
-        if let Some(list) = handlers.get(target_id) {
-            for callback in list.callbacks.values() {
-                callback(value1, value2);
             }
         }
     }
@@ -123,23 +106,11 @@ impl<F> WeakEventHandlers<F> {
     }
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize)]
 #[serde(untagged)]
 pub(crate) enum SubscriptionTarget {
     Uuid(Uuid),
-    Number(u64),
-}
-
-impl From<u32> for SubscriptionTarget {
-    fn from(number: u32) -> Self {
-        Self::Number(u64::from(number))
-    }
-}
-
-impl From<u64> for SubscriptionTarget {
-    fn from(number: u64) -> Self {
-        Self::Number(number)
-    }
+    String(String),
 }
 
 /// Subscription handler, will remove corresponding subscription when dropped

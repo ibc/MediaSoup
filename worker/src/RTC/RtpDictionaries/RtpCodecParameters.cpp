@@ -3,84 +3,45 @@
 
 #include "Logger.hpp"
 #include "MediaSoupErrors.hpp"
-#include "Utils.hpp"
 #include "RTC/RtpDictionaries.hpp"
 
 namespace RTC
 {
 	/* Instance methods. */
 
-	RtpCodecParameters::RtpCodecParameters(json& data)
+	RtpCodecParameters::RtpCodecParameters(const FBS::RtpParameters::RtpCodecParameters* data)
 	{
 		MS_TRACE();
 
-		if (!data.is_object())
-			MS_THROW_TYPE_ERROR("data is not an object");
-
-		auto jsonMimeTypeIt     = data.find("mimeType");
-		auto jsonPayloadTypeIt  = data.find("payloadType");
-		auto jsonClockRateIt    = data.find("clockRate");
-		auto jsonChannelsIt     = data.find("channels");
-		auto jsonParametersIt   = data.find("parameters");
-		auto jsonRtcpFeedbackIt = data.find("rtcpFeedback");
-
-		// mimeType is mandatory.
-		if (jsonMimeTypeIt == data.end() || !jsonMimeTypeIt->is_string())
-			MS_THROW_TYPE_ERROR("missing mimeType");
-
 		// Set MIME field.
 		// This may throw.
-		this->mimeType.SetMimeType(jsonMimeTypeIt->get<std::string>());
+		this->mimeType.SetMimeType(data->mimeType()->str());
 
-		// payloadType is mandatory.
-		// clang-format off
-		if (
-			jsonPayloadTypeIt == data.end() ||
-			!Utils::Json::IsPositiveInteger(*jsonPayloadTypeIt)
-		)
-		// clang-format on
-		{
-			MS_THROW_TYPE_ERROR("missing payloadType");
-		}
+		// payloadType.
+		this->payloadType = data->payloadType();
 
-		this->payloadType = jsonPayloadTypeIt->get<uint8_t>();
-
-		// clockRate is mandatory.
-		// clang-format off
-		if (
-			jsonClockRateIt == data.end() ||
-			!Utils::Json::IsPositiveInteger(*jsonClockRateIt)
-		)
-		// clang-format on
-		{
-			MS_THROW_TYPE_ERROR("missing clockRate");
-		}
-
-		this->clockRate = jsonClockRateIt->get<uint32_t>();
+		// clockRate.
+		this->clockRate = data->clockRate();
 
 		// channels is optional.
-		// clang-format off
-		if (
-			jsonChannelsIt != data.end() &&
-			Utils::Json::IsPositiveInteger(*jsonChannelsIt)
-		)
-		// clang-format on
+		if (data->channels().has_value())
 		{
-			this->channels = jsonChannelsIt->get<uint8_t>();
+			this->channels = data->channels().value();
 		}
 
 		// parameters is optional.
-		if (jsonParametersIt != data.end() && jsonParametersIt->is_object())
-			this->parameters.Set(*jsonParametersIt);
+		if (flatbuffers::IsFieldPresent(data, FBS::RtpParameters::RtpCodecParameters::VT_PARAMETERS))
+		{
+			this->parameters.Set(data->parameters());
+		}
 
 		// rtcpFeedback is optional.
-		if (jsonRtcpFeedbackIt != data.end() && jsonRtcpFeedbackIt->is_array())
+		if (flatbuffers::IsFieldPresent(data, FBS::RtpParameters::RtpCodecParameters::VT_RTCPFEEDBACK))
 		{
-			this->rtcpFeedback.reserve(jsonRtcpFeedbackIt->size());
+			this->rtcpFeedback.reserve(data->rtcpFeedback()->size());
 
-			for (auto& entry : *jsonRtcpFeedbackIt)
+			for (const auto* entry : *data->rtcpFeedback())
 			{
-				// This may throw due the constructor of RTC::RtcpFeedback.
 				this->rtcpFeedback.emplace_back(entry);
 			}
 		}
@@ -89,39 +50,29 @@ namespace RTC
 		CheckCodec();
 	}
 
-	void RtpCodecParameters::FillJson(json& jsonObject) const
+	flatbuffers::Offset<FBS::RtpParameters::RtpCodecParameters> RtpCodecParameters::FillBuffer(
+	  flatbuffers::FlatBufferBuilder& builder) const
 	{
 		MS_TRACE();
 
-		// Add mimeType.
-		jsonObject["mimeType"] = this->mimeType.ToString();
+		auto parameters = this->parameters.FillBuffer(builder);
 
-		// Add payloadType.
-		jsonObject["payloadType"] = this->payloadType;
+		std::vector<flatbuffers::Offset<FBS::RtpParameters::RtcpFeedback>> rtcpFeedback;
+		rtcpFeedback.reserve(this->rtcpFeedback.size());
 
-		// Add clockRate.
-		jsonObject["clockRate"] = this->clockRate;
-
-		// Add channels.
-		if (this->channels > 1)
-			jsonObject["channels"] = this->channels;
-
-		// Add parameters.
-		this->parameters.FillJson(jsonObject["parameters"]);
-
-		// Add rtcpFeedback.
-		jsonObject["rtcpFeedback"] = json::array();
-		auto jsonRtcpFeedbackIt    = jsonObject.find("rtcpFeedback");
-
-		for (size_t i{ 0 }; i < this->rtcpFeedback.size(); ++i)
+		for (const auto& fb : this->rtcpFeedback)
 		{
-			jsonRtcpFeedbackIt->emplace_back(json::value_t::object);
-
-			auto& jsonEntry = (*jsonRtcpFeedbackIt)[i];
-			auto& fb        = this->rtcpFeedback[i];
-
-			fb.FillJson(jsonEntry);
+			rtcpFeedback.emplace_back(fb.FillBuffer(builder));
 		}
+
+		return FBS::RtpParameters::CreateRtpCodecParametersDirect(
+		  builder,
+		  this->mimeType.ToString().c_str(),
+		  this->payloadType,
+		  this->clockRate,
+		  this->channels > 1 ? flatbuffers::Optional<uint8_t>(this->channels) : flatbuffers::nullopt,
+		  &parameters,
+		  &rtcpFeedback);
 	}
 
 	inline void RtpCodecParameters::CheckCodec()
@@ -137,7 +88,9 @@ namespace RTC
 			{
 				// A RTX codec must have 'apt' parameter.
 				if (!this->parameters.HasPositiveInteger(aptString))
+				{
 					MS_THROW_TYPE_ERROR("missing apt parameter in RTX codec");
+				}
 
 				break;
 			}

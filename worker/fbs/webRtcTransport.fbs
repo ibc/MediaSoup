@@ -1,0 +1,138 @@
+include "transport.fbs";
+include "sctpParameters.fbs";
+
+namespace FBS.WebRtcTransport;
+
+table ListenIndividual {
+    listen_infos: [FBS.Transport.ListenInfo] (required);
+}
+
+table ListenServer {
+    web_rtc_server_id: string (required);
+}
+
+union Listen {
+    ListenIndividual,
+    ListenServer,
+}
+
+table WebRtcTransportOptions {
+    base: FBS.Transport.Options (required);
+    listen: Listen (required);
+    enable_udp: bool = true;
+    enable_tcp: bool = true;
+    prefer_udp: bool = false;
+    prefer_tcp: bool = false;
+    ice_consent_timeout: uint8 = 30;
+}
+
+enum FingerprintAlgorithm: uint8 {
+    SHA1,
+    SHA224,
+    SHA256,
+    SHA384,
+    SHA512,
+}
+
+table Fingerprint {
+    algorithm: FingerprintAlgorithm;
+    value: string (required);
+}
+
+enum DtlsRole: uint8 {
+    AUTO,
+    CLIENT,
+    SERVER
+}
+
+enum DtlsState: uint8 {
+    NEW,
+    CONNECTING,
+    CONNECTED,
+    FAILED,
+    CLOSED
+}
+
+table DtlsParameters {
+    fingerprints: [Fingerprint] (required);
+    role: DtlsRole = AUTO;
+}
+
+table IceParameters {
+    username_fragment: string (required);
+    password: string (required);
+    ice_lite: bool = true;
+}
+
+enum IceCandidateType: uint8 {
+    HOST
+}
+
+enum IceCandidateTcpType: uint8 {
+    PASSIVE
+}
+
+enum IceRole: uint8 {
+    CONTROLLED,
+    CONTROLLING
+}
+
+enum IceState: uint8 {
+    NEW,
+    CONNECTED,
+    COMPLETED,
+    DISCONNECTED,
+}
+
+table IceCandidate {
+    foundation: string (required);
+    priority: uint32;
+    address: string (required);
+    protocol: FBS.Transport.Protocol = UDP;
+    port: uint16;
+    type: IceCandidateType;
+    tcp_type: IceCandidateTcpType = null;
+}
+
+table ConnectRequest {
+    dtls_parameters: DtlsParameters (required);
+}
+
+table ConnectResponse {
+    dtls_local_role: DtlsRole;
+}
+
+table DumpResponse {
+    base: FBS.Transport.Dump (required);
+    ice_role: IceRole;
+    ice_parameters: IceParameters (required);
+    ice_candidates: [IceCandidate] (required);
+    ice_state: IceState;
+    ice_selected_tuple: FBS.Transport.Tuple;
+    dtls_parameters: DtlsParameters (required);
+    dtls_state: DtlsState;
+}
+
+table GetStatsResponse {
+    base: FBS.Transport.Stats (required);
+    ice_role: IceRole;
+    ice_state: IceState;
+    ice_selected_tuple: FBS.Transport.Tuple;
+    dtls_state: DtlsState;
+}
+
+// Notifications from Worker.
+
+table IceSelectedTupleChangeNotification {
+    tuple: FBS.Transport.Tuple (required);
+}
+
+table IceStateChangeNotification {
+    ice_state: IceState;
+}
+
+table DtlsStateChangeNotification {
+    dtls_state: DtlsState;
+    remote_cert: string;
+}
+

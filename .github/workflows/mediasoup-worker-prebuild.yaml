@@ -1,0 +1,75 @@
+name: mediasoup-worker-prebuild
+
+# Only trigger on GitHub releases.
+on:
+  release:
+    types: [published]
+
+jobs:
+  ci:
+    strategy:
+      matrix:
+        build:
+          # Worker prebuild for Linux with kernel version 5 Ubuntu (20.04).
+          # Let's use an old version of Ubuntu (20.04) that builds the
+          # mediasoup-worker binary using an old version of GLib, so it will work
+          # on Linux hosts running more modern GLib versions.
+          # See https://github.com/versatica/mediasoup/issues/1089.
+          - os: ubuntu-20.04
+            cc: gcc
+            cxx: g++
+          # Worker prebuild for Linux with kernel version 6 Ubuntu (22.04).
+          # Let's not use Ubutu 24.04 to avoid same potential problem as described
+          # above.
+          - os: ubuntu-22.04
+            cc: gcc
+            cxx: g++
+          - os: macos-13
+            cc: clang
+            cxx: clang++
+          - os: macos-14
+            cc: clang
+            cxx: clang++
+          - os: macos-15
+            cc: clang
+            cxx: clang++
+          - os: windows-2022
+            cc: cl
+            cxx: cl
+        node:
+          - 22
+
+    runs-on: ${{ matrix.build.os }}
+
+    env:
+      CC: ${{ matrix.build.cc }}
+      CXX: ${{ matrix.build.cxx }}
+      MEDIASOUP_SKIP_WORKER_PREBUILT_DOWNLOAD: 'true'
+      MEDIASOUP_LOCAL_DEV: 'true'
+      MEDIASOUP_BUILDTYPE: 'Release'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # We need to install some NPM production deps for npm-scripts.mjs to
+      # work.
+      - name: npm ci --ignore-scripts
+        run: npm ci --ignore-scripts --omit=dev --foreground-scripts
+
+      - name: npm run worker:build
+        run: npm run worker:build
+
+      # Publish prebuild binaries on tag.
+      - name: npm run worker:prebuild
+        run: npm run worker:prebuild
+
+      - name: Upload mediasoup-worker prebuilt binary
+        uses: softprops/action-gh-release@v1
+        with:
+          files: worker/prebuild/mediasoup-worker-*.tgz

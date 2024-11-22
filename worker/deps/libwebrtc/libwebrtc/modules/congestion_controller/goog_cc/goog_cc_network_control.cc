@@ -195,7 +195,7 @@ NetworkControlUpdate GoogCcNetworkController::OnProcessInterval(
   }
   bandwidth_estimation_->UpdateEstimate(msg.at_time);
   absl::optional<int64_t> start_time_ms =
-      alr_detector_->GetApplicationLimitedRegionStartTime();
+      alr_detector_->GetApplicationLimitedRegionStartTime(msg.at_time.ms());
   probe_controller_->SetAlrStartTimeMs(start_time_ms);
 
   auto probes = probe_controller_->Process(msg.at_time.ms());

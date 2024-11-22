@@ -3,7 +3,7 @@
 
 #include "RTC/RTCP/XrDelaySinceLastRr.hpp"
 #include "Logger.hpp"
-#include <cstring>
+#include <cstring> // std::memcpy
 
 namespace RTC
 {
@@ -38,9 +38,9 @@ namespace RTC
 			MS_TRACE();
 
 			MS_DUMP("  <SsrcInfo>");
-			MS_DUMP("    ssrc : %" PRIu32, GetSsrc());
-			MS_DUMP("    lrr  : %" PRIu32, GetLastReceiverReport());
-			MS_DUMP("    dlrr : %" PRIu32, GetDelaySinceLastReceiverReport());
+			MS_DUMP("    ssrc: %" PRIu32, GetSsrc());
+			MS_DUMP("    lrr: %" PRIu32, GetLastReceiverReport());
+			MS_DUMP("    dlrr: %" PRIu32, GetDelaySinceLastReceiverReport());
 			MS_DUMP("  <SsrcInfo>");
 		}
 
@@ -75,14 +75,12 @@ namespace RTC
 				{
 					report->AddSsrcInfo(ssrcInfo);
 					offset += ssrcInfo->GetSize();
+					reportLength -= ssrcInfo->GetSize();
 				}
 				else
 				{
 					return report.release();
 				}
-
-				offset += ssrcInfo->GetSize();
-				reportLength -= DelaySinceLastRr::SsrcInfo::BodySize;
 			}
 
 			return report.release();
@@ -94,7 +92,7 @@ namespace RTC
 		{
 			MS_TRACE();
 
-			size_t length = static_cast<uint16_t>((SsrcInfo::BodySize * this->ssrcInfos.size() / 4));
+			const size_t length = static_cast<uint16_t>((SsrcInfo::BodySize * this->ssrcInfos.size() / 4));
 
 			// Fill the common header.
 			this->header->blockType = static_cast<uint8_t>(this->type);
@@ -119,10 +117,10 @@ namespace RTC
 			MS_TRACE();
 
 			MS_DUMP("<DelaySinceLastRr>");
-			MS_DUMP("  block type : %" PRIu8, (uint8_t)this->type);
-			MS_DUMP("  reserved   : 0");
+			MS_DUMP("  block type: %" PRIu8, (uint8_t)this->type);
+			MS_DUMP("  reserved: 0");
 			MS_DUMP(
-			  "  length     : %" PRIu16,
+			  "  length: %" PRIu16,
 			  static_cast<uint16_t>((SsrcInfo::BodySize * this->ssrcInfos.size() / 4)));
 			for (auto* ssrcInfo : this->ssrcInfos)
 			{

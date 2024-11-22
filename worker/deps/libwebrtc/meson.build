@@ -51,7 +51,6 @@ abseil_cpp_proj = subproject(
     'warning_level=0',
   ],
 )
-
 local_include_directories = declare_dependency(
   include_directories: include_directories('libwebrtc')
 )
@@ -64,7 +63,7 @@ libwebrtc = library(
     openssl_proj.get_variable('openssl_dep'),
     abseil_cpp_proj.get_variable('absl_strings_dep'),
     abseil_cpp_proj.get_variable('absl_types_dep'),
-    nlohmann_json_proj.get_variable('nlohmann_json_dep'),
+    flatbuffers_proj.get_variable('flatbuffers_dep'),
     libuv_proj.get_variable('libuv_dep'),
   ],
   include_directories: libwebrtc_include_directories,

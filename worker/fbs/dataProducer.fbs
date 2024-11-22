@@ -1,0 +1,34 @@
+include "sctpParameters.fbs";
+
+namespace FBS.DataProducer;
+
+enum Type: uint8 {
+    SCTP,
+    DIRECT
+}
+
+table DumpResponse {
+    id: string (required);
+    type: Type;
+    sctp_stream_parameters: FBS.SctpParameters.SctpStreamParameters;
+    label: string (required);
+    protocol: string (required);
+    paused: bool;
+}
+
+table GetStatsResponse {
+    timestamp: uint64;
+    label: string (required);
+    protocol: string (required);
+    messages_received: uint64;
+    bytes_received: uint64;
+    buffered_amount: uint32;
+}
+
+table SendNotification {
+    ppid: uint32;
+    data: [uint8] (required);
+    subchannels: [uint16];
+    required_subchannel: uint16 = null;
+}
+

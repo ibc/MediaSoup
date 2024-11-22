@@ -2,4 +2,4 @@
 
 #include "MediaSoupErrors.hpp"
 
-thread_local char MediaSoupError::buffer[MediaSoupError::bufferSize];
+thread_local char MediaSoupError::buffer[MediaSoupError::BufferSize];

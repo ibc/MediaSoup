@@ -1,12 +1,12 @@
 #ifndef MS_KEY_FRAME_REQUEST_MANAGER_HPP
 #define MS_KEY_FRAME_REQUEST_MANAGER_HPP
 
-#include "handles/Timer.hpp"
+#include "handles/TimerHandle.hpp"
 #include <absl/container/flat_hash_map.h>
 
 namespace RTC
 {
-	class PendingKeyFrameInfo : public Timer::Listener
+	class PendingKeyFrameInfo : public TimerHandle::Listener
 	{
 	public:
 		class Listener
@@ -20,7 +20,7 @@ namespace RTC
 
 	public:
 		PendingKeyFrameInfo(Listener* listener, uint32_t ssrc);
-		~PendingKeyFrameInfo();
+		~PendingKeyFrameInfo() override;
 
 		uint32_t GetSsrc() const
 		{
@@ -39,18 +39,18 @@ namespace RTC
 			return this->timer->Restart();
 		}
 
-		/* Pure virtual methods inherited from Timer::Listener. */
+		/* Pure virtual methods inherited from TimerHandle::Listener. */
 	public:
-		void OnTimer(Timer* timer) override;
+		void OnTimer(TimerHandle* timer) override;
 
 	private:
 		Listener* listener{ nullptr };
 		uint32_t ssrc;
-		Timer* timer{ nullptr };
+		TimerHandle* timer{ nullptr };
 		bool retryOnTimeout{ true };
 	};
 
-	class KeyFrameRequestDelayer : public Timer::Listener
+	class KeyFrameRequestDelayer : public TimerHandle::Listener
 	{
 	public:
 		class Listener
@@ -64,7 +64,7 @@ namespace RTC
 
 	public:
 		KeyFrameRequestDelayer(Listener* listener, uint32_t ssrc, uint32_t delay);
-		~KeyFrameRequestDelayer();
+		~KeyFrameRequestDelayer() override;
 
 		uint32_t GetSsrc() const
 		{
@@ -79,14 +79,14 @@ namespace RTC
 			this->keyFrameRequested = flag;
 		}
 
-		/* Pure virtual methods inherited from Timer::Listener. */
+		/* Pure virtual methods inherited from TimerHandle::Listener. */
 	public:
-		void OnTimer(Timer* timer) override;
+		void OnTimer(TimerHandle* timer) override;
 
 	private:
 		Listener* listener{ nullptr };
 		uint32_t ssrc;
-		Timer* timer{ nullptr };
+		TimerHandle* timer{ nullptr };
 		bool keyFrameRequested{ false };
 	};
 
@@ -105,7 +105,7 @@ namespace RTC
 
 	public:
 		explicit KeyFrameRequestManager(Listener* listener, uint32_t keyFrameRequestDelay);
-		virtual ~KeyFrameRequestManager();
+		~KeyFrameRequestManager() override;
 
 		void KeyFrameNeeded(uint32_t ssrc);
 		void ForceKeyFrameNeeded(uint32_t ssrc);

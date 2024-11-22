@@ -1,41 +1,106 @@
 name: mediasoup-node
 
-on: [push, pull_request]
+on: [pull_request, workflow_dispatch]
+
+concurrency:
+  # Cancel a currently running workflow from the same PR, branch or tag when a
+  # new workflow is triggered.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   ci:
     strategy:
       matrix:
-        # Different Node versions on Ubuntu, the latest Node on other platforms
-        ci:
-          - os: ubuntu-22.04
-            node: 16
-          - os: ubuntu-22.04
+        build:
+          - os: ubuntu-20.04
             node: 18
-          - os: macos-12
+            cc: gcc
+            cxx: g++
+          - os: ubuntu-22.04
+            node: 20
+            cc: gcc
+            cxx: g++
+          - os: ubuntu-22.04
+            node: 22
+            cc: gcc
+            cxx: g++
+          - os: ubuntu-24.04
+            node: 22
+            cc: gcc
+            cxx: g++
+            meson_args: '-Db_sanitize=address'
+          - os: ubuntu-24.04
+            node: 22
+            cc: clang
+            cxx: clang++
+            meson_args: '-Db_sanitize=undefined'
+          - os: ubuntu-24.04
+            node: 22
+            cc: gcc
+            cxx: g++
+            meson_args: '-Db_sanitize=thread'
+          - os: macos-13
             node: 18
+            cc: clang
+            cxx: clang++
+          - os: macos-14
+            node: 20
+            cc: clang
+            cxx: clang++
+          - os: macos-15
+            node: 22
+            cc: clang
+            cxx: clang++
           - os: windows-2022
-            node: 18
-    runs-on: ${{ matrix.ci.os }}
+            node: 20
+            cc: cl
+            cxx: cl
+          - os: windows-2022
+            node: 22
+            cc: cl
+            cxx: cl
+        build-type:
+          - Release
+          - Debug
+
+    runs-on: ${{ matrix.build.os }}
+
+    env:
+      CC: ${{ matrix.build.cc }}
+      CXX: ${{ matrix.build.cxx }}
+      MEDIASOUP_SKIP_WORKER_PREBUILT_DOWNLOAD: 'true'
+      MEDIASOUP_LOCAL_DEV: 'true'
+      MEDIASOUP_BUILDTYPE: ${{ matrix.build-type }}
+      MESON_ARGS: ${{ matrix.build.meson_args }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Node.js
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.ci.node }}
+          node-version: ${{ matrix.build.node }}
 
       - name: Configure cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ~/.npm
-          key: ${{ matrix.ci.os }}-node-${{ hashFiles('**/package.json') }}
+          key: ${{ matrix.build.os }}-node-${{ hashFiles('**/package.json') }}
           restore-keys: |
-            ${{ matrix.ci.os }}-node-
+            ${{ matrix.build.os }}-node-
 
-      - run: npm ci
-      - run: npm run lint:node
-      - run: npm run test:node
+      - name: npm ci
+        run: npm ci --foreground-scripts
+        env:
+          # Disable leak detection because it's detected by the tool flatc uses
+          # to build.
+          ASAN_OPTIONS: 'detect_leaks=0'
+
+      - name: npm run lint:node
+        run: npm run lint:node
+
+      - name: npm run test:node
+        run: npm run test:node

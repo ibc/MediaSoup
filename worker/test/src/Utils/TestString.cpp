@@ -1,6 +1,6 @@
 #include "common.hpp"
 #include "Utils.hpp"
-#include <catch2/catch.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include <cstring> // std::memcmp()
 
 using namespace Utils;
@@ -75,41 +75,4 @@ SCENARIO("String::Base64Encode() and String::Base64Decode()")
 	decodedPtr = String::Base64Decode(encoded, outLen);
 	REQUIRE(outLen == sizeof(rtpPacket));
 	REQUIRE(std::memcmp(decodedPtr, rtpPacket, outLen) == 0);
-}
-
-SCENARIO("String::Split()", "[utils][string]")
-{
-	SECTION("empty string")
-	{
-		std::string foo{};
-
-		auto v = String::Split(foo, ',');
-
-		REQUIRE(v.size() == 0);
-	}
-
-	SECTION("character separated string with no limit")
-	{
-		std::string foo{ "a,b,c,d" };
-
-		auto v = String::Split(foo, ',');
-
-		REQUIRE(v.size() == 4);
-		REQUIRE(v[0] == "a");
-		REQUIRE(v[1] == "b");
-		REQUIRE(v[2] == "c");
-		REQUIRE(v[3] == "d");
-	}
-
-	SECTION("character separated string with limit")
-	{
-		std::string foo{ "a,b,c,d" };
-
-		auto v = String::Split(foo, ',', 2);
-
-		REQUIRE(v.size() == 3);
-		REQUIRE(v[0] == "a");
-		REQUIRE(v[1] == "b");
-		REQUIRE(v[2] == "c,d");
-	}
 }

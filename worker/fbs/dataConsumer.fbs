@@ -1,0 +1,76 @@
+include "common.fbs";
+include "dataProducer.fbs";
+include "sctpParameters.fbs";
+
+namespace FBS.DataConsumer;
+
+table GetBufferedAmountResponse {
+    buffered_amount: uint32;
+}
+
+table SetBufferedAmountLowThresholdRequest {
+    threshold: uint32;
+}
+
+table DumpResponse {
+    id: string (required);
+    data_producer_id: string (required);
+    type: FBS.DataProducer.Type;
+    sctp_stream_parameters: FBS.SctpParameters.SctpStreamParameters;
+    label: string (required);
+    protocol: string (required);
+    buffered_amount_low_threshold: uint32;
+    paused: bool;
+    data_producer_paused: bool;
+    subchannels: [uint16] (required);
+}
+
+table GetStatsResponse {
+    timestamp: uint64;
+    label: string (required);
+    protocol: string (required);
+    messages_sent: uint64;
+    bytes_sent: uint64;
+    buffered_amount: uint32;
+}
+
+table SendRequest {
+    ppid: uint32;
+    data: [uint8] (required);
+}
+
+table SetSubchannelsRequest {
+    subchannels: [uint16] (required);
+}
+
+table SetSubchannelsResponse {
+    subchannels: [uint16] (required);
+}
+
+table AddSubchannelRequest {
+    subchannel: uint16;
+}
+
+table AddSubchannelResponse {
+    subchannels: [uint16] (required);
+}
+
+table RemoveSubchannelRequest {
+    subchannel: uint16;
+}
+
+table RemoveSubchannelResponse {
+    subchannels: [uint16] (required);
+}
+
+// Notifications from Worker.
+
+table BufferedAmountLowNotification {
+    buffered_amount: uint32;
+}
+
+table MessageNotification {
+    ppid: uint32;
+    data: [uint8] (required);
+}
+

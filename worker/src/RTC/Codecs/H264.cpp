@@ -17,7 +17,11 @@ namespace RTC
 			MS_TRACE();
 
 			if (len < 2)
+			{
+				MS_WARN_DEV("ignoring payload with length < 2");
+
 				return nullptr;
+			}
 
 			std::unique_ptr<PayloadDescriptor> payloadDescriptor(new PayloadDescriptor());
 
@@ -48,7 +52,9 @@ namespace RTC
 
 				// Detect key frame.
 				if (frameMarking->start && frameMarking->independent)
+				{
 					payloadDescriptor->isKeyFrame = true;
+				}
 			}
 
 			// NOTE: Unfortunately libwebrtc produces wrong Frame-Marking (without i=1 in
@@ -59,7 +65,7 @@ namespace RTC
 			// there is no frame-marking or if there is but keyframe was not detected above.
 			if (!frameMarking || !payloadDescriptor->isKeyFrame)
 			{
-				uint8_t nal = *data & 0x1F;
+				const uint8_t nal = *data & 0x1F;
 
 				switch (nal)
 				{
@@ -83,8 +89,8 @@ namespace RTC
 						// Iterate NAL units.
 						while (len >= 3)
 						{
-							auto naluSize  = Utils::Byte::Get2Bytes(data, offset);
-							uint8_t subnal = *(data + offset + sizeof(naluSize)) & 0x1F;
+							auto naluSize        = Utils::Byte::Get2Bytes(data, offset);
+							const uint8_t subnal = *(data + offset + sizeof(naluSize)) & 0x1F;
 
 							if (subnal == 7)
 							{
@@ -95,7 +101,9 @@ namespace RTC
 
 							// Check if there is room for the indicated NAL unit size.
 							if (len < (naluSize + sizeof(naluSize)))
+							{
 								break;
+							}
 
 							offset += naluSize + sizeof(naluSize);
 							len -= naluSize + sizeof(naluSize);
@@ -109,11 +117,13 @@ namespace RTC
 					case 28:
 					case 29:
 					{
-						uint8_t subnal   = *(data + 1) & 0x1F;
-						uint8_t startBit = *(data + 1) & 0x80;
+						const uint8_t subnal   = *(data + 1) & 0x1F;
+						const uint8_t startBit = *(data + 1) & 0x80;
 
 						if (subnal == 7 && startBit == 128)
+						{
 							payloadDescriptor->isKeyFrame = true;
+						}
 
 						break;
 					}
@@ -138,7 +148,9 @@ namespace RTC
 			PayloadDescriptor* payloadDescriptor = H264::Parse(data, len, frameMarking, frameMarkingLen);
 
 			if (!payloadDescriptor)
+			{
 				return;
+			}
 
 			auto* payloadDescriptorHandler = new PayloadDescriptorHandler(payloadDescriptor);
 
@@ -151,7 +163,7 @@ namespace RTC
 		{
 			MS_TRACE();
 
-			MS_DUMP("<PayloadDescriptor>");
+			MS_DUMP("<H264::PayloadDescriptor>");
 			MS_DUMP(
 			  "  s:%" PRIu8 "|e:%" PRIu8 "|i:%" PRIu8 "|d:%" PRIu8 "|b:%" PRIu8,
 			  this->s,
@@ -160,13 +172,19 @@ namespace RTC
 			  this->d,
 			  this->b);
 			if (this->hasTid)
-				MS_DUMP("  tid        : %" PRIu8, this->tid);
+			{
+				MS_DUMP("  tid: %" PRIu8, this->tid);
+			}
 			if (this->hasLid)
-				MS_DUMP("  lid        : %" PRIu8, this->lid);
+			{
+				MS_DUMP("  lid: %" PRIu8, this->lid);
+			}
 			if (this->hasTl0picidx)
-				MS_DUMP("  tl0picidx  : %" PRIu8, this->tl0picidx);
-			MS_DUMP("  isKeyFrame : %s", this->isKeyFrame ? "true" : "false");
-			MS_DUMP("</PayloadDescriptor>");
+			{
+				MS_DUMP("  tl0picidx: %" PRIu8, this->tl0picidx);
+			}
+			MS_DUMP("  isKeyFrame: %s", this->isKeyFrame ? "true" : "false");
+			MS_DUMP("</H264::PayloadDescriptor>");
 		}
 
 		H264::PayloadDescriptorHandler::PayloadDescriptorHandler(H264::PayloadDescriptor* payloadDescriptor)
@@ -231,7 +249,9 @@ namespace RTC
 			}
 
 			if (context->GetCurrentTemporalLayer() > context->GetTargetTemporalLayer())
+			{
 				context->SetCurrentTemporalLayer(context->GetTargetTemporalLayer());
+			}
 
 			return true;
 		}

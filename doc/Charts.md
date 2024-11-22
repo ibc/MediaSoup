@@ -1,6 +1,5 @@
 # Charts
 
-
 ## Broadcasting
 
 mediasoup **v2** (a room uses a single media worker subprocess by design, so a single CPU).
@@ -9,9 +8,8 @@ Charts provided by [CoSMo](https://www.cosmosoftware.io) team.
 
 Scenario:
 
-* 1 peer producing audio and video tracks.
-* N spy peers receiving them.
-
+- 1 peer producing audio and video tracks.
+- N spy peers receiving them.
 
 #### Bandwidth out (Mbps) / number of viewers
 

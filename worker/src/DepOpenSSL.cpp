@@ -9,7 +9,7 @@
 
 /* Static. */
 
-static std::once_flag globalInitOnce;
+static std::once_flag GlobalInitOnce;
 
 /* Static methods. */
 
@@ -18,10 +18,11 @@ void DepOpenSSL::ClassInit()
 	MS_TRACE();
 
 	std::call_once(
-	  globalInitOnce,
+	  GlobalInitOnce,
 	  []
 	  {
 		  MS_DEBUG_TAG(info, "openssl version: \"%s\"", OpenSSL_version(OPENSSL_VERSION));
+		  MS_DEBUG_TAG(info, "openssl CPU info: \"%s\"", OpenSSL_version(OPENSSL_CPU_INFO));
 
 		  // Initialize some crypto stuff.
 		  RAND_poll();

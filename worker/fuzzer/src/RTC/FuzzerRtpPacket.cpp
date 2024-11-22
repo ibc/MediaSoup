@@ -7,7 +7,9 @@
 void Fuzzer::RTC::RtpPacket::Fuzz(const uint8_t* data, size_t len)
 {
 	if (!::RTC::RtpPacket::IsRtp(data, len))
+	{
 		return;
+	}
 
 	// We need to clone the given data into a separate buffer because setters
 	// below will try to write into packet memory.
@@ -21,6 +23,8 @@ void Fuzzer::RTC::RtpPacket::Fuzz(const uint8_t* data, size_t len)
 	bool flip;
 	uint16_t rotation;
 	uint32_t absSendTime;
+	uint16_t playoutDelayMinDelay;
+	uint16_t playoutDelayMaxDelay;
 	uint16_t wideSeqNumber;
 	std::string mid;
 	std::string rid;
@@ -31,7 +35,9 @@ void Fuzzer::RTC::RtpPacket::Fuzz(const uint8_t* data, size_t len)
 	::RTC::RtpPacket* packet = ::RTC::RtpPacket::Parse(data2, len);
 
 	if (!packet)
+	{
 		return;
+	}
 
 	// packet->Dump();
 	packet->GetData();
@@ -86,6 +92,11 @@ void Fuzzer::RTC::RtpPacket::Fuzz(const uint8_t* data, size_t len)
 	packet->HasExtension(2);
 	packet->GetExtension(2, extenLen);
 	packet->ReadVideoOrientation(camera, flip, rotation);
+
+	packet->SetPlayoutDelayExtensionId(8);
+	packet->HasExtension(8);
+	packet->GetExtension(8, extenLen);
+	packet->ReadPlayoutDelay(playoutDelayMinDelay, playoutDelayMaxDelay);
 
 	packet->HasExtension(6);
 	packet->HasExtension(7);
@@ -173,6 +184,11 @@ void Fuzzer::RTC::RtpPacket::Fuzz(const uint8_t* data, size_t len)
 	packet->HasExtension(12);
 	packet->GetExtension(12, extenLen);
 	packet->ReadVideoOrientation(camera, flip, rotation);
+
+	packet->SetPlayoutDelayExtensionId(15);
+	packet->HasExtension(15);
+	packet->GetExtension(15, extenLen);
+	packet->ReadPlayoutDelay(playoutDelayMinDelay, playoutDelayMaxDelay);
 
 	packet->GetPayload();
 	packet->GetPayloadLength();

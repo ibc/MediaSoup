@@ -4,11 +4,9 @@
 #include "common.hpp"
 #include "Channel/ChannelRequest.hpp"
 #include "Channel/ChannelSocket.hpp"
-#include "PayloadChannel/PayloadChannelRequest.hpp"
-#include "PayloadChannel/PayloadChannelSocket.hpp"
 #include "RTC/SctpDictionaries.hpp"
 #include "RTC/Shared.hpp"
-#include <nlohmann/json.hpp>
+#include <absl/container/flat_hash_set.h>
 #include <string>
 
 namespace RTC
@@ -17,8 +15,7 @@ namespace RTC
 	// (this is to avoid circular dependencies).
 	class SctpAssociation;
 
-	class DataConsumer : public Channel::ChannelSocket::RequestHandler,
-	                     public PayloadChannel::PayloadChannelSocket::RequestHandler
+	class DataConsumer : public Channel::ChannelSocket::RequestHandler
 	{
 	protected:
 		using onQueuedCallback = const std::function<void(bool queued, bool sctpSendBufferFull)>;
@@ -32,9 +29,9 @@ namespace RTC
 		public:
 			virtual void OnDataConsumerSendMessage(
 			  RTC::DataConsumer* dataConsumer,
-			  uint32_t ppid,
 			  const uint8_t* msg,
 			  size_t len,
+			  uint32_t ppid,
 			  onQueuedCallback* cb)                                                        = 0;
 			virtual void OnDataConsumerDataProducerClosed(RTC::DataConsumer* dataConsumer) = 0;
 		};
@@ -53,13 +50,15 @@ namespace RTC
 		  const std::string& dataProducerId,
 		  RTC::SctpAssociation* sctpAssociation,
 		  RTC::DataConsumer::Listener* listener,
-		  json& data,
+		  const FBS::Transport::ConsumeDataRequest* data,
 		  size_t maxMessageSize);
-		virtual ~DataConsumer();
+		~DataConsumer() override;
 
 	public:
-		void FillJson(json& jsonObject) const;
-		void FillJsonStats(json& jsonArray) const;
+		flatbuffers::Offset<FBS::DataConsumer::DumpResponse> FillBuffer(
+		  flatbuffers::FlatBufferBuilder& builder) const;
+		flatbuffers::Offset<FBS::DataConsumer::GetStatsResponse> FillBufferStats(
+		  flatbuffers::FlatBufferBuilder& builder) const;
 		Type GetType() const
 		{
 			return this->type;
@@ -70,30 +69,46 @@ namespace RTC
 		}
 		bool IsActive() const
 		{
+			// It's active it DataConsumer and DataProducer are not paused and the transport
+			// is connected.
 			// clang-format off
 			return (
 				this->transportConnected &&
 				(this->type == DataConsumer::Type::DIRECT || this->sctpAssociationConnected) &&
+				!this->paused &&
+				!this->dataProducerPaused &&
 				!this->dataProducerClosed
 			);
 			// clang-format on
 		}
 		void TransportConnected();
 		void TransportDisconnected();
+		bool IsPaused() const
+		{
+			return this->paused;
+		}
+		bool IsDataProducerPaused() const
+		{
+			return this->dataProducerPaused;
+		}
+		void DataProducerPaused();
+		void DataProducerResumed();
 		void SctpAssociationConnected();
 		void SctpAssociationClosed();
 		void SctpAssociationBufferedAmount(uint32_t bufferedAmount);
 		void SctpAssociationSendBufferFull();
 		void DataProducerClosed();
-		void SendMessage(uint32_t ppid, const uint8_t* msg, size_t len, onQueuedCallback* = nullptr);
+		void SendMessage(
+		  const uint8_t* msg,
+		  size_t len,
+		  uint32_t ppid,
+		  std::vector<uint16_t>& subchannels,
+		  std::optional<uint16_t> requiredSubchannel,
+		  onQueuedCallback* cb = nullptr);
 
 		/* Methods inherited from Channel::ChannelSocket::RequestHandler. */
 	public:
 		void HandleRequest(Channel::ChannelRequest* request) override;
-
-		/* Methods inherited from PayloadChannel::PayloadChannelSocket::RequestHandler. */
-	public:
-		void HandleRequest(PayloadChannel::PayloadChannelRequest* request) override;
 
 	public:
 		// Passed by argument.
@@ -108,12 +123,14 @@ namespace RTC
 		size_t maxMessageSize{ 0u };
 		// Others.
 		Type type;
-		std::string typeString;
 		RTC::SctpStreamParameters sctpStreamParameters;
 		std::string label;
 		std::string protocol;
+		absl::flat_hash_set<uint16_t> subchannels;
 		bool transportConnected{ false };
 		bool sctpAssociationConnected{ false };
+		bool paused{ false };
+		bool dataProducerPaused{ false };
 		bool dataProducerClosed{ false };
 		size_t messagesSent{ 0u };
 		size_t bytesSent{ 0u };

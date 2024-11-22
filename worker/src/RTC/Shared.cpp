@@ -7,11 +7,8 @@
 namespace RTC
 {
 	Shared::Shared(
-	  ChannelMessageRegistrator* channelMessageRegistrator,
-	  Channel::ChannelNotifier* channelNotifier,
-	  PayloadChannel::PayloadChannelNotifier* payloadChannelNotifier)
-	  : channelMessageRegistrator(channelMessageRegistrator), channelNotifier(channelNotifier),
-	    payloadChannelNotifier(payloadChannelNotifier)
+	  ChannelMessageRegistrator* channelMessageRegistrator, Channel::ChannelNotifier* channelNotifier)
+	  : channelMessageRegistrator(channelMessageRegistrator), channelNotifier(channelNotifier)
 	{
 		MS_TRACE();
 	}
@@ -22,6 +19,5 @@ namespace RTC
 
 		delete this->channelMessageRegistrator;
 		delete this->channelNotifier;
-		delete this->payloadChannelNotifier;
 	}
 } // namespace RTC

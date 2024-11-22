@@ -1,8 +1,6 @@
 #include "common.hpp"
 #include "Utils.hpp"
-#include <catch2/catch.hpp>
-
-using namespace Utils;
+#include <catch2/catch_test_macros.hpp>
 
 SCENARIO("Utils::Bits::CountSetBits()")
 {

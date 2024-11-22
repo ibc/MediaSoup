@@ -3,6 +3,9 @@
 
 #include "common.hpp"
 #include "DepLibSRTP.hpp"
+#ifdef MS_LIBURING_SUPPORTED
+#include "DepLibUring.hpp"
+#endif
 #include "DepLibUV.hpp"
 #include "DepLibWebRTC.hpp"
 #include "DepOpenSSL.hpp"
@@ -13,35 +16,26 @@
 #include "Utils.hpp"
 #include "Worker.hpp"
 #include "Channel/ChannelSocket.hpp"
-#include "PayloadChannel/PayloadChannelSocket.hpp"
 #include "RTC/DtlsTransport.hpp"
 #include "RTC/SrtpSession.hpp"
 #include <uv.h>
 #include <absl/container/flat_hash_map.h>
-#include <cerrno>
-#include <csignal>  // sigaction()
-#include <cstdlib>  // std::_Exit(), std::genenv()
-#include <iostream> // std::cerr, std::endl
+#include <csignal> // sigaction()
 #include <string>
 
 void IgnoreSignals();
 
+// NOLINTNEXTLINE
 extern "C" int mediasoup_worker_run(
   int argc,
   char* argv[],
   const char* version,
   int consumerChannelFd,
   int producerChannelFd,
-  int payloadConsumeChannelFd,
-  int payloadProduceChannelFd,
   ChannelReadFn channelReadFn,
   ChannelReadCtx channelReadCtx,
   ChannelWriteFn channelWriteFn,
-  ChannelWriteCtx channelWriteCtx,
-  PayloadChannelReadFn payloadChannelReadFn,
-  PayloadChannelReadCtx payloadChannelReadCtx,
-  PayloadChannelWriteFn payloadChannelWriteFn,
-  PayloadChannelWriteCtx payloadChannelWriteCtx)
+  ChannelWriteCtx channelWriteCtx)
 {
 	// Initialize libuv stuff (we need it for the Channel).
 	DepLibUV::ClassInit();
@@ -50,11 +44,6 @@ extern "C" int mediasoup_worker_run(
 	// it in its destructor. Otherwise it's closed here by also letting libuv
 	// deallocate its UV handles.
 	std::unique_ptr<Channel::ChannelSocket> channel{ nullptr };
-
-	// PayloadChannel socket. If Worker instance runs properly, this socket is
-	// closed by it in its destructor. Otherwise it's closed here by also letting
-	// libuv deallocate its UV handles.
-	std::unique_ptr<PayloadChannel::PayloadChannelSocket> payloadChannel{ nullptr };
 
 	try
 	{
@@ -75,31 +64,8 @@ extern "C" int mediasoup_worker_run(
 		DepLibUV::RunLoop();
 		DepLibUV::ClassDestroy();
 
-		return 1;
-	}
-
-	try
-	{
-		if (payloadChannelReadFn)
-		{
-			payloadChannel.reset(new PayloadChannel::PayloadChannelSocket(
-			  payloadChannelReadFn, payloadChannelReadCtx, payloadChannelWriteFn, payloadChannelWriteCtx));
-		}
-		else
-		{
-			payloadChannel.reset(
-			  new PayloadChannel::PayloadChannelSocket(payloadConsumeChannelFd, payloadProduceChannelFd));
-		}
-	}
-	catch (const MediaSoupError& error)
-	{
-		MS_ERROR_STD("error creating the PayloadChannel: %s", error.what());
-
-		channel->Close();
-		DepLibUV::RunLoop();
-		DepLibUV::ClassDestroy();
-
-		return 1;
+		// 40 is a custom exit code to notify "unknown error" to the Node library.
+		return 40;
 	}
 
 	// Initialize the Logger.
@@ -114,7 +80,6 @@ extern "C" int mediasoup_worker_run(
 		MS_ERROR_STD("settings error: %s", error.what());
 
 		channel->Close();
-		payloadChannel->Close();
 		DepLibUV::RunLoop();
 		DepLibUV::ClassDestroy();
 
@@ -126,11 +91,11 @@ extern "C" int mediasoup_worker_run(
 		MS_ERROR_STD("unexpected settings error: %s", error.what());
 
 		channel->Close();
-		payloadChannel->Close();
 		DepLibUV::RunLoop();
 		DepLibUV::ClassDestroy();
 
-		return 1;
+		// 40 is a custom exit code to notify "unknown error" to the Node library.
+		return 40;
 	}
 
 	MS_DEBUG_TAG(info, "starting mediasoup-worker process [version:%s]", version);
@@ -160,6 +125,9 @@ extern "C" int mediasoup_worker_run(
 		DepOpenSSL::ClassInit();
 		DepLibSRTP::ClassInit();
 		DepUsrSCTP::ClassInit();
+#ifdef MS_LIBURING_SUPPORTED
+		DepLibUring::ClassInit();
+#endif
 		DepLibWebRTC::ClassInit();
 		Utils::Crypto::ClassInit();
 		RTC::DtlsTransport::ClassInit();
@@ -171,12 +139,15 @@ extern "C" int mediasoup_worker_run(
 #endif
 
 		// Run the Worker.
-		Worker worker(channel.get(), payloadChannel.get());
+		const Worker worker(channel.get());
 
 		// Free static stuff.
 		DepLibSRTP::ClassDestroy();
 		Utils::Crypto::ClassDestroy();
 		DepLibWebRTC::ClassDestroy();
+#ifdef MS_LIBURING_SUPPORTED
+		DepLibUring::ClassDestroy();
+#endif
 		RTC::DtlsTransport::ClassDestroy();
 		DepUsrSCTP::ClassDestroy();
 		DepLibUV::ClassDestroy();
@@ -193,7 +164,8 @@ extern "C" int mediasoup_worker_run(
 	{
 		MS_ERROR_STD("failure exit: %s", error.what());
 
-		return 1;
+		// 40 is a custom exit code to notify "unknown error" to the Node library.
+		return 40;
 	}
 }
 
@@ -203,10 +175,12 @@ void IgnoreSignals()
 	MS_TRACE();
 
 	int err;
-	struct sigaction act; // NOLINT(cppcoreguidelines-pro-type-member-init)
+	struct sigaction act
+	{
+	}; // NOLINT(cppcoreguidelines-pro-type-member-init)
 
 	// clang-format off
-	absl::flat_hash_map<std::string, int> ignoredSignals =
+	absl::flat_hash_map<std::string, int> const ignoredSignals =
 	{
 		{ "PIPE", SIGPIPE },
 		{ "HUP",  SIGHUP  },
@@ -221,17 +195,21 @@ void IgnoreSignals()
 	err            = sigfillset(&act.sa_mask);
 
 	if (err != 0)
+	{
 		MS_THROW_ERROR("sigfillset() failed: %s", std::strerror(errno));
+	}
 
-	for (auto& kv : ignoredSignals)
+	for (const auto& kv : ignoredSignals)
 	{
 		const auto& sigName = kv.first;
-		int sigId           = kv.second;
+		const int sigId     = kv.second;
 
 		err = sigaction(sigId, &act, nullptr);
 
 		if (err != 0)
+		{
 			MS_THROW_ERROR("sigaction() failed for signal %s: %s", sigName.c_str(), std::strerror(errno));
+		}
 	}
 #endif
 }

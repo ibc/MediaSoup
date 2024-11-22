@@ -28,6 +28,7 @@ namespace RTC
 				uint8_t tid{ 0 };       // Temporal layer id.
 				uint8_t lid{ 0 };       // Spatial layer id.
 				uint8_t tl0picidx{ 0 }; // TL0PICIDX
+
 				// Parsed values.
 				bool hasLid{ false };
 				bool hasTid{ false };

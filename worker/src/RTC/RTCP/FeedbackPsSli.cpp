@@ -3,7 +3,6 @@
 
 #include "RTC/RTCP/FeedbackPsSli.hpp"
 #include "Logger.hpp"
-#include <cstring>
 
 namespace RTC
 {
@@ -26,8 +25,8 @@ namespace RTC
 
 		size_t FeedbackPsSliItem::Serialize(uint8_t* buffer)
 		{
-			uint32_t compact = (this->first << 19) | (this->number << 6) | this->pictureId;
-			auto* header     = reinterpret_cast<Header*>(buffer);
+			const uint32_t compact = (this->first << 19) | (this->number << 6) | this->pictureId;
+			auto* header           = reinterpret_cast<Header*>(buffer);
 
 			header->compact = uint32_t{ htonl(compact) };
 			std::memcpy(buffer, header, HeaderSize);
@@ -40,9 +39,9 @@ namespace RTC
 			MS_TRACE();
 
 			MS_DUMP("<FeedbackPsSliItem>");
-			MS_DUMP("  first      : %" PRIu16, this->first);
-			MS_DUMP("  number     : %" PRIu16, this->number);
-			MS_DUMP("  picture id : %" PRIu8, this->pictureId);
+			MS_DUMP("  first: %" PRIu16, this->first);
+			MS_DUMP("  number: %" PRIu16, this->number);
+			MS_DUMP("  picture id: %" PRIu8, this->pictureId);
 			MS_DUMP("</FeedbackPsSliItem>");
 		}
 	} // namespace RTCP

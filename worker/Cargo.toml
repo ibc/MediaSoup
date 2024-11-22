@@ -1,6 +1,6 @@
 [package]
 name = "mediasoup-sys"
-version = "0.5.3"
+version = "0.9.1"
 description = "FFI bindings to C++ libmediasoup-worker"
 authors = ["Nazar Mokrynskyi <nazar@mokrynskyi.com>"]
 edition = "2021"
@@ -9,6 +9,7 @@ documentation = "https://docs.rs/mediasoup-sys"
 repository = "https://github.com/versatica/mediasoup/tree/v3/worker"
 include = [
     "/deps/libwebrtc",
+    "/fbs",
     "/fuzzer/include",
     "/fuzzer/src",
     "/include",
@@ -20,11 +21,22 @@ include = [
     "/test/src",
     "/build.rs",
     "/Cargo.toml",
-    "/Makefile",
     "/meson.build",
     "/meson_options.txt",
+    "/tasks.py"
 ]
 
 [package.metadata.docs.rs]
 default-target = "x86_64-unknown-linux-gnu"
 targets = []
+
+[build-dependencies]
+planus-codegen = "0.4.0"
+planus-translation = "0.4.0"
+
+[dependencies]
+planus = "0.4.0"
+
+[dependencies.serde]
+features = ["derive"]
+version = "1.0.190"

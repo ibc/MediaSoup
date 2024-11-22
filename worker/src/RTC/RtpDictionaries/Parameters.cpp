@@ -8,104 +8,121 @@ namespace RTC
 {
 	/* Instance methods. */
 
-	void Parameters::FillJson(json& jsonObject) const
+	std::vector<flatbuffers::Offset<FBS::RtpParameters::Parameter>> Parameters::FillBuffer(
+	  flatbuffers::FlatBufferBuilder& builder) const
 	{
 		MS_TRACE();
 
-		// Force it to be an object even if no key/values are added below.
-		jsonObject = json::object();
+		std::vector<flatbuffers::Offset<FBS::RtpParameters::Parameter>> parameters;
 
-		for (auto& kv : this->mapKeyValues)
+		for (const auto& kv : this->mapKeyValues)
 		{
-			auto& key   = kv.first;
-			auto& value = kv.second;
+			const auto& key   = kv.first;
+			const auto& value = kv.second;
+
+			flatbuffers::Offset<FBS::RtpParameters::Parameter> parameter;
 
 			switch (value.type)
 			{
 				case Value::Type::BOOLEAN:
-					jsonObject[key] = value.booleanValue;
+				{
+					auto valueOffset = FBS::RtpParameters::CreateBoolean(builder, value.booleanValue);
+
+					parameter = FBS::RtpParameters::CreateParameterDirect(
+					  builder, key.c_str(), FBS::RtpParameters::Value::Boolean, valueOffset.Union());
+
 					break;
+				}
 
 				case Value::Type::INTEGER:
-					jsonObject[key] = value.integerValue;
+				{
+					auto valueOffset = FBS::RtpParameters::CreateInteger32(builder, value.integerValue);
+
+					parameters.emplace_back(FBS::RtpParameters::CreateParameterDirect(
+					  builder, key.c_str(), FBS::RtpParameters::Value::Integer32, valueOffset.Union()));
+
 					break;
+				}
 
 				case Value::Type::DOUBLE:
-					jsonObject[key] = value.doubleValue;
+				{
+					auto valueOffset = FBS::RtpParameters::CreateDouble(builder, value.doubleValue);
+
+					parameters.emplace_back(FBS::RtpParameters::CreateParameterDirect(
+					  builder, key.c_str(), FBS::RtpParameters::Value::Double, valueOffset.Union()));
+
 					break;
+				}
 
 				case Value::Type::STRING:
-					jsonObject[key] = value.stringValue;
+				{
+					auto valueOffset =
+					  FBS::RtpParameters::CreateStringDirect(builder, value.stringValue.c_str());
+
+					parameters.emplace_back(FBS::RtpParameters::CreateParameterDirect(
+					  builder, key.c_str(), FBS::RtpParameters::Value::String, valueOffset.Union()));
+
 					break;
+				}
 
 				case Value::Type::ARRAY_OF_INTEGERS:
-					jsonObject[key] = value.arrayOfIntegers;
+				{
+					auto valueOffset =
+					  FBS::RtpParameters::CreateInteger32ArrayDirect(builder, &value.arrayOfIntegers);
+
+					parameters.emplace_back(FBS::RtpParameters::CreateParameterDirect(
+					  builder, key.c_str(), FBS::RtpParameters::Value::Integer32Array, valueOffset.Union()));
+
 					break;
+				}
 			}
 		}
+
+		return parameters;
 	}
 
-	void Parameters::Set(json& data)
+	void Parameters::Set(const flatbuffers::Vector<flatbuffers::Offset<FBS::RtpParameters::Parameter>>* data)
 	{
 		MS_TRACE();
 
-		MS_ASSERT(data.is_object(), "data is not an object");
-
-		for (json::iterator it = data.begin(); it != data.end(); ++it)
+		for (const auto* parameter : *data)
 		{
-			const std::string& key = it.key();
-			auto& value            = it.value();
+			const auto key = parameter->name()->str();
 
-			switch (value.type())
+			switch (parameter->value_type())
 			{
-				case json::value_t::boolean:
+				case FBS::RtpParameters::Value::Boolean:
 				{
-					this->mapKeyValues.emplace(key, Value(value.get<bool>()));
+					this->mapKeyValues.emplace(
+					  key, Value((parameter->value_as_Boolean()->value() == 0) ? false : true));
 
 					break;
 				}
 
-				case json::value_t::number_integer:
-				case json::value_t::number_unsigned:
+				case FBS::RtpParameters::Value::Integer32:
 				{
-					this->mapKeyValues.emplace(key, Value(value.get<int32_t>()));
+					this->mapKeyValues.emplace(key, Value(parameter->value_as_Integer32()->value()));
 
 					break;
 				}
 
-				case json::value_t::number_float:
+				case FBS::RtpParameters::Value::Double:
 				{
-					this->mapKeyValues.emplace(key, Value(value.get<double>()));
+					this->mapKeyValues.emplace(key, Value(parameter->value_as_Double()->value()));
 
 					break;
 				}
 
-				case json::value_t::string:
+				case FBS::RtpParameters::Value::String:
 				{
-					this->mapKeyValues.emplace(key, Value(value.get<std::string>()));
+					this->mapKeyValues.emplace(key, Value(parameter->value_as_String()->value()->str()));
 
 					break;
 				}
 
-				case json::value_t::array:
+				case FBS::RtpParameters::Value::Integer32Array:
 				{
-					std::vector<int32_t> arrayOfIntegers;
-					bool isValid = true;
-
-					for (auto& entry : value)
-					{
-						if (!entry.is_number_integer())
-						{
-							isValid = false;
-
-							break;
-						}
-
-						arrayOfIntegers.emplace_back(entry.get<int32_t>());
-					}
-
-					if (!arrayOfIntegers.empty() && isValid)
-						this->mapKeyValues.emplace(key, Value(arrayOfIntegers));
+					this->mapKeyValues.emplace(key, Value(parameter->value_as_Integer32Array()->value()));
 
 					break;
 				}
@@ -122,9 +139,11 @@ namespace RTC
 		auto it = this->mapKeyValues.find(key);
 
 		if (it == this->mapKeyValues.end())
+		{
 			return false;
+		}
 
-		auto& value = it->second;
+		const auto& value = it->second;
 
 		return value.type == Value::Type::BOOLEAN;
 	}
@@ -136,9 +155,11 @@ namespace RTC
 		auto it = this->mapKeyValues.find(key);
 
 		if (it == this->mapKeyValues.end())
+		{
 			return false;
+		}
 
-		auto& value = it->second;
+		const auto& value = it->second;
 
 		return value.type == Value::Type::INTEGER;
 	}
@@ -150,9 +171,11 @@ namespace RTC
 		auto it = this->mapKeyValues.find(key);
 
 		if (it == this->mapKeyValues.end())
+		{
 			return false;
+		}
 
-		auto& value = it->second;
+		const auto& value = it->second;
 
 		return value.type == Value::Type::INTEGER && value.integerValue >= 0;
 	}
@@ -164,9 +187,11 @@ namespace RTC
 		auto it = this->mapKeyValues.find(key);
 
 		if (it == this->mapKeyValues.end())
+		{
 			return false;
+		}
 
-		auto& value = it->second;
+		const auto& value = it->second;
 
 		return value.type == Value::Type::DOUBLE;
 	}
@@ -178,9 +203,11 @@ namespace RTC
 		auto it = this->mapKeyValues.find(key);
 
 		if (it == this->mapKeyValues.end())
+		{
 			return false;
+		}
 
-		auto& value = it->second;
+		const auto& value = it->second;
 
 		return value.type == Value::Type::STRING;
 	}
@@ -192,9 +219,11 @@ namespace RTC
 		auto it = this->mapKeyValues.find(key);
 
 		if (it == this->mapKeyValues.end())
+		{
 			return false;
+		}
 
-		auto& value = it->second;
+		const auto& value = it->second;
 
 		return value.type == Value::Type::ARRAY_OF_INTEGERS;
 	}
@@ -206,10 +235,12 @@ namespace RTC
 		auto it = this->mapKeyValues.find(key);
 
 		if (it == this->mapKeyValues.end())
+		{
 			return false;
+		}
 
-		auto& value = it->second;
-		auto& array = value.arrayOfIntegers;
+		const auto& value = it->second;
+		const auto& array = value.arrayOfIntegers;
 
 		return std::find(array.begin(), array.end(), integer) != array.end();
 	}
@@ -222,7 +253,7 @@ namespace RTC
 
 		MS_ASSERT(it != this->mapKeyValues.end(), "key does not exist [key:%s]", key.c_str());
 
-		auto& value = it->second;
+		const auto& value = it->second;
 
 		return value.booleanValue;
 	}
@@ -235,7 +266,7 @@ namespace RTC
 
 		MS_ASSERT(it != this->mapKeyValues.end(), "key does not exist [key:%s]", key.c_str());
 
-		auto& value = it->second;
+		const auto& value = it->second;
 
 		return value.integerValue;
 	}
@@ -248,7 +279,7 @@ namespace RTC
 
 		MS_ASSERT(it != this->mapKeyValues.end(), "key does not exist [key:%s]", key.c_str());
 
-		auto& value = it->second;
+		const auto& value = it->second;
 
 		return value.doubleValue;
 	}
@@ -261,7 +292,7 @@ namespace RTC
 
 		MS_ASSERT(it != this->mapKeyValues.end(), "key does not exist [key:%s]", key.c_str());
 
-		auto& value = it->second;
+		const auto& value = it->second;
 
 		return value.stringValue;
 	}
@@ -274,7 +305,7 @@ namespace RTC
 
 		MS_ASSERT(it != this->mapKeyValues.end(), "key does not exist [key:%s]", key.c_str());
 
-		auto& value = it->second;
+		const auto& value = it->second;
 
 		return value.arrayOfIntegers;
 	}

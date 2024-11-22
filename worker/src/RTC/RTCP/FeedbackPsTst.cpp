@@ -3,7 +3,7 @@
 
 #include "RTC/RTCP/FeedbackPsTst.hpp"
 #include "Logger.hpp"
-#include <cstring>
+#include <cstring> // std::memcpy
 
 namespace RTC
 {
@@ -41,9 +41,9 @@ namespace RTC
 			MS_TRACE();
 
 			MS_DUMP("<FeedbackPsTstItem>");
-			MS_DUMP("  ssrc            : %" PRIu32, this->GetSsrc());
-			MS_DUMP("  sequence number : %" PRIu32, this->GetSequenceNumber());
-			MS_DUMP("  index           : %" PRIu32, this->GetIndex());
+			MS_DUMP("  ssrc: %" PRIu32, this->GetSsrc());
+			MS_DUMP("  sequence number: %" PRIu32, this->GetSequenceNumber());
+			MS_DUMP("  index: %" PRIu32, this->GetIndex());
 			MS_DUMP("</FeedbackPsTstItem>");
 		}
 

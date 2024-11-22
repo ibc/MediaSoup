@@ -1,0 +1,133 @@
+include "worker.fbs";
+include "router.fbs";
+include "transport.fbs";
+include "producer.fbs";
+include "consumer.fbs";
+include "dataConsumer.fbs";
+include "rtpObserver.fbs";
+
+namespace FBS.Request;
+
+enum Method: uint8 {
+    WORKER_CLOSE = 0,
+    WORKER_DUMP,
+    WORKER_GET_RESOURCE_USAGE,
+    WORKER_UPDATE_SETTINGS,
+    WORKER_CREATE_WEBRTCSERVER,
+    WORKER_CREATE_ROUTER,
+    WORKER_WEBRTCSERVER_CLOSE,
+    WORKER_CLOSE_ROUTER,
+    WEBRTCSERVER_DUMP,
+    ROUTER_DUMP,
+    ROUTER_CREATE_WEBRTCTRANSPORT,
+    ROUTER_CREATE_WEBRTCTRANSPORT_WITH_SERVER,
+    ROUTER_CREATE_PLAINTRANSPORT,
+    ROUTER_CREATE_PIPETRANSPORT,
+    ROUTER_CREATE_DIRECTTRANSPORT,
+    ROUTER_CLOSE_TRANSPORT,
+    ROUTER_CREATE_ACTIVESPEAKEROBSERVER,
+    ROUTER_CREATE_AUDIOLEVELOBSERVER,
+    ROUTER_CLOSE_RTPOBSERVER,
+    TRANSPORT_DUMP,
+    TRANSPORT_GET_STATS,
+    TRANSPORT_CONNECT,
+    TRANSPORT_SET_MAX_INCOMING_BITRATE,
+    TRANSPORT_SET_MAX_OUTGOING_BITRATE,
+    TRANSPORT_SET_MIN_OUTGOING_BITRATE,
+    TRANSPORT_RESTART_ICE,
+    TRANSPORT_PRODUCE,
+    TRANSPORT_PRODUCE_DATA,
+    TRANSPORT_CONSUME,
+    TRANSPORT_CONSUME_DATA,
+    TRANSPORT_ENABLE_TRACE_EVENT,
+    TRANSPORT_CLOSE_PRODUCER,
+    TRANSPORT_CLOSE_CONSUMER,
+    TRANSPORT_CLOSE_DATAPRODUCER,
+    TRANSPORT_CLOSE_DATACONSUMER,
+    PLAINTRANSPORT_CONNECT,
+    PIPETRANSPORT_CONNECT,
+    WEBRTCTRANSPORT_CONNECT,
+    PRODUCER_DUMP,
+    PRODUCER_GET_STATS,
+    PRODUCER_PAUSE,
+    PRODUCER_RESUME,
+    PRODUCER_ENABLE_TRACE_EVENT,
+    CONSUMER_DUMP,
+    CONSUMER_GET_STATS,
+    CONSUMER_PAUSE,
+    CONSUMER_RESUME,
+    CONSUMER_SET_PREFERRED_LAYERS,
+    CONSUMER_SET_PRIORITY,
+    CONSUMER_REQUEST_KEY_FRAME,
+    CONSUMER_ENABLE_TRACE_EVENT,
+    DATAPRODUCER_DUMP,
+    DATAPRODUCER_GET_STATS,
+    DATAPRODUCER_PAUSE,
+    DATAPRODUCER_RESUME,
+    DATACONSUMER_DUMP,
+    DATACONSUMER_GET_STATS,
+    DATACONSUMER_PAUSE,
+    DATACONSUMER_RESUME,
+    DATACONSUMER_GET_BUFFERED_AMOUNT,
+    DATACONSUMER_SET_BUFFERED_AMOUNT_LOW_THRESHOLD,
+    DATACONSUMER_SEND,
+    DATACONSUMER_SET_SUBCHANNELS,
+    DATACONSUMER_ADD_SUBCHANNEL,
+    DATACONSUMER_REMOVE_SUBCHANNEL,
+    RTPOBSERVER_PAUSE,
+    RTPOBSERVER_RESUME,
+    RTPOBSERVER_ADD_PRODUCER,
+    RTPOBSERVER_REMOVE_PRODUCER,
+}
+
+union Body {
+    Worker_UpdateSettingsRequest: FBS.Worker.UpdateSettingsRequest,
+    Worker_CreateWebRtcServerRequest: FBS.Worker.CreateWebRtcServerRequest,
+    Worker_CloseWebRtcServerRequest: FBS.Worker.CloseWebRtcServerRequest,
+    Worker_CreateRouterRequest: FBS.Worker.CreateRouterRequest,
+    Worker_CloseRouterRequest: FBS.Worker.CloseRouterRequest,
+    Router_CreateWebRtcTransportRequest: FBS.Router.CreateWebRtcTransportRequest,
+    Router_CreatePlainTransportRequest: FBS.Router.CreatePlainTransportRequest,
+    Router_CreatePipeTransportRequest: FBS.Router.CreatePipeTransportRequest,
+    Router_CreateDirectTransportRequest: FBS.Router.CreateDirectTransportRequest,
+    Router_CreateActiveSpeakerObserverRequest: FBS.Router.CreateActiveSpeakerObserverRequest,
+    Router_CreateAudioLevelObserverRequest: FBS.Router.CreateAudioLevelObserverRequest,
+    Router_CloseTransportRequest: FBS.Router.CloseTransportRequest,
+    Router_CloseRtpObserverRequest: FBS.Router.CloseRtpObserverRequest,
+    Transport_SetMaxIncomingBitrateRequest: FBS.Transport.SetMaxIncomingBitrateRequest,
+    Transport_SetMaxOutgoingBitrateRequest: FBS.Transport.SetMaxOutgoingBitrateRequest,
+    Transport_SetMinOutgoingBitrateRequest: FBS.Transport.SetMinOutgoingBitrateRequest,
+    Transport_ProduceRequest: FBS.Transport.ProduceRequest,
+    Transport_ConsumeRequest: FBS.Transport.ConsumeRequest,
+    Transport_ProduceDataRequest: FBS.Transport.ProduceDataRequest,
+    Transport_ConsumeDataRequest: FBS.Transport.ConsumeDataRequest,
+    Transport_EnableTraceEventRequest: FBS.Transport.EnableTraceEventRequest,
+    Transport_CloseProducerRequest: FBS.Transport.CloseProducerRequest,
+    Transport_CloseConsumerRequest: FBS.Transport.CloseConsumerRequest,
+    Transport_CloseDataProducerRequest: FBS.Transport.CloseDataProducerRequest,
+    Transport_CloseDataConsumerRequest: FBS.Transport.CloseDataConsumerRequest,
+    PlainTransport_ConnectRequest: FBS.PlainTransport.ConnectRequest,
+    PipeTransport_ConnectRequest: FBS.PipeTransport.ConnectRequest,
+    WebRtcTransport_ConnectRequest: FBS.WebRtcTransport.ConnectRequest,
+    Producer_EnableTraceEventRequest: FBS.Producer.EnableTraceEventRequest,
+    Consumer_SetPreferredLayersRequest: FBS.Consumer.SetPreferredLayersRequest,
+    Consumer_SetPriorityRequest: FBS.Consumer.SetPriorityRequest,
+    Consumer_EnableTraceEventRequest: FBS.Consumer.EnableTraceEventRequest,
+    DataConsumer_SetBufferedAmountLowThresholdRequest: FBS.DataConsumer.SetBufferedAmountLowThresholdRequest,
+    DataConsumer_SendRequest: FBS.DataConsumer.SendRequest,
+    DataConsumer_SetSubchannelsRequest: FBS.DataConsumer.SetSubchannelsRequest,
+    DataConsumer_AddSubchannelRequest: FBS.DataConsumer.AddSubchannelRequest,
+    DataConsumer_RemoveSubchannelRequest: FBS.DataConsumer.RemoveSubchannelRequest,
+    RtpObserver_AddProducerRequest: FBS.RtpObserver.AddProducerRequest,
+    RtpObserver_RemoveProducerRequest: FBS.RtpObserver.RemoveProducerRequest,
+}
+
+table Request {
+    id: uint32;
+    method: Method;
+    handler_id: string (required);
+    body: Body;
+}
+
+root_type Request;
+

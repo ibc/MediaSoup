@@ -1,73 +1,29 @@
 import { Logger } from './Logger';
-import { EnhancedEventEmitter } from './EnhancedEventEmitter';
+import { EnhancedEventEmitter } from './enhancedEvents';
+import type {
+	DataProducer,
+	DataProducerType,
+	DataProducerDump,
+	DataProducerStat,
+	DataProducerEvents,
+	DataProducerObserver,
+	DataProducerObserverEvents,
+} from './DataProducerTypes';
 import { Channel } from './Channel';
-import { PayloadChannel } from './PayloadChannel';
-import { TransportInternal } from './Transport';
-import { SctpStreamParameters } from './SctpParameters';
+import type { TransportInternal } from './Transport';
+import type { SctpStreamParameters } from './sctpParametersTypes';
+import { parseSctpStreamParameters } from './sctpParametersFbsUtils';
+import type { AppData } from './types';
+import * as FbsTransport from './fbs/transport';
+import * as FbsNotification from './fbs/notification';
+import * as FbsRequest from './fbs/request';
+import * as FbsDataProducer from './fbs/data-producer';
 
-export type DataProducerOptions =
-{
-	/**
-	 * DataProducer id (just for Router.pipeToRouter() method).
-	 */
-	id?: string;
-
-	/**
-	 * SCTP parameters defining how the endpoint is sending the data.
-	 * Just if messages are sent over SCTP.
-	 */
-	sctpStreamParameters?: SctpStreamParameters;
-
-	/**
-	 * A label which can be used to distinguish this DataChannel from others.
-	 */
-	label?: string;
-
-	/**
-	 * Name of the sub-protocol used by this DataChannel.
-	 */
-	protocol?: string;
-
-	/**
-	 * Custom application data.
-	 */
-	appData?: Record<string, unknown>;
-};
-
-export type DataProducerStat =
-{
-	type: string;
-	timestamp: number;
-	label: string;
-	protocol: string;
-	messagesReceived: number;
-	bytesReceived: number;
-};
-
-/**
- * DataProducer type.
- */
-export type DataProducerType = 'sctp' | 'direct';
-
-export type DataProducerEvents =
-{
-	transportclose: [];
-	// Private events.
-	'@close': [];
-};
-
-export type DataProducerObserverEvents =
-{
-	close: [];
-};
-
-type DataProducerInternal = TransportInternal &
-{
+type DataProducerInternal = TransportInternal & {
 	dataProducerId: string;
 };
 
-type DataProducerData =
-{
+type DataProducerData = {
 	type: DataProducerType;
 	sctpStreamParameters?: SctpStreamParameters;
 	label: string;
@@ -76,7 +32,9 @@ type DataProducerData =
 
 const logger = new Logger('DataProducer');
 
-export class DataProducer extends EnhancedEventEmitter<DataProducerEvents>
+export class DataProducerImpl<DataProducerAppData extends AppData = AppData>
+	extends EnhancedEventEmitter<DataProducerEvents>
+	implements DataProducer
 {
 	// Internal data.
 	readonly #internal: DataProducerInternal;
@@ -87,38 +45,32 @@ export class DataProducer extends EnhancedEventEmitter<DataProducerEvents>
 	// Channel instance.
 	readonly #channel: Channel;
 
-	// PayloadChannel instance.
-	readonly #payloadChannel: PayloadChannel;
-
 	// Closed flag.
 	#closed = false;
 
+	// Paused flag.
+	#paused = false;
+
 	// Custom app data.
-	readonly #appData: Record<string, unknown>;
+	#appData: DataProducerAppData;
 
 	// Observer instance.
-	readonly #observer = new EnhancedEventEmitter<DataProducerObserverEvents>();
+	readonly #observer: DataProducerObserver =
+		new EnhancedEventEmitter<DataProducerObserverEvents>();
 
-	/**
-	 * @private
-	 */
-	constructor(
-		{
-			internal,
-			data,
-			channel,
-			payloadChannel,
-			appData
-		}:
-		{
-			internal: DataProducerInternal;
-			data: DataProducerData;
-			channel: Channel;
-			payloadChannel: PayloadChannel;
-			appData?: Record<string, unknown>;
-		}
-	)
-	{
+	constructor({
+		internal,
+		data,
+		channel,
+		paused,
+		appData,
+	}: {
+		internal: DataProducerInternal;
+		data: DataProducerData;
+		channel: Channel;
+		paused: boolean;
+		appData?: DataProducerAppData;
+	}) {
 		super();
 
 		logger.debug('constructor()');
@@ -126,91 +78,57 @@ export class DataProducer extends EnhancedEventEmitter<DataProducerEvents>
 		this.#internal = internal;
 		this.#data = data;
 		this.#channel = channel;
-		this.#payloadChannel = payloadChannel;
-		this.#appData = appData || {};
+		this.#paused = paused;
+		this.#appData = appData ?? ({} as DataProducerAppData);
 
 		this.handleWorkerNotifications();
+		this.handleListenerError();
 	}
 
-	/**
-	 * DataProducer id.
-	 */
-	get id(): string
-	{
+	get id(): string {
 		return this.#internal.dataProducerId;
 	}
 
-	/**
-	 * Whether the DataProducer is closed.
-	 */
-	get closed(): boolean
-	{
+	get closed(): boolean {
 		return this.#closed;
 	}
 
-	/**
-	 * DataProducer type.
-	 */
-	get type(): DataProducerType
-	{
+	get type(): DataProducerType {
 		return this.#data.type;
 	}
 
-	/**
-	 * SCTP stream parameters.
-	 */
-	get sctpStreamParameters(): SctpStreamParameters | undefined
-	{
+	get sctpStreamParameters(): SctpStreamParameters | undefined {
 		return this.#data.sctpStreamParameters;
 	}
 
-	/**
-	 * DataChannel label.
-	 */
-	get label(): string
-	{
+	get label(): string {
 		return this.#data.label;
 	}
 
-	/**
-	 * DataChannel protocol.
-	 */
-	get protocol(): string
-	{
+	get protocol(): string {
 		return this.#data.protocol;
 	}
 
-	/**
-	 * App custom data.
-	 */
-	get appData(): Record<string, unknown>
-	{
+	get paused(): boolean {
+		return this.#paused;
+	}
+
+	get appData(): DataProducerAppData {
 		return this.#appData;
 	}
 
-	/**
-	 * Invalid setter.
-	 */
-	set appData(appData: Record<string, unknown>) // eslint-disable-line no-unused-vars
-	{
-		throw new Error('cannot override appData object');
+	set appData(appData: DataProducerAppData) {
+		this.#appData = appData;
 	}
 
-	/**
-	 * Observer.
-	 */
-	get observer(): EnhancedEventEmitter<DataProducerObserverEvents>
-	{
+	get observer(): DataProducerObserver {
 		return this.#observer;
 	}
 
-	/**
-	 * Close the DataProducer.
-	 */
-	close(): void
-	{
-		if (this.#closed)
+	close(): void {
+		if (this.#closed) {
 			return;
+		}
 
 		logger.debug('close()');
 
@@ -218,11 +136,19 @@ export class DataProducer extends EnhancedEventEmitter<DataProducerEvents>
 
 		// Remove notification subscriptions.
 		this.#channel.removeAllListeners(this.#internal.dataProducerId);
-		this.#payloadChannel.removeAllListeners(this.#internal.dataProducerId);
 
-		const reqData = { dataProducerId: this.#internal.dataProducerId };
+		/* Build Request. */
+		const requestOffset = new FbsTransport.CloseDataProducerRequestT(
+			this.#internal.dataProducerId
+		).pack(this.#channel.bufferBuilder);
 
-		this.#channel.request('transport.closeDataProducer', this.#internal.transportId, reqData)
+		this.#channel
+			.request(
+				FbsRequest.Method.TRANSPORT_CLOSE_DATAPRODUCER,
+				FbsRequest.Body.Transport_CloseDataProducerRequest,
+				requestOffset,
+				this.#internal.transportId
+			)
 			.catch(() => {});
 
 		this.emit('@close');
@@ -231,15 +157,10 @@ export class DataProducer extends EnhancedEventEmitter<DataProducerEvents>
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Transport was closed.
-	 *
-	 * @private
-	 */
-	transportClosed(): void
-	{
-		if (this.#closed)
+	transportClosed(): void {
+		if (this.#closed) {
 			return;
+		}
 
 		logger.debug('transportClosed()');
 
@@ -247,7 +168,6 @@ export class DataProducer extends EnhancedEventEmitter<DataProducerEvents>
 
 		// Remove notification subscriptions.
 		this.#channel.removeAllListeners(this.#internal.dataProducerId);
-		this.#payloadChannel.removeAllListeners(this.#internal.dataProducerId);
 
 		this.safeEmit('transportclose');
 
@@ -255,33 +175,89 @@ export class DataProducer extends EnhancedEventEmitter<DataProducerEvents>
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Dump DataProducer.
-	 */
-	async dump(): Promise<any>
-	{
+	async dump(): Promise<DataProducerDump> {
 		logger.debug('dump()');
 
-		return this.#channel.request('dataProducer.dump', this.#internal.dataProducerId);
+		const response = await this.#channel.request(
+			FbsRequest.Method.DATAPRODUCER_DUMP,
+			undefined,
+			undefined,
+			this.#internal.dataProducerId
+		);
+
+		/* Decode Response. */
+		const produceResponse = new FbsDataProducer.DumpResponse();
+
+		response.body(produceResponse);
+
+		return parseDataProducerDumpResponse(produceResponse);
 	}
 
-	/**
-	 * Get DataProducer stats.
-	 */
-	async getStats(): Promise<DataProducerStat[]>
-	{
+	async getStats(): Promise<DataProducerStat[]> {
 		logger.debug('getStats()');
 
-		return this.#channel.request('dataProducer.getStats', this.#internal.dataProducerId);
+		const response = await this.#channel.request(
+			FbsRequest.Method.DATAPRODUCER_GET_STATS,
+			undefined,
+			undefined,
+			this.#internal.dataProducerId
+		);
+
+		/* Decode Response. */
+		const data = new FbsDataProducer.GetStatsResponse();
+
+		response.body(data);
+
+		return [parseDataProducerStats(data)];
 	}
 
-	/**
-	 * Send data (just valid for DataProducers created on a DirectTransport).
-	 */
-	send(message: string | Buffer, ppid?: number): void
-	{
-		if (typeof message !== 'string' && !Buffer.isBuffer(message))
-		{
+	async pause(): Promise<void> {
+		logger.debug('pause()');
+
+		await this.#channel.request(
+			FbsRequest.Method.DATAPRODUCER_PAUSE,
+			undefined,
+			undefined,
+			this.#internal.dataProducerId
+		);
+
+		const wasPaused = this.#paused;
+
+		this.#paused = true;
+
+		// Emit observer event.
+		if (!wasPaused) {
+			this.#observer.safeEmit('pause');
+		}
+	}
+
+	async resume(): Promise<void> {
+		logger.debug('resume()');
+
+		await this.#channel.request(
+			FbsRequest.Method.DATAPRODUCER_RESUME,
+			undefined,
+			undefined,
+			this.#internal.dataProducerId
+		);
+
+		const wasPaused = this.#paused;
+
+		this.#paused = false;
+
+		// Emit observer event.
+		if (wasPaused) {
+			this.#observer.safeEmit('resume');
+		}
+	}
+
+	send(
+		message: string | Buffer,
+		ppid?: number,
+		subchannels?: number[],
+		requiredSubchannel?: number
+	): void {
+		if (typeof message !== 'string' && !Buffer.isBuffer(message)) {
 			throw new TypeError('message must be a string or a Buffer');
 		}
 
@@ -301,27 +277,131 @@ export class DataProducer extends EnhancedEventEmitter<DataProducerEvents>
 		 * +-------------------------------+----------+
 		 */
 
-		if (typeof ppid !== 'number')
-		{
-			ppid = (typeof message === 'string')
-				? message.length > 0 ? 51 : 56
-				: message.length > 0 ? 53 : 57;
+		if (typeof ppid !== 'number') {
+			ppid =
+				typeof message === 'string'
+					? message.length > 0
+						? 51
+						: 56
+					: message.length > 0
+						? 53
+						: 57;
 		}
 
 		// Ensure we honor PPIDs.
-		if (ppid === 56)
+		if (ppid === 56) {
 			message = ' ';
-		else if (ppid === 57)
+		} else if (ppid === 57) {
 			message = Buffer.alloc(1);
+		}
 
-		const notifData = String(ppid);
+		const builder = this.#channel.bufferBuilder;
 
-		this.#payloadChannel.notify(
-			'dataProducer.send', this.#internal.dataProducerId, notifData, message);
+		let dataOffset = 0;
+
+		const subchannelsOffset =
+			FbsDataProducer.SendNotification.createSubchannelsVector(
+				builder,
+				subchannels ?? []
+			);
+
+		if (typeof message === 'string') {
+			message = Buffer.from(message);
+		}
+
+		dataOffset = FbsDataProducer.SendNotification.createDataVector(
+			builder,
+			message
+		);
+
+		const notificationOffset =
+			FbsDataProducer.SendNotification.createSendNotification(
+				builder,
+				ppid,
+				dataOffset,
+				subchannelsOffset,
+				requiredSubchannel ?? null
+			);
+
+		this.#channel.notify(
+			FbsNotification.Event.DATAPRODUCER_SEND,
+			FbsNotification.Body.DataProducer_SendNotification,
+			notificationOffset,
+			this.#internal.dataProducerId
+		);
 	}
 
-	private handleWorkerNotifications(): void
-	{
+	private handleWorkerNotifications(): void {
 		// No need to subscribe to any event.
 	}
+
+	private handleListenerError(): void {
+		this.on('listenererror', (eventName, error) => {
+			logger.error(
+				`event listener threw an error [eventName:${eventName}]:`,
+				error
+			);
+		});
+	}
+}
+
+export function dataProducerTypeToFbs(
+	type: DataProducerType
+): FbsDataProducer.Type {
+	switch (type) {
+		case 'sctp': {
+			return FbsDataProducer.Type.SCTP;
+		}
+
+		case 'direct': {
+			return FbsDataProducer.Type.DIRECT;
+		}
+
+		default: {
+			throw new TypeError('invalid DataConsumerType: ${type}');
+		}
+	}
+}
+
+export function dataProducerTypeFromFbs(
+	type: FbsDataProducer.Type
+): DataProducerType {
+	switch (type) {
+		case FbsDataProducer.Type.SCTP: {
+			return 'sctp';
+		}
+
+		case FbsDataProducer.Type.DIRECT: {
+			return 'direct';
+		}
+	}
+}
+
+export function parseDataProducerDumpResponse(
+	data: FbsDataProducer.DumpResponse
+): DataProducerDump {
+	return {
+		id: data.id()!,
+		type: dataProducerTypeFromFbs(data.type()),
+		sctpStreamParameters:
+			data.sctpStreamParameters() !== null
+				? parseSctpStreamParameters(data.sctpStreamParameters()!)
+				: undefined,
+		label: data.label()!,
+		protocol: data.protocol()!,
+		paused: data.paused(),
+	};
+}
+
+function parseDataProducerStats(
+	binary: FbsDataProducer.GetStatsResponse
+): DataProducerStat {
+	return {
+		type: 'data-producer',
+		timestamp: Number(binary.timestamp()),
+		label: binary.label()!,
+		protocol: binary.protocol()!,
+		messagesReceived: Number(binary.messagesReceived()),
+		bytesReceived: Number(binary.bytesReceived()),
+	};
 }

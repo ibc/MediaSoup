@@ -3,6 +3,7 @@
 
 #include "common.hpp"
 #include "DepLibUV.hpp"
+#include "FBS/rtpStream.h"
 #include "RTC/RTCP/FeedbackPsFir.hpp"
 #include "RTC/RTCP/FeedbackPsPli.hpp"
 #include "RTC/RTCP/FeedbackRtpNack.hpp"
@@ -13,12 +14,10 @@
 #include "RTC/RTCP/XrDelaySinceLastRr.hpp"
 #include "RTC/RTCP/XrReceiverReferenceTime.hpp"
 #include "RTC/RtpDictionaries.hpp"
+#include "RTC/RtpPacket.hpp"
 #include "RTC/RtxStream.hpp"
-#include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
-
-using json = nlohmann::json;
 
 namespace RTC
 {
@@ -37,7 +36,8 @@ namespace RTC
 	public:
 		struct Params
 		{
-			void FillJson(json& jsonObject) const;
+			flatbuffers::Offset<FBS::RtpStream::Params> FillBuffer(
+			  flatbuffers::FlatBufferBuilder& builder) const;
 
 			size_t encodingIdx{ 0u };
 			uint32_t ssrc{ 0u };
@@ -61,8 +61,9 @@ namespace RTC
 		RtpStream(RTC::RtpStream::Listener* listener, RTC::RtpStream::Params& params, uint8_t initialScore);
 		virtual ~RtpStream();
 
-		void FillJson(json& jsonObject) const;
-		virtual void FillJsonStats(json& jsonObject);
+		flatbuffers::Offset<FBS::RtpStream::Dump> FillBuffer(flatbuffers::FlatBufferBuilder& builder) const;
+		virtual flatbuffers::Offset<FBS::RtpStream::Stats> FillBufferStats(
+		  flatbuffers::FlatBufferBuilder& builder);
 		uint32_t GetEncodingIdx() const
 		{
 			return this->params.encodingIdx;
@@ -174,18 +175,28 @@ namespace RTC
 	private:
 		void InitSeq(uint16_t seq);
 
+		/* Pure virtual method that must be implemented by the subclass. */
+	protected:
+		virtual void UserOnSequenceNumberReset() = 0;
+
 	protected:
 		// Given as argument.
 		RTC::RtpStream::Listener* listener{ nullptr };
 		Params params;
 		// Others.
 		//   https://tools.ietf.org/html/rfc3550#appendix-A.1 stuff.
-		uint16_t maxSeq{ 0u };      // Highest seq. number seen.
-		uint32_t cycles{ 0u };      // Shifted count of seq. number cycles.
-		uint32_t baseSeq{ 0u };     // Base seq number.
-		uint32_t badSeq{ 0u };      // Last 'bad' seq number + 1.
-		uint32_t maxPacketTs{ 0u }; // Highest timestamp seen.
-		uint64_t maxPacketMs{ 0u }; // When the packet with highest timestammp was seen.
+		// Highest seq. number seen.
+		uint16_t maxSeq{ 0u };
+		// Shifted count of seq. number cycles.
+		uint32_t cycles{ 0u };
+		// Base seq number.
+		uint32_t baseSeq{ 0u };
+		// Last 'bad' seq number + 1.
+		uint32_t badSeq{ 0u };
+		// Highest timestamp seen.
+		uint32_t maxPacketTs{ 0u };
+		// When the packet with highest timestammp was seen.
+		uint64_t maxPacketMs{ 0u };
 		uint32_t packetsLost{ 0u };
 		uint8_t fractionLost{ 0u };
 		size_t packetsDiscarded{ 0u };
@@ -195,14 +206,15 @@ namespace RTC
 		size_t nackPacketCount{ 0u };
 		size_t pliCount{ 0u };
 		size_t firCount{ 0u };
-		size_t repairedPriorScore{ 0u }; // Packets repaired at last interval for score calculation.
-		size_t retransmittedPriorScore{
-			0u
-		}; // Packets retransmitted at last interval for score calculation.
-		uint64_t lastSenderReportNtpMs{ 0u }; // NTP timestamp in last Sender Report (in ms).
-		uint32_t lastSenderReportTs{ 0u };    // RTP timestamp in last Sender Report.
-		float rtt{ 0 };
-		bool hasRtt{ false };
+		// Packets repaired at last interval for score calculation.
+		size_t repairedPriorScore{ 0u };
+		// Packets retransmitted at last interval for score calculation.
+		size_t retransmittedPriorScore{ 0u };
+		// NTP timestamp in last Sender Report (in ms).
+		uint64_t lastSenderReportNtpMs{ 0u };
+		// RTP timestamp in last Sender Report.
+		uint32_t lastSenderReportTs{ 0u };
+		float rtt{ 0.0f };
 		// Instance of RtxStream.
 		RTC::RtxStream* rtxStream{ nullptr };
 

@@ -3,7 +3,6 @@
 
 #include "RTC/RTCP/FeedbackPsFir.hpp"
 #include "Logger.hpp"
-#include <cstring>
 #include <cstring> // std::memset()
 
 namespace RTC
@@ -42,8 +41,8 @@ namespace RTC
 			MS_TRACE();
 
 			MS_DUMP("<FeedbackPsFirItem>");
-			MS_DUMP("  ssrc            : %" PRIu32, this->GetSsrc());
-			MS_DUMP("  sequence number : %" PRIu8, this->GetSequenceNumber());
+			MS_DUMP("  ssrc: %" PRIu32, this->GetSsrc());
+			MS_DUMP("  sequence number: %" PRIu8, this->GetSequenceNumber());
 			MS_DUMP("</FeedbackPsFirItem>");
 		}
 	} // namespace RTCP

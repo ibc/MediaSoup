@@ -16,7 +16,6 @@ If you got a crash in mediasoup, please try to provide a core dump into the issu
 
 https://mediasoup.org/support/#crashes-in-mediasoup-get-a-core-dump
 
-
 ### Your environment
 
 - Operating system:
@@ -25,6 +24,5 @@ https://mediasoup.org/support/#crashes-in-mediasoup-get-a-core-dump
 - gcc/clang version:
 - mediasoup version:
 - mediasoup-client version:
-
 
 ### Issue description

@@ -6,9 +6,9 @@
 
 /* Class variables. */
 
-const uint64_t Logger::pid{ static_cast<uint64_t>(uv_os_getpid()) };
+const uint64_t Logger::Pid{ static_cast<uint64_t>(uv_os_getpid()) };
 thread_local Channel::ChannelSocket* Logger::channel{ nullptr };
-thread_local char Logger::buffer[Logger::bufferSize];
+thread_local char Logger::buffer[Logger::BufferSize];
 
 /* Class methods. */
 

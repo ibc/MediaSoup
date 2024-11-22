@@ -1,6 +1,12 @@
 name: mediasoup-rust
 
-on: [push, pull_request]
+on: [pull_request, workflow_dispatch]
+
+concurrency:
+  # Cancel a currently running workflow from the same PR, branch or tag when a
+  # new workflow is triggered.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -9,42 +15,47 @@ jobs:
   ci:
     strategy:
       matrix:
-        os:
-          - ubuntu-20.04
-          - ubuntu-22.04
-          - macos-12
-          - windows-2022
+        build:
+          - os: ubuntu-20.04
+          - os: ubuntu-22.04
+          - os: ubuntu-24.04
+          - os: macos-13
+          - os: macos-14
+          - os: macos-15
+          - os: windows-2022
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.build.os }}
+
+    env:
+      KEEP_BUILD_ARTIFACTS: '1'
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Configure cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ matrix.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+          key: ${{ matrix.build.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
 
       - name: cargo fmt
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+        run: cargo fmt --all -- --check
 
       - name: cargo clippy
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --all-targets -- -D warnings
+        run: cargo clippy --all-targets -- -D warnings
 
+      # NOTE: In Windows this will build and test libmediasoupworker in release
+      # mode twice since build.rs doesn't allow debug mode on Windows.
       - name: cargo test
-        uses: actions-rs/cargo@v1
+        run: |
+          cargo test --verbose
+          cargo test --release --verbose
+
+      - name: cargo doc
+        run: cargo doc --locked --all --no-deps --lib
         env:
-          KEEP_BUILD_ARTIFACTS: '1'
-        with:
-          command: test
-          args: --verbose
+          DOCS_RS: '1'
+          RUSTDOCFLAGS: '-D rustdoc::broken-intra-doc-links -D rustdoc::private_intra_doc_links'

@@ -1,0 +1,254 @@
+include "common.fbs";
+include "consumer.fbs";
+include "dataProducer.fbs";
+include "rtpParameters.fbs";
+include "sctpAssociation.fbs";
+include "sctpParameters.fbs";
+include "srtpParameters.fbs";
+
+namespace FBS.Transport;
+
+enum Protocol: uint8 {
+    UDP = 1,
+    TCP
+}
+
+table PortRange {
+    min: uint16 = 0;
+    max: uint16 = 0;
+}
+
+table SocketFlags {
+    ipv6_only: bool = false;
+    udp_reuse_port: bool = false;
+}
+
+table ListenInfo {
+    protocol: Protocol = UDP;
+    ip: string (required);
+    announced_address: string;
+    port: uint16 = 0;
+    port_range: PortRange (required);
+    flags: SocketFlags (required);
+    send_buffer_size: uint32 = 0;
+    recv_buffer_size: uint32 = 0;
+}
+
+table RestartIceResponse {
+    username_fragment: string (required);
+    password: string (required);
+    ice_lite: bool;
+}
+
+table ProduceRequest {
+    producer_id: string (required);
+    kind: FBS.RtpParameters.MediaKind;
+    rtp_parameters: FBS.RtpParameters.RtpParameters (required);
+    rtp_mapping: FBS.RtpParameters.RtpMapping (required);
+    key_frame_request_delay: uint32;
+    paused: bool = false;
+}
+
+table ProduceResponse {
+    type: FBS.RtpParameters.Type;
+}
+
+table ConsumeRequest {
+    consumer_id: string (required);
+    producer_id: string (required);
+    kind: FBS.RtpParameters.MediaKind;
+    rtp_parameters: FBS.RtpParameters.RtpParameters (required);
+    type: FBS.RtpParameters.Type;
+    consumable_rtp_encodings: [FBS.RtpParameters.RtpEncodingParameters] (required);
+    paused: bool = false;
+    preferred_layers: FBS.Consumer.ConsumerLayers;
+    ignore_dtx: bool = false;
+}
+
+table ConsumeResponse {
+    paused: bool;
+    producer_paused: bool;
+    score: FBS.Consumer.ConsumerScore (required);
+    preferred_layers: FBS.Consumer.ConsumerLayers;
+}
+
+table ProduceDataRequest {
+    data_producer_id: string (required);
+    type: FBS.DataProducer.Type;
+    sctp_stream_parameters: FBS.SctpParameters.SctpStreamParameters;
+    label: string;
+    protocol: string;
+    paused: bool = false;
+}
+
+table ConsumeDataRequest {
+    data_consumer_id: string (required);
+    data_producer_id: string (required);
+    type: FBS.DataProducer.Type;
+    sctp_stream_parameters: FBS.SctpParameters.SctpStreamParameters;
+    label: string;
+    protocol: string;
+    paused: bool = false;
+    subchannels: [uint16];
+}
+
+table Tuple {
+    local_address: string (required);
+    local_port: uint16;
+    remote_ip: string;
+    remote_port: uint16;
+    protocol: Protocol = UDP;
+}
+
+table RtpListener {
+    ssrc_table: [FBS.Common.Uint32String] (required);
+    mid_table: [FBS.Common.StringString] (required);
+    rid_table: [FBS.Common.StringString] (required);
+}
+
+table SctpListener {
+    stream_id_table: [FBS.Common.Uint16String] (required);
+}
+
+table RecvRtpHeaderExtensions {
+    mid: uint8 = null;
+    rid: uint8 = null;
+    rrid: uint8 = null;
+    abs_send_time: uint8 = null;
+    transport_wide_cc01: uint8 = null;
+}
+
+table Options {
+    direct: bool = false;
+
+    /// Only needed for DirectTransport. This value is handled by base Transport.
+    max_message_size: uint32 = null;
+    initial_available_outgoing_bitrate: uint32 = null;
+    enable_sctp: bool = false;
+    num_sctp_streams: FBS.SctpParameters.NumSctpStreams;
+    max_sctp_message_size: uint32;
+    sctp_send_buffer_size: uint32;
+    is_data_channel: bool = false;
+}
+
+enum TraceEventType: uint8 {
+    PROBATION = 0,
+    BWE
+}
+
+table Dump {
+    id: string (required);
+    direct: bool = false;
+    producer_ids: [string] (required);
+    consumer_ids: [string] (required);
+    map_ssrc_consumer_id: [FBS.Common.Uint32String] (required);
+    map_rtx_ssrc_consumer_id: [FBS.Common.Uint32String] (required);
+    data_producer_ids: [string] (required);
+    data_consumer_ids: [string] (required);
+    recv_rtp_header_extensions: RecvRtpHeaderExtensions (required);
+    rtp_listener: RtpListener (required);
+    max_message_size: uint32;
+    sctp_parameters: FBS.SctpParameters.SctpParameters;
+    sctp_state: FBS.SctpAssociation.SctpState = null;
+    sctp_listener: SctpListener;
+    trace_event_types: [TraceEventType] (required);
+}
+
+table Stats {
+    transport_id: string (required);
+    timestamp: uint64;
+    sctp_state: FBS.SctpAssociation.SctpState = null;
+    bytes_received: uint64;
+    recv_bitrate: uint32;
+    bytes_sent: uint64;
+    send_bitrate: uint32;
+    rtp_bytes_received: uint64;
+    rtp_recv_bitrate: uint32;
+    rtp_bytes_sent: uint64;
+    rtp_send_bitrate: uint32;
+    rtx_bytes_received: uint64;
+    rtx_recv_bitrate: uint32;
+    rtx_bytes_sent: uint64;
+    rtx_send_bitrate: uint32;
+    probation_bytes_sent: uint64;
+    probation_send_bitrate: uint32;
+    available_outgoing_bitrate: uint32 = null;
+    available_incoming_bitrate: uint32 = null;
+    max_incoming_bitrate: uint32 = null;
+    max_outgoing_bitrate: uint32 = null;
+    min_outgoing_bitrate: uint32 = null;
+    rtp_packet_loss_received: float64 = null;
+    rtp_packet_loss_sent: float64 = null;
+}
+
+table SetMaxIncomingBitrateRequest {
+    max_incoming_bitrate: uint32;
+}
+
+table SetMaxOutgoingBitrateRequest {
+    max_outgoing_bitrate: uint32;
+}
+
+table SetMinOutgoingBitrateRequest {
+    min_outgoing_bitrate: uint32;
+}
+
+table EnableTraceEventRequest {
+    events: [TraceEventType] (required);
+}
+
+table CloseProducerRequest {
+    producer_id: string (required);
+}
+
+table CloseConsumerRequest {
+    consumer_id: string (required);
+}
+
+table CloseDataProducerRequest {
+    data_producer_id: string (required);
+}
+
+table CloseDataConsumerRequest {
+    data_consumer_id: string (required);
+}
+
+// Notifications to Worker.
+
+table SendRtcpNotification {
+    data: [uint8] (required);
+}
+
+// Notifications from Worker.
+
+table SctpStateChangeNotification {
+    sctp_state: FBS.SctpAssociation.SctpState;
+}
+
+union TraceInfo {
+    BweTraceInfo,
+}
+
+enum BweType: uint8 {
+    TRANSPORT_CC = 0,
+    REMB
+}
+
+table BweTraceInfo {
+    bwe_type: BweType;
+    desired_bitrate: uint32;
+    effective_desired_bitrate: uint32;
+    min_bitrate: uint32;
+    max_bitrate: uint32;
+    start_bitrate: uint32;
+    max_padding_bitrate: uint32;
+    available_bitrate: uint32;
+}
+
+table TraceNotification {
+    type: TraceEventType;
+    timestamp: uint64;
+    direction: FBS.Common.TraceDirection;
+    info: TraceInfo;
+}
+

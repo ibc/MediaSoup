@@ -19,7 +19,7 @@ async fn create_data_producer_consumer_pair(
         .produce_data(DataProducerOptions::new_direct())
         .await?;
     let data_consumer = direct_transport
-        .consume_data(DataConsumerOptions::new_direct(data_producer.id()))
+        .consume_data(DataConsumerOptions::new_direct(data_producer.id(), None))
         .await?;
 
     Ok((data_producer, data_consumer))
@@ -51,7 +51,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                     let _ = sender.send(());
                 });
 
-                let _ = direct_data_producer.send(WebRtcMessage::Binary(Cow::from(data)));
+                let _ =
+                    direct_data_producer.send(WebRtcMessage::Binary(Cow::from(data)), None, None);
 
                 let _ = receiver.recv();
             })

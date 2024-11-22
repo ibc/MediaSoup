@@ -4,7 +4,7 @@
 #include "RTC/RTCP/ReceiverReport.hpp"
 #include "Logger.hpp"
 #include "Utils.hpp"
-#include <cstring>
+#include <cstring> // std::memcpy
 
 namespace RTC
 {
@@ -37,13 +37,13 @@ namespace RTC
 			MS_TRACE();
 
 			MS_DUMP("<ReceiverReport>");
-			MS_DUMP("  ssrc          : %" PRIu32, GetSsrc());
-			MS_DUMP("  fraction lost : %" PRIu8, GetFractionLost());
-			MS_DUMP("  total lost    : %" PRIu32, GetTotalLost());
-			MS_DUMP("  last seq      : %" PRIu32, GetLastSeq());
-			MS_DUMP("  jitter        : %" PRIu32, GetJitter());
-			MS_DUMP("  lsr           : %" PRIu32, GetLastSenderReport());
-			MS_DUMP("  dlsr          : %" PRIu32, GetDelaySinceLastSenderReport());
+			MS_DUMP("  ssrc: %" PRIu32, GetSsrc());
+			MS_DUMP("  fraction lost: %" PRIu8, GetFractionLost());
+			MS_DUMP("  total lost: %" PRIu32, GetTotalLost());
+			MS_DUMP("  last seq: %" PRIu32, GetLastSeq());
+			MS_DUMP("  jitter: %" PRIu32, GetJitter());
+			MS_DUMP("  lsr: %" PRIu32, GetLastSenderReport());
+			MS_DUMP("  dlsr: %" PRIu32, GetDelaySinceLastSenderReport());
 			MS_DUMP("</ReceiverReport>");
 		}
 
@@ -86,13 +86,15 @@ namespace RTC
 
 			std::unique_ptr<ReceiverReportPacket> packet(new ReceiverReportPacket(header));
 
-			uint32_t ssrc =
+			const uint32_t ssrc =
 			  Utils::Byte::Get4Bytes(reinterpret_cast<uint8_t*>(header), Packet::CommonHeaderSize);
 
 			packet->SetSsrc(ssrc);
 
 			if (offset == 0)
+			{
 				offset = Packet::CommonHeaderSize + 4u /* ssrc */;
+			}
 
 			uint8_t count = header->count;
 

@@ -10,8 +10,7 @@ void Fuzzer::RTC::RTCP::FeedbackRtpTmmbn::Fuzz(::RTC::RTCP::FeedbackRtpTmmbnPack
 	// TODO.
 	// AddItem(Item* item);
 
-	auto it = packet->Begin();
-	for (; it != packet->End(); ++it)
+	for (auto it = packet->Begin(); it != packet->End(); ++it)
 	{
 		auto& item = (*it);
 
@@ -37,8 +36,7 @@ void Fuzzer::RTC::RTCP::FeedbackRtpTmmbr::Fuzz(::RTC::RTCP::FeedbackRtpTmmbrPack
 	// TODO.
 	// AddItem(Item* item);
 
-	auto it = packet->Begin();
-	for (; it != packet->End(); ++it)
+	for (auto it = packet->Begin(); it != packet->End(); ++it)
 	{
 		auto& item = (*it);
 

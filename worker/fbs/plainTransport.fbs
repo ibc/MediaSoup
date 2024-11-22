@@ -1,0 +1,56 @@
+include "transport.fbs";
+include "sctpParameters.fbs";
+include "srtpParameters.fbs";
+
+namespace FBS.PlainTransport;
+
+table PlainTransportOptions {
+    base: FBS.Transport.Options (required);
+    listen_info: FBS.Transport.ListenInfo (required);
+    rtcp_listen_info: FBS.Transport.ListenInfo;
+    rtcp_mux: bool;
+    comedia: bool;
+    enable_srtp: bool;
+    srtp_crypto_suite: FBS.SrtpParameters.SrtpCryptoSuite = null;
+}
+
+table ConnectRequest {
+    ip: string;
+    port: uint16 = null;
+    rtcp_port: uint16 = null;
+    srtp_parameters: FBS.SrtpParameters.SrtpParameters;
+}
+
+table ConnectResponse {
+    tuple: FBS.Transport.Tuple (required);
+    rtcp_tuple: FBS.Transport.Tuple;
+    srtp_parameters: FBS.SrtpParameters.SrtpParameters;
+}
+
+table DumpResponse {
+    base: FBS.Transport.Dump (required);
+    rtcp_mux: bool;
+    comedia: bool;
+    tuple: FBS.Transport.Tuple (required);
+    rtcp_tuple: FBS.Transport.Tuple;
+    srtp_parameters: FBS.SrtpParameters.SrtpParameters;
+}
+
+table GetStatsResponse {
+    base: FBS.Transport.Stats (required);
+    rtcp_mux: bool;
+    comedia: bool;
+    tuple: FBS.Transport.Tuple (required);
+    rtcp_tuple: FBS.Transport.Tuple;
+}
+
+// Notifications from Worker.
+
+table TupleNotification {
+    tuple: FBS.Transport.Tuple (required);
+}
+
+table RtcpTupleNotification {
+    tuple: FBS.Transport.Tuple (required);
+}
+

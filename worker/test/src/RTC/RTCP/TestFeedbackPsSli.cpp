@@ -1,6 +1,6 @@
 #include "common.hpp"
 #include "RTC/RTCP/FeedbackPsSli.hpp"
-#include <catch2/catch.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include <cstring> // std::memcmp()
 
 using namespace RTC::RTCP;
@@ -46,11 +46,11 @@ SCENARIO("RTCP Feedback PS SLI parsing", "[parser][rtcp][feedback-ps][sli]")
 
 	SECTION("parse FeedbackPsSliPacket")
 	{
-		FeedbackPsSliPacket* packet = FeedbackPsSliPacket::Parse(buffer, sizeof(buffer));
+		std::unique_ptr<FeedbackPsSliPacket> packet{ FeedbackPsSliPacket::Parse(buffer, sizeof(buffer)) };
 
 		REQUIRE(packet);
 
-		verify(packet);
+		verify(packet.get());
 
 		SECTION("serialize packet instance")
 		{
@@ -63,7 +63,5 @@ SCENARIO("RTCP Feedback PS SLI parsing", "[parser][rtcp][feedback-ps][sli]")
 				REQUIRE(std::memcmp(buffer, serialized, sizeof(buffer)) == 0);
 			}
 		}
-
-		delete packet;
 	}
 }

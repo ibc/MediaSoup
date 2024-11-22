@@ -1,0 +1,60 @@
+include "common.fbs";
+include "activeSpeakerObserver.fbs";
+include "audioLevelObserver.fbs";
+include "transport.fbs";
+include "pipeTransport.fbs";
+include "plainTransport.fbs";
+include "webRtcTransport.fbs";
+include "directTransport.fbs";
+
+namespace FBS.Router;
+
+table DumpResponse {
+    id: string (required);
+    transport_ids: [string] (required);
+    rtp_observer_ids: [string] (required);
+    map_producer_id_consumer_ids: [FBS.Common.StringStringArray] (required);
+    map_consumer_id_producer_id: [FBS.Common.StringString] (required);
+    map_producer_id_observer_ids: [FBS.Common.StringStringArray] (required);
+    map_data_producer_id_data_consumer_ids: [FBS.Common.StringStringArray] (required);
+    map_data_consumer_id_data_producer_id: [FBS.Common.StringString] (required);
+}
+
+table CreatePipeTransportRequest {
+    transport_id: string (required);
+    options: FBS.PipeTransport.PipeTransportOptions (required);
+}
+
+table CreatePlainTransportRequest {
+    transport_id: string (required);
+    options: FBS.PlainTransport.PlainTransportOptions (required);
+}
+
+table CreateWebRtcTransportRequest {
+    transport_id: string (required);
+    options: FBS.WebRtcTransport.WebRtcTransportOptions (required);
+}
+
+table CreateDirectTransportRequest {
+    transport_id: string (required);
+    options: FBS.DirectTransport.DirectTransportOptions (required);
+}
+
+table CreateAudioLevelObserverRequest {
+    rtp_observer_id: string (required);
+    options: FBS.AudioLevelObserver.AudioLevelObserverOptions (required);
+}
+
+table CreateActiveSpeakerObserverRequest {
+    rtp_observer_id: string (required);
+    options: FBS.ActiveSpeakerObserver.ActiveSpeakerObserverOptions (required);
+}
+
+table CloseTransportRequest {
+    transport_id: string (required);
+}
+
+table CloseRtpObserverRequest {
+    rtp_observer_id: string (required);
+}
+

@@ -1,0 +1,10 @@
+namespace FBS.SctpAssociation;
+
+enum SctpState: uint8 {
+    NEW = 0,
+    CONNECTING,
+    CONNECTED,
+    FAILED,
+    CLOSED,
+}
+

@@ -27,7 +27,6 @@ void Fuzzer::RTC::RtpStreamSend::Fuzz(const uint8_t* data, size_t len)
 
 	// Create base RtpPacket instance.
 	auto* packet = ::RTC::RtpPacket::Parse(buffer, 12);
-	size_t offset{ 0u };
 
 	// Create a RtpStreamSend instance.
 	TestRtpStreamListener testRtpStreamListener;
@@ -44,6 +43,7 @@ void Fuzzer::RTC::RtpStreamSend::Fuzz(const uint8_t* data, size_t len)
 
 	std::string mid;
 	auto* stream = new ::RTC::RtpStreamSend(&testRtpStreamListener, params, mid);
+	size_t offset{ 0u };
 
 	while (len >= 4u)
 	{

@@ -28,55 +28,62 @@ namespace RTC
 		MS_TRACE();
 
 		delete this->rtxStream;
+		this->rtxStream = nullptr;
 	}
 
-	void RtpStream::FillJson(json& jsonObject) const
+	flatbuffers::Offset<FBS::RtpStream::Dump> RtpStream::FillBuffer(
+	  flatbuffers::FlatBufferBuilder& builder) const
 	{
 		MS_TRACE();
 
 		// Add params.
-		this->params.FillJson(jsonObject["params"]);
-
-		// Add score.
-		jsonObject["score"] = this->score;
+		auto params = this->params.FillBuffer(builder);
 
 		// Add rtxStream.
+		flatbuffers::Offset<FBS::RtxStream::RtxDump> rtxStream;
+
 		if (HasRtx())
-			this->rtxStream->FillJson(jsonObject["rtxStream"]);
+		{
+			rtxStream = this->rtxStream->FillBuffer(builder);
+		}
+
+		return FBS::RtpStream::CreateDump(builder, params, this->score, rtxStream);
 	}
 
-	void RtpStream::FillJsonStats(json& jsonObject)
+	flatbuffers::Offset<FBS::RtpStream::Stats> RtpStream::FillBufferStats(
+	  flatbuffers::FlatBufferBuilder& builder)
 	{
 		MS_TRACE();
 
 		const uint64_t nowMs = DepLibUV::GetTimeMs();
+		const auto mediaKind = this->params.mimeType.type == RTC::RtpCodecMimeType::Type::AUDIO
+		                         ? FBS::RtpParameters::MediaKind::AUDIO
+		                         : FBS::RtpParameters::MediaKind::VIDEO;
 
-		jsonObject["timestamp"]            = nowMs;
-		jsonObject["ssrc"]                 = this->params.ssrc;
-		jsonObject["kind"]                 = RtpCodecMimeType::type2String[this->params.mimeType.type];
-		jsonObject["mimeType"]             = this->params.mimeType.ToString();
-		jsonObject["packetsLost"]          = this->packetsLost;
-		jsonObject["fractionLost"]         = this->fractionLost;
-		jsonObject["packetsDiscarded"]     = this->packetsDiscarded;
-		jsonObject["packetsRetransmitted"] = this->packetsRetransmitted;
-		jsonObject["packetsRepaired"]      = this->packetsRepaired;
-		jsonObject["nackCount"]            = this->nackCount;
-		jsonObject["nackPacketCount"]      = this->nackPacketCount;
-		jsonObject["pliCount"]             = this->pliCount;
-		jsonObject["firCount"]             = this->firCount;
-		jsonObject["score"]                = this->score;
+		auto baseStats = FBS::RtpStream::CreateBaseStatsDirect(
+		  builder,
+		  nowMs,
+		  this->params.ssrc,
+		  mediaKind,
+		  this->params.mimeType.ToString().c_str(),
+		  this->packetsLost,
+		  this->fractionLost,
+		  this->packetsDiscarded,
+		  this->packetsRetransmitted,
+		  this->packetsRepaired,
+		  this->nackCount,
+		  this->nackPacketCount,
+		  this->pliCount,
+		  this->firCount,
+		  this->score,
+		  !this->params.rid.empty() ? this->params.rid.c_str() : nullptr,
+		  this->params.rtxSsrc ? flatbuffers::Optional<uint32_t>(this->params.rtxSsrc)
+		                       : flatbuffers::nullopt,
+		  this->rtxStream ? this->rtxStream->GetPacketsDiscarded() : 0,
+		  this->rtt > 0.0f ? this->rtt : 0);
 
-		if (!this->params.rid.empty())
-			jsonObject["rid"] = this->params.rid;
-
-		if (this->params.rtxSsrc)
-			jsonObject["rtxSsrc"] = this->params.rtxSsrc;
-
-		if (this->rtxStream)
-			jsonObject["rtxPacketsDiscarded"] = this->rtxStream->GetPacketsDiscarded();
-
-		if (this->hasRtt)
-			jsonObject["roundTripTime"] = this->rtt;
+		return FBS::RtpStream::CreateStats(
+		  builder, FBS::RtpStream::StatsData::BaseStats, baseStats.Union());
 	}
 
 	void RtpStream::SetRtx(uint8_t payloadType, uint32_t ssrc)
@@ -162,11 +169,15 @@ namespace RTC
 
 			// If previous score was 0 (and new one is not 0) then update activeSinceMs.
 			if (previousScore == 0u)
+			{
 				this->activeSinceMs = DepLibUV::GetTimeMs();
+			}
 
 			// Notify the listener.
 			if (notify)
+			{
 				this->listener->OnRtpStreamScore(this, score, previousScore);
+			}
 		}
 	}
 
@@ -193,7 +204,7 @@ namespace RTC
 			this->maxSeq = seq;
 		}
 		// Too old packet received (older than the allowed misorder).
-		// Or to new packet (more than acceptable dropout).
+		// Or too new packet (more than acceptable dropout).
 		else if (udelta <= RtpSeqMod - MaxMisorder)
 		{
 			// The sequence number made a very large jump. If two sequential packets
@@ -212,6 +223,9 @@ namespace RTC
 
 				this->maxPacketTs = packet->GetTimestamp();
 				this->maxPacketMs = DepLibUV::GetTimeMs();
+
+				// Notify the subclass about it.
+				UserOnSequenceNumberReset();
 			}
 			else
 			{
@@ -244,7 +258,9 @@ namespace RTC
 
 		// Add the score into the histogram.
 		if (this->scores.size() == ScoreHistogramLength)
+		{
 			this->scores.erase(this->scores.begin());
+		}
 
 		auto previousScore = this->score;
 
@@ -292,7 +308,9 @@ namespace RTC
 
 			// If previous score was 0 (and new one is not 0) then update activeSinceMs.
 			if (previousScore == 0u)
+			{
 				this->activeSinceMs = DepLibUV::GetTimeMs();
+			}
 
 			this->listener->OnRtpStreamScore(this, this->score, previousScore);
 		}
@@ -334,33 +352,28 @@ namespace RTC
 		this->badSeq  = RtpSeqMod + 1; // So seq == badSeq is false.
 	}
 
-	void RtpStream::Params::FillJson(json& jsonObject) const
+	flatbuffers::Offset<FBS::RtpStream::Params> RtpStream::Params::FillBuffer(
+	  flatbuffers::FlatBufferBuilder& builder) const
 	{
 		MS_TRACE();
 
-		jsonObject["encodingIdx"] = this->encodingIdx;
-		jsonObject["ssrc"]        = this->ssrc;
-		jsonObject["payloadType"] = this->payloadType;
-		jsonObject["mimeType"]    = this->mimeType.ToString();
-		jsonObject["clockRate"]   = this->clockRate;
-
-		if (!this->rid.empty())
-			jsonObject["rid"] = this->rid;
-
-		jsonObject["cname"] = this->cname;
-
-		if (this->rtxSsrc != 0)
-		{
-			jsonObject["rtxSsrc"]        = this->rtxSsrc;
-			jsonObject["rtxPayloadType"] = this->rtxPayloadType;
-		}
-
-		jsonObject["useNack"]        = this->useNack;
-		jsonObject["usePli"]         = this->usePli;
-		jsonObject["useFir"]         = this->useFir;
-		jsonObject["useInBandFec"]   = this->useInBandFec;
-		jsonObject["useDtx"]         = this->useDtx;
-		jsonObject["spatialLayers"]  = this->spatialLayers;
-		jsonObject["temporalLayers"] = this->temporalLayers;
+		return FBS::RtpStream::CreateParamsDirect(
+		  builder,
+		  this->encodingIdx,
+		  this->ssrc,
+		  this->payloadType,
+		  this->mimeType.ToString().c_str(),
+		  this->clockRate,
+		  this->rid.c_str(),
+		  this->cname.c_str(),
+		  this->rtxSsrc != 0 ? flatbuffers::Optional<uint32_t>(this->rtxSsrc) : flatbuffers::nullopt,
+		  this->rtxSsrc != 0 ? flatbuffers::Optional<uint8_t>(this->rtxPayloadType) : flatbuffers::nullopt,
+		  this->useNack,
+		  this->usePli,
+		  this->useFir,
+		  this->useInBandFec,
+		  this->useDtx,
+		  this->spatialLayers,
+		  this->temporalLayers);
 	}
 } // namespace RTC

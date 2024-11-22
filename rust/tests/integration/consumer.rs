@@ -2,10 +2,8 @@ use async_executor::Executor;
 use async_io::Timer;
 use futures_lite::future;
 use hash_hasher::{HashedMap, HashedSet};
-use mediasoup::consumer::{
-    ConsumableRtpEncoding, ConsumerLayers, ConsumerOptions, ConsumerScore, ConsumerType,
-};
-use mediasoup::data_structures::{AppData, ListenIp};
+use mediasoup::consumer::{ConsumerLayers, ConsumerOptions, ConsumerScore, ConsumerType};
+use mediasoup::data_structures::{AppData, ListenInfo, Protocol};
 use mediasoup::prelude::*;
 use mediasoup::producer::ProducerOptions;
 use mediasoup::router::{Router, RouterOptions};
@@ -18,7 +16,9 @@ use mediasoup::rtp_parameters::{
 };
 use mediasoup::scalability_modes::ScalabilityMode;
 use mediasoup::transport::ConsumeError;
-use mediasoup::webrtc_transport::{TransportListenIps, WebRtcTransport, WebRtcTransportOptions};
+use mediasoup::webrtc_transport::{
+    WebRtcTransport, WebRtcTransportListenInfos, WebRtcTransportOptions,
+};
 use mediasoup::worker::{Worker, WorkerSettings};
 use mediasoup::worker_manager::WorkerManager;
 use parking_lot::Mutex;
@@ -159,21 +159,25 @@ fn video_producer_options() -> ProducerOptions {
             encodings: vec![
                 RtpEncodingParameters {
                     ssrc: Some(22222222),
+                    scalability_mode: "L1T5".parse().unwrap(),
                     rtx: Some(RtpEncodingParametersRtx { ssrc: 22222223 }),
                     ..RtpEncodingParameters::default()
                 },
                 RtpEncodingParameters {
                     ssrc: Some(22222224),
+                    scalability_mode: "L1T5".parse().unwrap(),
                     rtx: Some(RtpEncodingParametersRtx { ssrc: 22222225 }),
                     ..RtpEncodingParameters::default()
                 },
                 RtpEncodingParameters {
                     ssrc: Some(22222226),
+                    scalability_mode: "L1T5".parse().unwrap(),
                     rtx: Some(RtpEncodingParametersRtx { ssrc: 22222227 }),
                     ..RtpEncodingParameters::default()
                 },
                 RtpEncodingParameters {
                     ssrc: Some(22222228),
+                    scalability_mode: "L1T5".parse().unwrap(),
                     rtx: Some(RtpEncodingParametersRtx { ssrc: 22222229 }),
                     ..RtpEncodingParameters::default()
                 },
@@ -199,7 +203,7 @@ fn consumer_device_capabilities() -> RtpCapabilities {
                 clock_rate: NonZeroU32::new(48000).unwrap(),
                 channels: NonZeroU8::new(2).unwrap(),
                 parameters: RtpCodecParametersParameters::default(),
-                rtcp_feedback: vec![],
+                rtcp_feedback: vec![RtcpFeedback::Nack],
             },
             RtpCodecCapability::Video {
                 mime_type: MimeTypeVideo::H264,
@@ -287,7 +291,16 @@ fn consumer_device_capabilities() -> RtpCapabilities {
 }
 
 // Keeps executor threads running until dropped
-struct ExecutorGuard(Vec<async_oneshot::Sender<()>>);
+struct ExecutorGuard {
+    // Silence clippy warnings
+    _senders: Vec<async_oneshot::Sender<()>>,
+}
+
+impl ExecutorGuard {
+    fn new(_senders: Vec<async_oneshot::Sender<()>>) -> Self {
+        Self { _senders }
+    }
+}
 
 fn create_executor() -> (ExecutorGuard, Arc<Executor<'static>>) {
     let executor = Arc::new(Executor::new());
@@ -314,7 +327,7 @@ fn create_executor() -> (ExecutorGuard, Arc<Executor<'static>>) {
         })
         .collect();
 
-    (ExecutorGuard(senders), executor)
+    (ExecutorGuard::new(senders), executor)
 }
 
 async fn init() -> (
@@ -346,10 +359,17 @@ async fn init() -> (
         .await
         .expect("Failed to create router");
 
-    let transport_options = WebRtcTransportOptions::new(TransportListenIps::new(ListenIp {
-        ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-        announced_ip: None,
-    }));
+    let transport_options =
+        WebRtcTransportOptions::new(WebRtcTransportListenInfos::new(ListenInfo {
+            protocol: Protocol::Udp,
+            ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
+            announced_address: None,
+            port: None,
+            port_range: None,
+            flags: None,
+            send_buffer_size: None,
+            recv_buffer_size: None,
+        }));
 
     let transport_1 = router
         .create_webrtc_transport(transport_options.clone())
@@ -493,7 +513,7 @@ fn consume_succeeds() {
                     options.paused = true;
                     options.preferred_layers = Some(ConsumerLayers {
                         spatial_layer: 12,
-                        temporal_layer: None,
+                        temporal_layer: Some(0),
                     });
                     options.app_data = AppData::new(ConsumerAppData { baz: "LOL" });
                     options
@@ -695,6 +715,49 @@ fn consume_succeeds() {
                 assert_eq!(transport_2_dump.consumer_ids, expected_consumer_ids);
             }
         }
+    });
+}
+
+#[test]
+fn consume_with_enable_rtx_succeeds() {
+    future::block_on(async move {
+        let (_executor_guard, _worker, _router, transport_1, transport_2) = init().await;
+
+        let audio_producer = transport_1
+            .produce(audio_producer_options())
+            .await
+            .expect("Failed to produce audio");
+
+        let consumer_device_capabilities = consumer_device_capabilities();
+
+        let audio_consumer = transport_2
+            .consume({
+                let mut options =
+                    ConsumerOptions::new(audio_producer.id(), consumer_device_capabilities.clone());
+                options.enable_rtx = Some(true);
+                options
+            })
+            .await
+            .expect("Failed to consume audio");
+
+        assert_eq!(audio_consumer.kind(), MediaKind::Audio);
+        assert_eq!(audio_consumer.rtp_parameters().mid, Some("0".to_string()));
+        assert_eq!(
+            audio_consumer.rtp_parameters().codecs,
+            vec![RtpCodecParameters::Audio {
+                mime_type: MimeTypeAudio::Opus,
+                payload_type: 100,
+                clock_rate: NonZeroU32::new(48000).unwrap(),
+                channels: NonZeroU8::new(2).unwrap(),
+                parameters: RtpCodecParametersParameters::from([
+                    ("useinbandfec", 1_u32.into()),
+                    ("usedtx", 1_u32.into()),
+                    ("foo", "222.222".into()),
+                    ("bar", "333".into()),
+                ]),
+                rtcp_feedback: vec![RtcpFeedback::Nack],
+            }]
+        );
     });
 }
 
@@ -920,11 +983,10 @@ fn dump_succeeds() {
                     rtx: None,
                     dtx: None,
                     scalability_mode: ScalabilityMode::None,
-                    scale_resolution_down_by: None,
                     ssrc: audio_consumer
                         .rtp_parameters()
                         .encodings
-                        .get(0)
+                        .first()
                         .unwrap()
                         .ssrc,
                     rid: None,
@@ -938,18 +1000,14 @@ fn dump_succeeds() {
                     .consumable_rtp_parameters()
                     .encodings
                     .iter()
-                    .map(|encoding| ConsumableRtpEncoding {
+                    .map(|encoding| RtpEncodingParameters {
                         ssrc: encoding.ssrc,
                         rid: None,
                         codec_payload_type: None,
                         rtx: None,
                         max_bitrate: None,
-                        max_framerate: None,
                         dtx: None,
                         scalability_mode: ScalabilityMode::None,
-                        spatial_layers: None,
-                        temporal_layers: None,
-                        ksvc: None
                     })
                     .collect::<Vec<_>>()
             );
@@ -1037,18 +1095,17 @@ fn dump_succeeds() {
                     ssrc: video_consumer
                         .rtp_parameters()
                         .encodings
-                        .get(0)
+                        .first()
                         .unwrap()
                         .ssrc,
                     rtx: video_consumer
                         .rtp_parameters()
                         .encodings
-                        .get(0)
+                        .first()
                         .unwrap()
                         .rtx,
                     dtx: None,
-                    scalability_mode: "S4T1".parse().unwrap(),
-                    scale_resolution_down_by: None,
+                    scalability_mode: "L4T5".parse().unwrap(),
                     rid: None,
                     max_bitrate: None,
                 }],
@@ -1060,18 +1117,14 @@ fn dump_succeeds() {
                     .consumable_rtp_parameters()
                     .encodings
                     .iter()
-                    .map(|encoding| ConsumableRtpEncoding {
+                    .map(|encoding| RtpEncodingParameters {
                         ssrc: encoding.ssrc,
                         rid: None,
                         codec_payload_type: None,
                         rtx: None,
                         max_bitrate: None,
-                        max_framerate: None,
                         dtx: None,
-                        scalability_mode: ScalabilityMode::None,
-                        spatial_layers: None,
-                        temporal_layers: None,
-                        ksvc: None,
+                        scalability_mode: "L1T5".parse().unwrap(),
                     })
                     .collect::<Vec<_>>()
             );
@@ -1121,7 +1174,7 @@ fn get_stats_succeeds() {
                 audio_consumer
                     .rtp_parameters()
                     .encodings
-                    .get(0)
+                    .first()
                     .unwrap()
                     .ssrc
                     .unwrap()
@@ -1170,7 +1223,7 @@ fn get_stats_succeeds() {
                 video_consumer
                     .rtp_parameters()
                     .encodings
-                    .get(0)
+                    .first()
                     .unwrap()
                     .ssrc
                     .unwrap()
@@ -1285,7 +1338,55 @@ fn set_preferred_layers_succeeds() {
                 video_consumer.preferred_layers(),
                 Some(ConsumerLayers {
                     spatial_layer: 2,
+                    temporal_layer: Some(3),
+                })
+            );
+
+            video_consumer
+                .set_preferred_layers(ConsumerLayers {
+                    spatial_layer: 3,
+                    temporal_layer: None,
+                })
+                .await
+                .expect("Failed to set preferred layers consumer");
+
+            assert_eq!(
+                video_consumer.preferred_layers(),
+                Some(ConsumerLayers {
+                    spatial_layer: 3,
+                    temporal_layer: Some(4),
+                })
+            );
+
+            video_consumer
+                .set_preferred_layers(ConsumerLayers {
+                    spatial_layer: 3,
                     temporal_layer: Some(0),
+                })
+                .await
+                .expect("Failed to set preferred layers consumer");
+
+            assert_eq!(
+                video_consumer.preferred_layers(),
+                Some(ConsumerLayers {
+                    spatial_layer: 3,
+                    temporal_layer: Some(0),
+                })
+            );
+
+            video_consumer
+                .set_preferred_layers(ConsumerLayers {
+                    spatial_layer: 66,
+                    temporal_layer: Some(66),
+                })
+                .await
+                .expect("Failed to set preferred layers consumer");
+
+            assert_eq!(
+                video_consumer.preferred_layers(),
+                Some(ConsumerLayers {
+                    spatial_layer: 3,
+                    temporal_layer: Some(4),
                 })
             );
         }

@@ -1,6 +1,6 @@
 #include "common.hpp"
 #include "RTC/RTCP/FeedbackPsRemb.hpp"
-#include <catch2/catch.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include <cstring> // std::memcmp()
 
 using namespace RTC::RTCP;
@@ -43,11 +43,11 @@ SCENARIO("RTCP Feedback PS parsing", "[parser][rtcp][feedback-ps][remb]")
 
 	SECTION("parse FeedbackPsRembPacket")
 	{
-		FeedbackPsRembPacket* packet = FeedbackPsRembPacket::Parse(buffer, sizeof(buffer));
+		std::unique_ptr<FeedbackPsRembPacket> packet{ FeedbackPsRembPacket::Parse(buffer, sizeof(buffer)) };
 
 		REQUIRE(packet);
 
-		verify(packet);
+		verify(packet.get());
 
 		SECTION("serialize packet instance")
 		{
@@ -60,8 +60,6 @@ SCENARIO("RTCP Feedback PS parsing", "[parser][rtcp][feedback-ps][remb]")
 				REQUIRE(std::memcmp(buffer, serialized, sizeof(buffer)) == 0);
 			}
 		}
-
-		delete packet;
 	}
 
 	SECTION("create FeedbackPsRembPacket")

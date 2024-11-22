@@ -3,10 +3,7 @@
 
 #include "common.hpp"
 #include "Channel/ChannelSocket.hpp"
-#include <nlohmann/json.hpp>
 #include <string>
-
-using json = nlohmann::json;
 
 namespace Channel
 {
@@ -16,14 +13,49 @@ namespace Channel
 		explicit ChannelNotifier(Channel::ChannelSocket* channel);
 
 	public:
-		void Emit(uint64_t targetId, const char* event);
-		void Emit(const std::string& targetId, const char* event);
-		void Emit(const std::string& targetId, const char* event, json& data);
-		void Emit(const std::string& targetId, const char* event, const std::string& data);
+		flatbuffers::FlatBufferBuilder& GetBufferBuilder()
+		{
+			return this->bufferBuilder;
+		}
+
+		template<class Body>
+		void Emit(
+		  const std::string& targetId,
+		  FBS::Notification::Event event,
+		  FBS::Notification::Body type,
+		  flatbuffers::Offset<Body>& body)
+		{
+			auto& builder     = this->bufferBuilder;
+			auto notification = FBS::Notification::CreateNotificationDirect(
+			  builder, targetId.c_str(), event, type, body.Union());
+
+			auto message =
+			  FBS::Message::CreateMessage(builder, FBS::Message::Body::Notification, notification.Union());
+
+			builder.FinishSizePrefixed(message);
+			this->channel->Send(builder.GetBufferPointer(), builder.GetSize());
+			builder.Clear();
+		}
+
+		void Emit(const std::string& targetId, FBS::Notification::Event event)
+		{
+			auto& builder = ChannelNotifier::bufferBuilder;
+			auto notification =
+			  FBS::Notification::CreateNotificationDirect(builder, targetId.c_str(), event);
+
+			auto message =
+			  FBS::Message::CreateMessage(builder, FBS::Message::Body::Notification, notification.Union());
+
+			builder.FinishSizePrefixed(message);
+			this->channel->Send(builder.GetBufferPointer(), builder.GetSize());
+			builder.Clear();
+		}
 
 	private:
 		// Passed by argument.
 		Channel::ChannelSocket* channel{ nullptr };
+		// Others.
+		flatbuffers::FlatBufferBuilder bufferBuilder{};
 	};
 } // namespace Channel
 

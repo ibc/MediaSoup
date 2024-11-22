@@ -10,8 +10,7 @@ void Fuzzer::RTC::RTCP::FeedbackPsFir::Fuzz(::RTC::RTCP::FeedbackPsFirPacket* pa
 	// TODO.
 	// AddItem(Item* item);
 
-	auto it = packet->Begin();
-	for (; it != packet->End(); ++it)
+	for (auto it = packet->Begin(); it != packet->End(); ++it)
 	{
 		auto& item = (*it);
 

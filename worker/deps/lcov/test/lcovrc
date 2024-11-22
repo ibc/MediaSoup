@@ -1,4 +1,0 @@
-# lcovrc file used during tests
-
-lcov_function_coverage = 1
-lcov_branch_coverage = 1

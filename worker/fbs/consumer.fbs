@@ -1,0 +1,125 @@
+include "common.fbs";
+include "rtpPacket.fbs";
+include "rtpParameters.fbs";
+include "rtpStream.fbs";
+
+namespace FBS.Consumer;
+
+table ConsumerLayers {
+    spatial_layer: uint8;
+    temporal_layer: uint8 = null;
+}
+
+table ConsumerScore {
+    score: uint8;
+    producer_score: uint8;
+    producer_scores: [uint8] (required);
+}
+
+table SetPreferredLayersRequest {
+    preferred_layers: ConsumerLayers (required);
+}
+
+table SetPreferredLayersResponse {
+    preferred_layers: ConsumerLayers;
+}
+
+table SetPriorityRequest {
+    priority: uint8;
+}
+
+table SetPriorityResponse {
+    priority: uint8;
+}
+
+enum TraceEventType: uint8 {
+    KEYFRAME = 0,
+    FIR,
+    NACK,
+    PLI,
+    RTP,
+}
+
+table EnableTraceEventRequest {
+    events: [TraceEventType] (required);
+}
+
+table DumpResponse {
+    data: ConsumerDump (required);
+}
+
+table BaseConsumerDump {
+    id: string (required);
+    type: FBS.RtpParameters.Type;
+    producer_id: string (required);
+    kind: FBS.RtpParameters.MediaKind;
+    rtp_parameters: FBS.RtpParameters.RtpParameters (required);
+    consumable_rtp_encodings: [FBS.RtpParameters.RtpEncodingParameters] (required);
+    supported_codec_payload_types: [uint8] (required);
+    trace_event_types: [TraceEventType] (required);
+    paused: bool;
+    producer_paused: bool;
+    priority: uint8;
+}
+
+table ConsumerDump {
+    base: BaseConsumerDump (required);
+    rtp_streams: [FBS.RtpStream.Dump] (required);
+    preferred_spatial_layer: int16 = null;
+    target_spatial_layer: int16 = null;
+    current_spatial_layer: int16 = null;
+    preferred_temporal_layer: int16 = null;
+    target_temporal_layer: int16 = null;
+    current_temporal_layer: int16 = null;
+}
+
+table GetStatsResponse {
+    stats: [FBS.RtpStream.Stats] (required);
+}
+
+// Notifications from Worker.
+
+table LayersChangeNotification {
+    layers: ConsumerLayers;
+}
+
+table RtpNotification {
+    data: [ubyte] (required);
+}
+
+table ScoreNotification {
+    score: ConsumerScore (required);
+}
+
+union TraceInfo {
+    KeyFrameTraceInfo,
+    FirTraceInfo,
+    PliTraceInfo,
+    RtpTraceInfo,
+}
+
+table KeyFrameTraceInfo {
+    rtp_packet: FBS.RtpPacket.Dump (required);
+    is_rtx: bool;
+}
+
+table FirTraceInfo {
+    ssrc: uint32;
+}
+
+table PliTraceInfo {
+    ssrc: uint32;
+}
+
+table RtpTraceInfo {
+    rtp_packet: FBS.RtpPacket.Dump (required);
+    is_rtx: bool;
+}
+
+table TraceNotification {
+    type: TraceEventType;
+    timestamp: uint64;
+    direction: FBS.Common.TraceDirection;
+    info: TraceInfo;
+}
+

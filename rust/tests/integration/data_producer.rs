@@ -2,13 +2,15 @@ use async_io::Timer;
 use futures_lite::future;
 use hash_hasher::{HashedMap, HashedSet};
 use mediasoup::data_producer::{DataProducerOptions, DataProducerType};
-use mediasoup::data_structures::{AppData, ListenIp};
+use mediasoup::data_structures::{AppData, ListenInfo, Protocol};
 use mediasoup::plain_transport::{PlainTransport, PlainTransportOptions};
 use mediasoup::prelude::*;
 use mediasoup::router::{Router, RouterOptions};
 use mediasoup::sctp_parameters::SctpStreamParameters;
 use mediasoup::transport::ProduceDataError;
-use mediasoup::webrtc_transport::{TransportListenIps, WebRtcTransport, WebRtcTransportOptions};
+use mediasoup::webrtc_transport::{
+    WebRtcTransport, WebRtcTransportListenInfos, WebRtcTransportOptions,
+};
 use mediasoup::worker::{RequestError, Worker, WorkerSettings};
 use mediasoup::worker_manager::WorkerManager;
 use std::env;
@@ -47,9 +49,15 @@ async fn init() -> (Worker, Router, WebRtcTransport, PlainTransport) {
     let transport1 = router
         .create_webrtc_transport({
             let mut transport_options =
-                WebRtcTransportOptions::new(TransportListenIps::new(ListenIp {
+                WebRtcTransportOptions::new(WebRtcTransportListenInfos::new(ListenInfo {
+                    protocol: Protocol::Udp,
                     ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                    announced_ip: None,
+                    announced_address: None,
+                    port: None,
+                    port_range: None,
+                    flags: None,
+                    send_buffer_size: None,
+                    recv_buffer_size: None,
                 }));
 
             transport_options.enable_sctp = true;
@@ -61,9 +69,15 @@ async fn init() -> (Worker, Router, WebRtcTransport, PlainTransport) {
 
     let transport2 = router
         .create_plain_transport({
-            let mut transport_options = PlainTransportOptions::new(ListenIp {
+            let mut transport_options = PlainTransportOptions::new(ListenInfo {
+                protocol: Protocol::Udp,
                 ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                announced_ip: None,
+                announced_address: None,
+                port: None,
+                port_range: None,
+                flags: None,
+                send_buffer_size: None,
+                recv_buffer_size: None,
             });
 
             transport_options.enable_sctp = true;
@@ -120,6 +134,7 @@ fn transport_1_produce_data_succeeds() {
         }
         assert_eq!(data_producer1.label().as_str(), "foo");
         assert_eq!(data_producer1.protocol().as_str(), "bar");
+        assert!(!data_producer1.paused());
         assert_eq!(
             data_producer1
                 .app_data()
@@ -177,6 +192,7 @@ fn transport_2_produce_data_succeeds() {
 
                 options.label = "foo".to_string();
                 options.protocol = "bar".to_string();
+                options.paused = true;
                 options.app_data = AppData::new(CustomAppData { foo: 1, baz: "2" });
 
                 options
@@ -197,6 +213,7 @@ fn transport_2_produce_data_succeeds() {
         }
         assert_eq!(data_producer2.label().as_str(), "foo");
         assert_eq!(data_producer2.protocol().as_str(), "bar");
+        assert!(data_producer2.paused());
         assert_eq!(
             data_producer2
                 .app_data()
@@ -318,6 +335,7 @@ fn dump_succeeds() {
             }
             assert_eq!(dump.label.as_str(), "foo");
             assert_eq!(dump.protocol.as_str(), "bar");
+            assert!(!dump.paused);
         }
 
         {
@@ -329,6 +347,7 @@ fn dump_succeeds() {
 
                     options.label = "foo".to_string();
                     options.protocol = "bar".to_string();
+                    options.paused = true;
                     options.app_data = AppData::new(CustomAppData { foo: 1, baz: "2" });
 
                     options
@@ -353,6 +372,7 @@ fn dump_succeeds() {
             }
             assert_eq!(dump.label.as_str(), "foo");
             assert_eq!(dump.protocol.as_str(), "bar");
+            assert!(dump.paused);
         }
     });
 }
@@ -415,6 +435,61 @@ fn get_stats_succeeds() {
             assert_eq!(&stats[0].protocol, data_producer2.protocol());
             assert_eq!(stats[0].messages_received, 0);
             assert_eq!(stats[0].bytes_received, 0);
+        }
+    });
+}
+
+#[test]
+fn pause_and_resume_succeed() {
+    future::block_on(async move {
+        let (_worker, _router, transport1, _) = init().await;
+
+        {
+            let data_producer1 = transport1
+                .produce_data({
+                    let mut options =
+                        DataProducerOptions::new_sctp(SctpStreamParameters::new_ordered(666));
+
+                    options.label = "foo".to_string();
+                    options.protocol = "bar".to_string();
+                    options.app_data = AppData::new(CustomAppData { foo: 1, baz: "2" });
+
+                    options
+                })
+                .await
+                .expect("Failed to produce data");
+
+            {
+                data_producer1
+                    .pause()
+                    .await
+                    .expect("Failed to pause data producer");
+
+                assert!(data_producer1.paused());
+
+                let dump = data_producer1
+                    .dump()
+                    .await
+                    .expect("Failed to dump data producer");
+
+                assert!(dump.paused);
+            }
+
+            {
+                data_producer1
+                    .resume()
+                    .await
+                    .expect("Failed to resume data producer");
+
+                assert!(!data_producer1.paused());
+
+                let dump = data_producer1
+                    .dump()
+                    .await
+                    .expect("Failed to dump data producer");
+
+                assert!(!dump.paused);
+            }
         }
     });
 }

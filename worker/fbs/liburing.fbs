@@ -1,0 +1,8 @@
+namespace FBS.LibUring;
+
+table Dump {
+    sqe_process_count: uint64;
+    sqe_miss_count: uint64;
+    user_data_miss_count: uint64;
+}
+

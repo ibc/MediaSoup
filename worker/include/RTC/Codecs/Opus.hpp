@@ -20,6 +20,9 @@ namespace RTC
 
 				void Dump() const override;
 
+				// Mandatory fields.
+				uint8_t stereo : 1;
+				uint8_t code : 2;
 				// Parsed values.
 				bool isDtx{ false };
 			};

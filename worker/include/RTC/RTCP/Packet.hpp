@@ -52,7 +52,7 @@ namespace RTC
 			static const size_t CommonHeaderSize{ 4 };
 			static bool IsRtcp(const uint8_t* data, size_t len)
 			{
-				auto header = const_cast<CommonHeader*>(reinterpret_cast<const CommonHeader*>(data));
+				auto* header = const_cast<CommonHeader*>(reinterpret_cast<const CommonHeader*>(data));
 
 				// clang-format off
 				return (

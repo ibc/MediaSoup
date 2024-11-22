@@ -3,67 +3,48 @@
 
 #include "Logger.hpp"
 #include "MediaSoupErrors.hpp"
-#include "Utils.hpp"
 #include "RTC/SctpDictionaries.hpp"
 
 namespace RTC
 {
 	/* Instance methods. */
 
-	SctpStreamParameters::SctpStreamParameters(json& data)
+	SctpStreamParameters::SctpStreamParameters(const FBS::SctpParameters::SctpStreamParameters* data)
 	{
 		MS_TRACE();
 
-		if (!data.is_object())
-			MS_THROW_TYPE_ERROR("data is not an object");
-
-		auto jsonStreamIdIt          = data.find("streamId");
-		auto jsonOrderedIdIt         = data.find("ordered");
-		auto jsonMaxPacketLifeTimeIt = data.find("maxPacketLifeTime");
-		auto jsonMaxRetransmitsIt    = data.find("maxRetransmits");
-
-		// streamId is mandatory.
-		if (jsonStreamIdIt == data.end() || !Utils::Json::IsPositiveInteger(*jsonStreamIdIt))
-			MS_THROW_TYPE_ERROR("missing streamId");
-
-		this->streamId = jsonStreamIdIt->get<uint16_t>();
+		this->streamId = data->streamId();
 
 		if (this->streamId > 65534)
+		{
 			MS_THROW_TYPE_ERROR("streamId must not be greater than 65534");
+		}
 
 		// ordered is optional.
 		bool orderedGiven = false;
 
-		if (jsonOrderedIdIt != data.end() && jsonOrderedIdIt->is_boolean())
+		if (data->ordered().has_value())
 		{
 			orderedGiven  = true;
-			this->ordered = jsonOrderedIdIt->get<bool>();
+			this->ordered = data->ordered().value();
 		}
 
 		// maxPacketLifeTime is optional.
-		// clang-format off
-		if (
-			jsonMaxPacketLifeTimeIt != data.end() &&
-			Utils::Json::IsPositiveInteger(*jsonMaxPacketLifeTimeIt)
-		)
-		// clang-format on
+		if (data->maxPacketLifeTime().has_value())
 		{
-			this->maxPacketLifeTime = jsonMaxPacketLifeTimeIt->get<uint16_t>();
+			this->maxPacketLifeTime = data->maxPacketLifeTime().value();
 		}
 
 		// maxRetransmits is optional.
-		// clang-format off
-		if (
-			jsonMaxRetransmitsIt != data.end() &&
-			Utils::Json::IsPositiveInteger(*jsonMaxRetransmitsIt)
-		)
-		// clang-format on
+		if (data->maxRetransmits().has_value())
 		{
-			this->maxRetransmits = jsonMaxRetransmitsIt->get<uint16_t>();
+			this->maxRetransmits = data->maxRetransmits().value();
 		}
 
 		if (this->maxPacketLifeTime && this->maxRetransmits)
+		{
 			MS_THROW_TYPE_ERROR("cannot provide both maxPacketLifeTime and maxRetransmits");
+		}
 
 		// clang-format off
 		if (
@@ -81,22 +62,18 @@ namespace RTC
 		}
 	}
 
-	void SctpStreamParameters::FillJson(json& jsonObject) const
+	flatbuffers::Offset<FBS::SctpParameters::SctpStreamParameters> SctpStreamParameters::FillBuffer(
+	  flatbuffers::FlatBufferBuilder& builder) const
 	{
 		MS_TRACE();
 
-		// Add streamId.
-		jsonObject["streamId"] = this->streamId;
-
-		// Add ordered.
-		jsonObject["ordered"] = this->ordered;
-
-		// Add maxPacketLifeTime.
-		if (this->maxPacketLifeTime)
-			jsonObject["maxPacketLifeTime"] = this->maxPacketLifeTime;
-
-		// Add maxRetransmits.
-		if (this->maxRetransmits)
-			jsonObject["maxRetransmits"] = this->maxRetransmits;
+		return FBS::SctpParameters::CreateSctpStreamParameters(
+		  builder,
+		  this->streamId,
+		  this->ordered,
+		  this->maxPacketLifeTime ? flatbuffers::Optional<uint16_t>(this->maxPacketLifeTime)
+		                          : flatbuffers::nullopt,
+		  this->maxRetransmits ? flatbuffers::Optional<uint16_t>(this->maxRetransmits)
+		                       : flatbuffers::nullopt);
 	}
 } // namespace RTC

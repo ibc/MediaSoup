@@ -5,11 +5,11 @@ use crate::consumer::{Consumer, ConsumerId, ConsumerOptions};
 use crate::data_consumer::{DataConsumer, DataConsumerId, DataConsumerOptions, DataConsumerType};
 use crate::data_producer::{DataProducer, DataProducerId, DataProducerOptions, DataProducerType};
 use crate::data_structures::{
-    AppData, DtlsParameters, DtlsState, IceCandidate, IceParameters, IceRole, IceState, ListenIp,
+    AppData, DtlsParameters, DtlsState, IceCandidate, IceParameters, IceRole, IceState, ListenInfo,
     SctpState, TransportTuple,
 };
 use crate::messages::{
-    TransportCloseRequest, TransportConnectWebRtcRequest, TransportRestartIceRequest,
+    TransportCloseRequest, TransportRestartIceRequest, WebRtcTransportConnectRequest,
     WebRtcTransportData,
 };
 use crate::producer::{Producer, ProducerId, ProducerOptions};
@@ -22,15 +22,17 @@ use crate::transport::{
     TransportTraceEventType,
 };
 use crate::webrtc_server::WebRtcServer;
-use crate::worker::{Channel, PayloadChannel, RequestError, SubscriptionHandler};
+use crate::worker::{Channel, NotificationParseError, RequestError, SubscriptionHandler};
 use async_executor::Executor;
 use async_trait::async_trait;
 use event_listener_primitives::{Bag, BagOnce, HandlerId};
 use log::{debug, error};
+use mediasoup_sys::fbs::{notification, response, transport, web_rtc_transport};
 use nohash_hasher::IntMap;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
+use std::error::Error;
 use std::fmt;
 use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -39,25 +41,25 @@ use thiserror::Error;
 
 /// Struct that protects an invariant of having non-empty list of listen IPs
 #[derive(Debug, Clone, Eq, PartialEq, Serialize)]
-pub struct TransportListenIps(Vec<ListenIp>);
+pub struct WebRtcTransportListenInfos(Vec<ListenInfo>);
 
-impl TransportListenIps {
+impl WebRtcTransportListenInfos {
     /// Create transport listen IPs with given IP populated initially.
     #[must_use]
-    pub fn new(listen_ip: ListenIp) -> Self {
-        Self(vec![listen_ip])
+    pub fn new(listen_info: ListenInfo) -> Self {
+        Self(vec![listen_info])
     }
 
     /// Insert another listen IP.
     #[must_use]
-    pub fn insert(mut self, listen_ip: ListenIp) -> Self {
-        self.0.push(listen_ip);
+    pub fn insert(mut self, listen_info: ListenInfo) -> Self {
+        self.0.push(listen_info);
         self
     }
 }
 
-impl Deref for TransportListenIps {
-    type Target = Vec<ListenIp>;
+impl Deref for WebRtcTransportListenInfos {
+    type Target = Vec<ListenInfo>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -69,14 +71,14 @@ impl Deref for TransportListenIps {
 #[error("Empty list of listen IPs provided, should have at least one element")]
 pub struct EmptyListError;
 
-impl TryFrom<Vec<ListenIp>> for TransportListenIps {
+impl TryFrom<Vec<ListenInfo>> for WebRtcTransportListenInfos {
     type Error = EmptyListError;
 
-    fn try_from(listen_ips: Vec<ListenIp>) -> Result<Self, Self::Error> {
-        if listen_ips.is_empty() {
+    fn try_from(listen_infos: Vec<ListenInfo>) -> Result<Self, Self::Error> {
+        if listen_infos.is_empty() {
             Err(EmptyListError)
         } else {
-            Ok(Self(listen_ips))
+            Ok(Self(listen_infos))
         }
     }
 }
@@ -84,18 +86,16 @@ impl TryFrom<Vec<ListenIp>> for TransportListenIps {
 /// How [`WebRtcTransport`] should listen on interfaces.
 ///
 /// # Notes on usage
-/// * Do not use "0.0.0.0" into `listen_ips`. Values in `listen_ips` must be specific bindable IPs
+/// * Do not use "0.0.0.0" into `listen_infos`. Values in `listen_infos` must be specific bindable IPs
 ///   on the host.
-/// * If you use "0.0.0.0" or "::" into `listen_ips`, then you need to also provide `announced_ip`
-///   in the corresponding entry in `listen_ips`.
+/// * If you use "0.0.0.0" or "::" into `listen_infos`, then you need to also provide
+/// `announced_address` in the corresponding entry in `listen_infos`.
 #[derive(Debug, Clone)]
 pub enum WebRtcTransportListen {
-    /// Listen on individual IP/port combinations specific to this transport.
+    /// Listen on individual protocol/IP/port combinations specific to this transport.
     Individual {
-        /// Listening IP address or addresses in order of preference (first one is the preferred one).
-        listen_ips: TransportListenIps,
-        /// Fixed port to listen on instead of selecting automatically from Worker's port range.
-        port: Option<u16>,
+        /// Listening infos in order of preference (first one is the preferred one).
+        listen_infos: WebRtcTransportListenInfos,
     },
     /// Share [`WebRtcServer`] with other transports withing the same worker.
     Server {
@@ -114,10 +114,14 @@ pub enum WebRtcTransportListen {
 pub struct WebRtcTransportOptions {
     /// How [`WebRtcTransport`] should listen on interfaces.
     pub listen: WebRtcTransportListen,
-    /// Listen in UDP. Default true.
+    /// Initial available outgoing bitrate (in bps).
+    /// Default 600000.
+    pub initial_available_outgoing_bitrate: u32,
+    /// Enable UDP.
+    /// Default true.
     pub enable_udp: bool,
-    /// Listen in TCP.
-    /// Default false.
+    /// Enable TCP.
+    /// Default true if webrtc_server is given, false otherwise.
     pub enable_tcp: bool,
     /// Prefer UDP.
     /// Default false.
@@ -125,9 +129,9 @@ pub struct WebRtcTransportOptions {
     /// Prefer TCP.
     /// Default false.
     pub prefer_tcp: bool,
-    /// Initial available outgoing bitrate (in bps).
-    /// Default 600000.
-    pub initial_available_outgoing_bitrate: u32,
+    /// ICE consent timeout (in seconds). If 0 it is disabled.
+    /// Default 30.
+    pub ice_consent_timeout: u8,
     /// Create a SCTP association.
     /// Default false.
     pub enable_sctp: bool,
@@ -144,19 +148,17 @@ pub struct WebRtcTransportOptions {
 }
 
 impl WebRtcTransportOptions {
-    /// Create [`WebRtcTransport`] options with given listen IPs.
+    /// Create [`WebRtcTransport`] options with given listen infos.
     #[must_use]
-    pub fn new(listen_ips: TransportListenIps) -> Self {
+    pub fn new(listen_infos: WebRtcTransportListenInfos) -> Self {
         Self {
-            listen: WebRtcTransportListen::Individual {
-                listen_ips,
-                port: None,
-            },
+            listen: WebRtcTransportListen::Individual { listen_infos },
+            initial_available_outgoing_bitrate: 600_000,
             enable_udp: true,
             enable_tcp: false,
             prefer_udp: false,
             prefer_tcp: false,
-            initial_available_outgoing_bitrate: 600_000,
+            ice_consent_timeout: 30,
             enable_sctp: false,
             num_sctp_streams: NumSctpStreams::default(),
             max_sctp_message_size: 262_144,
@@ -169,11 +171,12 @@ impl WebRtcTransportOptions {
     pub fn new_with_server(webrtc_server: WebRtcServer) -> Self {
         Self {
             listen: WebRtcTransportListen::Server { webrtc_server },
+            initial_available_outgoing_bitrate: 600_000,
             enable_udp: true,
-            enable_tcp: false,
+            enable_tcp: true,
             prefer_udp: false,
             prefer_tcp: false,
-            initial_available_outgoing_bitrate: 600_000,
+            ice_consent_timeout: 30,
             enable_sctp: false,
             num_sctp_streams: NumSctpStreams::default(),
             max_sctp_message_size: 262_144,
@@ -199,11 +202,11 @@ pub struct WebRtcTransportDump {
     pub data_consumer_ids: Vec<DataConsumerId>,
     pub recv_rtp_header_extensions: RecvRtpHeaderExtensions,
     pub rtp_listener: RtpListener,
-    pub max_message_size: usize,
+    pub max_message_size: u32,
     pub sctp_parameters: Option<SctpParameters>,
     pub sctp_state: Option<SctpState>,
     pub sctp_listener: Option<SctpListener>,
-    pub trace_event_types: String,
+    pub trace_event_types: Vec<TransportTraceEventType>,
     // WebRtcTransport specific.
     pub dtls_parameters: DtlsParameters,
     pub dtls_state: DtlsState,
@@ -212,6 +215,91 @@ pub struct WebRtcTransportDump {
     pub ice_role: IceRole,
     pub ice_state: IceState,
     pub ice_selected_tuple: Option<TransportTuple>,
+}
+
+impl WebRtcTransportDump {
+    pub(crate) fn from_fbs(
+        dump: web_rtc_transport::DumpResponse,
+    ) -> Result<Self, Box<dyn Error + Send + Sync>> {
+        Ok(Self {
+            // Common to all Transports.
+            id: dump.base.id.parse()?,
+            direct: false,
+            producer_ids: dump
+                .base
+                .producer_ids
+                .iter()
+                .map(|producer_id| Ok(producer_id.parse()?))
+                .collect::<Result<_, Box<dyn Error + Send + Sync>>>()?,
+            consumer_ids: dump
+                .base
+                .consumer_ids
+                .iter()
+                .map(|consumer_id| Ok(consumer_id.parse()?))
+                .collect::<Result<_, Box<dyn Error + Send + Sync>>>()?,
+            map_ssrc_consumer_id: dump
+                .base
+                .map_ssrc_consumer_id
+                .iter()
+                .map(|key_value| Ok((key_value.key, key_value.value.parse()?)))
+                .collect::<Result<_, Box<dyn Error + Send + Sync>>>()?,
+            map_rtx_ssrc_consumer_id: dump
+                .base
+                .map_rtx_ssrc_consumer_id
+                .iter()
+                .map(|key_value| Ok((key_value.key, key_value.value.parse()?)))
+                .collect::<Result<_, Box<dyn Error + Send + Sync>>>()?,
+            data_producer_ids: dump
+                .base
+                .data_producer_ids
+                .iter()
+                .map(|data_producer_id| Ok(data_producer_id.parse()?))
+                .collect::<Result<_, Box<dyn Error + Send + Sync>>>()?,
+            data_consumer_ids: dump
+                .base
+                .data_consumer_ids
+                .iter()
+                .map(|data_consumer_id| Ok(data_consumer_id.parse()?))
+                .collect::<Result<_, Box<dyn Error + Send + Sync>>>()?,
+            recv_rtp_header_extensions: RecvRtpHeaderExtensions::from_fbs(
+                dump.base.recv_rtp_header_extensions.as_ref(),
+            ),
+            rtp_listener: RtpListener::from_fbs(dump.base.rtp_listener.as_ref())?,
+            max_message_size: dump.base.max_message_size,
+            sctp_parameters: dump
+                .base
+                .sctp_parameters
+                .as_ref()
+                .map(|parameters| SctpParameters::from_fbs(parameters.as_ref())),
+            sctp_state: dump
+                .base
+                .sctp_state
+                .map(|state| SctpState::from_fbs(&state)),
+            sctp_listener: dump.base.sctp_listener.as_ref().map(|listener| {
+                SctpListener::from_fbs(listener.as_ref()).expect("Error parsing SctpListner")
+            }),
+            trace_event_types: dump
+                .base
+                .trace_event_types
+                .iter()
+                .map(TransportTraceEventType::from_fbs)
+                .collect(),
+            // WebRtcTransport specific.
+            dtls_parameters: DtlsParameters::from_fbs(*dump.dtls_parameters),
+            dtls_state: DtlsState::from_fbs(dump.dtls_state),
+            ice_candidates: dump
+                .ice_candidates
+                .iter()
+                .map(IceCandidate::from_fbs)
+                .collect(),
+            ice_parameters: IceParameters::from_fbs(*dump.ice_parameters),
+            ice_role: IceRole::from_fbs(dump.ice_role),
+            ice_state: IceState::from_fbs(dump.ice_state),
+            ice_selected_tuple: dump
+                .ice_selected_tuple
+                .map(|tuple| TransportTuple::from_fbs(tuple.as_ref())),
+        })
+    }
 }
 
 /// RTC statistics of the [`WebRtcTransport`].
@@ -225,26 +313,27 @@ pub struct WebRtcTransportStat {
     pub transport_id: TransportId,
     pub timestamp: u64,
     pub sctp_state: Option<SctpState>,
-    pub bytes_received: usize,
+    pub bytes_received: u64,
     pub recv_bitrate: u32,
-    pub bytes_sent: usize,
+    pub bytes_sent: u64,
     pub send_bitrate: u32,
-    pub rtp_bytes_received: usize,
+    pub rtp_bytes_received: u64,
     pub rtp_recv_bitrate: u32,
-    pub rtp_bytes_sent: usize,
+    pub rtp_bytes_sent: u64,
     pub rtp_send_bitrate: u32,
-    pub rtx_bytes_received: usize,
+    pub rtx_bytes_received: u64,
     pub rtx_recv_bitrate: u32,
-    pub rtx_bytes_sent: usize,
+    pub rtx_bytes_sent: u64,
     pub rtx_send_bitrate: u32,
-    pub probation_bytes_sent: usize,
+    pub probation_bytes_sent: u64,
     pub probation_send_bitrate: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub available_outgoing_bitrate: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub available_incoming_bitrate: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_incoming_bitrate: Option<u32>,
+    pub max_outgoing_bitrate: Option<u32>,
+    pub min_outgoing_bitrate: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rtp_packet_loss_received: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -257,6 +346,45 @@ pub struct WebRtcTransportStat {
     pub dtls_state: DtlsState,
 }
 
+impl WebRtcTransportStat {
+    pub(crate) fn from_fbs(
+        stats: web_rtc_transport::GetStatsResponse,
+    ) -> Result<Self, Box<dyn Error + Send + Sync>> {
+        Ok(Self {
+            transport_id: stats.base.transport_id.parse()?,
+            timestamp: stats.base.timestamp,
+            sctp_state: stats.base.sctp_state.as_ref().map(SctpState::from_fbs),
+            bytes_received: stats.base.bytes_received,
+            recv_bitrate: stats.base.recv_bitrate,
+            bytes_sent: stats.base.bytes_sent,
+            send_bitrate: stats.base.send_bitrate,
+            rtp_bytes_received: stats.base.rtp_bytes_received,
+            rtp_recv_bitrate: stats.base.rtp_recv_bitrate,
+            rtp_bytes_sent: stats.base.rtp_bytes_sent,
+            rtp_send_bitrate: stats.base.rtp_send_bitrate,
+            rtx_bytes_received: stats.base.rtx_bytes_received,
+            rtx_recv_bitrate: stats.base.rtx_recv_bitrate,
+            rtx_bytes_sent: stats.base.rtx_bytes_sent,
+            rtx_send_bitrate: stats.base.rtx_send_bitrate,
+            probation_bytes_sent: stats.base.probation_bytes_sent,
+            probation_send_bitrate: stats.base.probation_send_bitrate,
+            available_outgoing_bitrate: stats.base.available_outgoing_bitrate,
+            available_incoming_bitrate: stats.base.available_incoming_bitrate,
+            max_incoming_bitrate: stats.base.max_incoming_bitrate,
+            max_outgoing_bitrate: stats.base.max_outgoing_bitrate,
+            min_outgoing_bitrate: stats.base.min_outgoing_bitrate,
+            rtp_packet_loss_received: stats.base.rtp_packet_loss_received,
+            rtp_packet_loss_sent: stats.base.rtp_packet_loss_sent,
+            // WebRtcTransport specific.
+            ice_role: IceRole::from_fbs(stats.ice_role),
+            ice_state: IceState::from_fbs(stats.ice_state),
+            ice_selected_tuple: stats
+                .ice_selected_tuple
+                .map(|tuple| TransportTuple::from_fbs(tuple.as_ref())),
+            dtls_state: DtlsState::from_fbs(stats.dtls_state),
+        })
+    }
+}
 /// Remote parameters for [`WebRtcTransport`].
 #[derive(Debug, Clone, PartialOrd, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -305,6 +433,80 @@ enum Notification {
     Trace(TransportTraceEventData),
 }
 
+impl Notification {
+    pub(crate) fn from_fbs(
+        notification: notification::NotificationRef<'_>,
+    ) -> Result<Self, NotificationParseError> {
+        match notification.event().unwrap() {
+            notification::Event::WebrtctransportIceStateChange => {
+                let Ok(Some(notification::BodyRef::WebRtcTransportIceStateChangeNotification(
+                    body,
+                ))) = notification.body()
+                else {
+                    panic!("Wrong message from worker: {notification:?}");
+                };
+
+                let ice_state = IceState::from_fbs(body.ice_state().unwrap());
+
+                Ok(Notification::IceStateChange { ice_state })
+            }
+            notification::Event::WebrtctransportIceSelectedTupleChange => {
+                let Ok(Some(
+                    notification::BodyRef::WebRtcTransportIceSelectedTupleChangeNotification(body),
+                )) = notification.body()
+                else {
+                    panic!("Wrong message from worker: {notification:?}");
+                };
+
+                let ice_selected_tuple_fbs =
+                    transport::Tuple::try_from(body.tuple().unwrap()).unwrap();
+                let ice_selected_tuple = TransportTuple::from_fbs(&ice_selected_tuple_fbs);
+
+                Ok(Notification::IceSelectedTupleChange { ice_selected_tuple })
+            }
+            notification::Event::WebrtctransportDtlsStateChange => {
+                let Ok(Some(notification::BodyRef::WebRtcTransportDtlsStateChangeNotification(
+                    body,
+                ))) = notification.body()
+                else {
+                    panic!("Wrong message from worker: {notification:?}");
+                };
+
+                let dtls_state = DtlsState::from_fbs(body.dtls_state().unwrap());
+
+                Ok(Notification::DtlsStateChange {
+                    dtls_state,
+                    dtls_remote_cert: None,
+                })
+            }
+            notification::Event::TransportSctpStateChange => {
+                let Ok(Some(notification::BodyRef::TransportSctpStateChangeNotification(body))) =
+                    notification.body()
+                else {
+                    panic!("Wrong message from worker: {notification:?}");
+                };
+
+                let sctp_state = SctpState::from_fbs(&body.sctp_state().unwrap());
+
+                Ok(Notification::SctpStateChange { sctp_state })
+            }
+            notification::Event::TransportTrace => {
+                let Ok(Some(notification::BodyRef::TransportTraceNotification(body))) =
+                    notification.body()
+                else {
+                    panic!("Wrong message from worker: {notification:?}");
+                };
+
+                let trace_notification_fbs = transport::TraceNotification::try_from(body).unwrap();
+                let trace_notification = TransportTraceEventData::from_fbs(trace_notification_fbs);
+
+                Ok(Notification::Trace(trace_notification))
+            }
+            _ => Err(NotificationParseError::InvalidEvent),
+        }
+    }
+}
+
 struct Inner {
     id: TransportId,
     next_mid_for_consumers: AtomicUsize,
@@ -312,7 +514,6 @@ struct Inner {
     cname_for_producers: Mutex<Option<String>>,
     executor: Arc<Executor<'static>>,
     channel: Channel,
-    payload_channel: PayloadChannel,
     handlers: Arc<Handlers>,
     data: Arc<WebRtcTransportData>,
     app_data: AppData,
@@ -542,31 +743,30 @@ impl TransportGeneric for WebRtcTransport {
     async fn dump(&self) -> Result<Self::Dump, RequestError> {
         debug!("dump()");
 
-        serde_json::from_value(self.dump_impl().await?).map_err(|error| {
-            RequestError::FailedToParse {
-                error: error.to_string(),
-            }
-        })
+        if let response::Body::WebRtcTransportDumpResponse(data) = self.dump_impl().await? {
+            Ok(WebRtcTransportDump::from_fbs(*data).expect("Error parsing dump response"))
+        } else {
+            panic!("Wrong message from worker");
+        }
     }
 
     async fn get_stats(&self) -> Result<Vec<Self::Stat>, RequestError> {
         debug!("get_stats()");
 
-        serde_json::from_value(self.get_stats_impl().await?).map_err(|error| {
-            RequestError::FailedToParse {
-                error: error.to_string(),
-            }
-        })
+        if let response::Body::WebRtcTransportGetStatsResponse(data) = self.get_stats_impl().await?
+        {
+            Ok(vec![
+                WebRtcTransportStat::from_fbs(*data).expect("Error parsing dump response")
+            ])
+        } else {
+            panic!("Wrong message from worker");
+        }
     }
 }
 
 impl TransportImpl for WebRtcTransport {
     fn channel(&self) -> &Channel {
         &self.inner.channel
-    }
-
-    fn payload_channel(&self) -> &PayloadChannel {
-        &self.inner.payload_channel
     }
 
     fn executor(&self) -> &Arc<Executor<'static>> {
@@ -592,7 +792,6 @@ impl WebRtcTransport {
         id: TransportId,
         executor: Arc<Executor<'static>>,
         channel: Channel,
-        payload_channel: PayloadChannel,
         data: WebRtcTransportData,
         app_data: AppData,
         router: Router,
@@ -608,7 +807,7 @@ impl WebRtcTransport {
             let data = Arc::clone(&data);
 
             channel.subscribe_to_notifications(id.into(), move |notification| {
-                match serde_json::from_slice::<Notification>(notification) {
+                match Notification::from_fbs(notification) {
                     Ok(notification) => match notification {
                         Notification::IceStateChange { ice_state } => {
                             *data.ice_state.lock() = ice_state;
@@ -617,7 +816,9 @@ impl WebRtcTransport {
                             });
                         }
                         Notification::IceSelectedTupleChange { ice_selected_tuple } => {
-                            data.ice_selected_tuple.lock().replace(ice_selected_tuple);
+                            data.ice_selected_tuple
+                                .lock()
+                                .replace(ice_selected_tuple.clone());
                             handlers
                                 .ice_selected_tuple_change
                                 .call_simple(&ice_selected_tuple);
@@ -697,7 +898,6 @@ impl WebRtcTransport {
             cname_for_producers,
             executor,
             channel,
-            payload_channel,
             handlers,
             data,
             app_data,
@@ -762,7 +962,7 @@ impl WebRtcTransport {
             .channel
             .request(
                 self.id(),
-                TransportConnectWebRtcRequest {
+                WebRtcTransportConnectRequest {
                     dtls_parameters: remote_parameters.dtls_parameters,
                 },
             )
@@ -794,6 +994,14 @@ impl WebRtcTransport {
         self.set_max_outgoing_bitrate_impl(bitrate).await
     }
 
+    /// Set minimum outgoing bitrate for media streams sent by the remote endpoint over this
+    /// transport.
+    pub async fn set_min_outgoing_bitrate(&self, bitrate: u32) -> Result<(), RequestError> {
+        debug!("set_min_outgoing_bitrate() [bitrate:{}]", bitrate);
+
+        self.set_min_outgoing_bitrate_impl(bitrate).await
+    }
+
     /// Local ICE role. Due to the mediasoup ICE Lite design, this is always `Controlled`.
     #[must_use]
     pub fn ice_role(&self) -> IceRole {
@@ -822,7 +1030,7 @@ impl WebRtcTransport {
     /// ICE is not established (no working candidate pair was found).
     #[must_use]
     pub fn ice_selected_tuple(&self) -> Option<TransportTuple> {
-        *self.inner.data.ice_selected_tuple.lock()
+        self.inner.data.ice_selected_tuple.lock().clone()
     }
 
     /// Local DTLS parameters.
@@ -864,13 +1072,10 @@ impl WebRtcTransport {
     pub async fn restart_ice(&self) -> Result<IceParameters, RequestError> {
         debug!("restart_ice()");
 
-        let response = self
-            .inner
+        self.inner
             .channel
             .request(self.id(), TransportRestartIceRequest {})
-            .await?;
-
-        Ok(response.ice_parameters)
+            .await
     }
 
     /// Callback is called when the WebRTC server used during creation of this transport is closed

@@ -1,7 +1,7 @@
 use crate::consumer::ConsumerOptions;
 use crate::data_consumer::DataConsumerOptions;
 use crate::data_producer::DataProducerOptions;
-use crate::data_structures::ListenIp;
+use crate::data_structures::{ListenInfo, Protocol};
 use crate::producer::ProducerOptions;
 use crate::router::{PipeToRouterOptions, Router, RouterOptions};
 use crate::rtp_parameters::{
@@ -10,7 +10,9 @@ use crate::rtp_parameters::{
 };
 use crate::sctp_parameters::SctpStreamParameters;
 use crate::transport::Transport;
-use crate::webrtc_transport::{TransportListenIps, WebRtcTransport, WebRtcTransportOptions};
+use crate::webrtc_transport::{
+    WebRtcTransport, WebRtcTransportListenInfos, WebRtcTransportOptions,
+};
 use crate::worker::WorkerSettings;
 use crate::worker_manager::WorkerManager;
 use futures_lite::future;
@@ -95,10 +97,17 @@ async fn init() -> (Router, Router, WebRtcTransport, WebRtcTransport) {
         .await
         .expect("Failed to create router");
 
-    let mut transport_options = WebRtcTransportOptions::new(TransportListenIps::new(ListenIp {
-        ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-        announced_ip: None,
-    }));
+    let mut transport_options =
+        WebRtcTransportOptions::new(WebRtcTransportListenInfos::new(ListenInfo {
+            protocol: Protocol::Udp,
+            ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
+            announced_address: None,
+            port: None,
+            port_range: None,
+            flags: None,
+            send_buffer_size: None,
+            recv_buffer_size: None,
+        }));
     transport_options.enable_sctp = true;
 
     let transport_1 = router1

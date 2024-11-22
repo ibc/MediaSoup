@@ -3,15 +3,13 @@
 
 #include "common.hpp"
 #include "DepLibUV.hpp"
+#include "FBS/rtxStream.h"
 #include "RTC/RTCP/Packet.hpp"
 #include "RTC/RTCP/ReceiverReport.hpp"
 #include "RTC/RTCP/SenderReport.hpp"
 #include "RTC/RtpDictionaries.hpp"
 #include "RTC/RtpPacket.hpp"
-#include <nlohmann/json.hpp>
 #include <string>
-
-using json = nlohmann::json;
 
 namespace RTC
 {
@@ -20,7 +18,8 @@ namespace RTC
 	public:
 		struct Params
 		{
-			void FillJson(json& jsonObject) const;
+			flatbuffers::Offset<FBS::RtxStream::Params> FillBuffer(
+			  flatbuffers::FlatBufferBuilder& builder) const;
 
 			uint32_t ssrc{ 0 };
 			uint8_t payloadType{ 0 };
@@ -34,7 +33,7 @@ namespace RTC
 		explicit RtxStream(RTC::RtxStream::Params& params);
 		virtual ~RtxStream();
 
-		void FillJson(json& jsonObject) const;
+		flatbuffers::Offset<FBS::RtxStream::RtxDump> FillBuffer(flatbuffers::FlatBufferBuilder& builder) const;
 		uint32_t GetSsrc() const
 		{
 			return this->params.ssrc;

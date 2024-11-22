@@ -4,7 +4,7 @@ use mediasoup::audio_level_observer::AudioLevelObserverOptions;
 use mediasoup::consumer::{ConsumerLayers, ConsumerOptions, ConsumerTraceEventType};
 use mediasoup::data_consumer::DataConsumerOptions;
 use mediasoup::data_producer::DataProducerOptions;
-use mediasoup::data_structures::ListenIp;
+use mediasoup::data_structures::{ListenInfo, Protocol};
 use mediasoup::direct_transport::DirectTransportOptions;
 use mediasoup::plain_transport::PlainTransportOptions;
 use mediasoup::prelude::*;
@@ -17,7 +17,7 @@ use mediasoup::rtp_parameters::{
 };
 use mediasoup::sctp_parameters::SctpStreamParameters;
 use mediasoup::transport::TransportTraceEventType;
-use mediasoup::webrtc_transport::{TransportListenIps, WebRtcTransportOptions};
+use mediasoup::webrtc_transport::{WebRtcTransportListenInfos, WebRtcTransportOptions};
 use mediasoup::worker::{WorkerLogLevel, WorkerSettings, WorkerUpdateSettings};
 use mediasoup::worker_manager::WorkerManager;
 use std::net::{IpAddr, Ipv4Addr};
@@ -82,10 +82,17 @@ fn smoke() {
 
         let webrtc_transport = router
             .create_webrtc_transport({
-                let mut options = WebRtcTransportOptions::new(TransportListenIps::new(ListenIp {
-                    ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                    announced_ip: None,
-                }));
+                let mut options =
+                    WebRtcTransportOptions::new(WebRtcTransportListenInfos::new(ListenInfo {
+                        protocol: Protocol::Udp,
+                        ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
+                        announced_address: None,
+                        port: None,
+                        port_range: None,
+                        flags: None,
+                        send_buffer_size: None,
+                        recv_buffer_size: None,
+                    }));
 
                 options.enable_sctp = true;
 
@@ -264,9 +271,15 @@ fn smoke() {
 
         let plain_transport = router
             .create_plain_transport({
-                let mut options = PlainTransportOptions::new(ListenIp {
+                let mut options = PlainTransportOptions::new(ListenInfo {
+                    protocol: Protocol::Udp,
                     ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                    announced_ip: None,
+                    announced_address: None,
+                    port: None,
+                    port_range: None,
+                    flags: None,
+                    send_buffer_size: None,
+                    recv_buffer_size: None,
                 });
 
                 options.enable_sctp = true;

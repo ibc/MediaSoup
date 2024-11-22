@@ -6,26 +6,26 @@ use crate::messages::{
     TransportConsumeDataRequest, TransportConsumeRequest, TransportDumpRequest,
     TransportEnableTraceEventRequest, TransportGetStatsRequest, TransportProduceDataRequest,
     TransportProduceRequest, TransportSetMaxIncomingBitrateRequest,
-    TransportSetMaxOutgoingBitrateRequest,
+    TransportSetMaxOutgoingBitrateRequest, TransportSetMinOutgoingBitrateRequest,
 };
 pub use crate::ortc::{
     ConsumerRtpParametersError, RtpCapabilitiesError, RtpParametersError, RtpParametersMappingError,
 };
 use crate::producer::{Producer, ProducerId, ProducerOptions};
 use crate::router::Router;
-use crate::rtp_parameters::RtpEncodingParameters;
-use crate::worker::{Channel, PayloadChannel, RequestError};
+use crate::rtp_parameters::{MediaKind, RtpEncodingParameters};
+use crate::sctp_parameters::SctpStreamParameters;
+use crate::worker::{Channel, RequestError};
 use crate::{ortc, uuid_based_wrapper_type};
 use async_executor::Executor;
 use async_trait::async_trait;
 use event_listener_primitives::HandlerId;
-use hash_hasher::HashedMap;
 use log::{error, warn};
+use mediasoup_sys::fbs::{response, transport};
 use nohash_hasher::IntMap;
 use parking_lot::Mutex;
-use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use std::error::Error;
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -64,6 +64,25 @@ pub enum TransportTraceEventData {
     },
 }
 
+impl TransportTraceEventData {
+    pub(crate) fn from_fbs(data: transport::TraceNotification) -> Self {
+        match data.type_ {
+            transport::TraceEventType::Probation => unimplemented!(),
+            transport::TraceEventType::Bwe => TransportTraceEventData::Bwe {
+                timestamp: data.timestamp,
+                direction: TraceEventDirection::from_fbs(data.direction),
+                info: {
+                    let Some(transport::TraceInfo::BweTraceInfo(info)) = data.info else {
+                        panic!("Wrong message from worker: {data:?}");
+                    };
+
+                    BweTraceInfo::from_fbs(*info)
+                },
+            },
+        }
+    }
+}
+
 /// Valid types for "trace" event.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -74,16 +93,56 @@ pub enum TransportTraceEventType {
     Bwe,
 }
 
+impl TransportTraceEventType {
+    pub(crate) fn to_fbs(self) -> transport::TraceEventType {
+        match self {
+            TransportTraceEventType::Probation => transport::TraceEventType::Probation,
+            TransportTraceEventType::Bwe => transport::TraceEventType::Bwe,
+        }
+    }
+
+    pub(crate) fn from_fbs(event_type: &transport::TraceEventType) -> Self {
+        match event_type {
+            transport::TraceEventType::Probation => TransportTraceEventType::Probation,
+            transport::TraceEventType::Bwe => TransportTraceEventType::Bwe,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[doc(hidden)]
 pub struct RtpListener {
-    /// Map from Ssrc (as string) to producer ID
-    pub mid_table: HashedMap<String, ProducerId>,
-    /// Map from Ssrc (as string) to producer ID
-    pub rid_table: HashedMap<String, ProducerId>,
-    /// Map from Ssrc (as string) to producer ID
-    pub ssrc_table: HashedMap<String, ProducerId>,
+    /// Vector of mid and producer ID
+    pub mid_table: Vec<(String, ProducerId)>,
+    /// Vector of rid and producer ID
+    pub rid_table: Vec<(String, ProducerId)>,
+    /// Vector of Ssrc and producer ID
+    pub ssrc_table: Vec<(u32, ProducerId)>,
+}
+
+impl RtpListener {
+    pub(crate) fn from_fbs(
+        rtp_listener: &transport::RtpListener,
+    ) -> Result<Self, Box<dyn Error + Send + Sync>> {
+        Ok(Self {
+            mid_table: rtp_listener
+                .mid_table
+                .iter()
+                .map(|key_value| Ok((key_value.key.to_string(), key_value.value.parse()?)))
+                .collect::<Result<_, Box<dyn Error + Send + Sync>>>()?,
+            rid_table: rtp_listener
+                .rid_table
+                .iter()
+                .map(|key_value| Ok((key_value.key.to_string(), key_value.value.parse()?)))
+                .collect::<Result<_, Box<dyn Error + Send + Sync>>>()?,
+            ssrc_table: rtp_listener
+                .ssrc_table
+                .iter()
+                .map(|key_value| Ok((key_value.key, key_value.value.parse()?)))
+                .collect::<Result<_, Box<dyn Error + Send + Sync>>>()?,
+        })
+    }
 }
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Deserialize, Serialize)]
@@ -97,12 +156,38 @@ pub struct RecvRtpHeaderExtensions {
     transport_wide_cc01: Option<u8>,
 }
 
+impl RecvRtpHeaderExtensions {
+    pub(crate) fn from_fbs(extensions: &transport::RecvRtpHeaderExtensions) -> Self {
+        Self {
+            mid: extensions.mid,
+            rid: extensions.rid,
+            rrid: extensions.rrid,
+            abs_send_time: extensions.abs_send_time,
+            transport_wide_cc01: extensions.transport_wide_cc01,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[doc(hidden)]
 pub struct SctpListener {
-    /// Map from stream ID (as string) to data producer ID
-    stream_id_table: HashedMap<String, DataProducerId>,
+    /// Vector of stream ID (as string) to data producer ID
+    stream_id_table: Vec<(u16, DataProducerId)>,
+}
+
+impl SctpListener {
+    pub(crate) fn from_fbs(
+        listener: &transport::SctpListener,
+    ) -> Result<Self, Box<dyn Error + Send + Sync>> {
+        Ok(Self {
+            stream_id_table: listener
+                .stream_id_table
+                .iter()
+                .map(|key_value| Ok((key_value.key, key_value.value.parse()?)))
+                .collect::<Result<_, Box<dyn Error + Send + Sync>>>()?,
+        })
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -254,9 +339,9 @@ pub trait Transport: Debug + Send + Sync {
 pub trait TransportGeneric: Transport + Clone + 'static {
     /// Dump data structure specific to each transport.
     #[doc(hidden)]
-    type Dump: Debug + DeserializeOwned + 'static;
+    type Dump: Debug + 'static;
     /// Stats data structure specific to each transport.
-    type Stat: Debug + DeserializeOwned + 'static;
+    type Stat: Debug + 'static;
 
     /// Dump Transport.
     async fn dump(&self) -> Result<Self::Dump, RequestError>;
@@ -267,7 +352,7 @@ pub trait TransportGeneric: Transport + Clone + 'static {
 }
 
 /// Error that caused [`Transport::produce`] to fail.
-#[derive(Debug, Error, Eq, PartialEq)]
+#[derive(Debug, Error)]
 pub enum ProduceError {
     /// Producer with the same id already exists.
     #[error("Producer with the same id \"{0}\" already exists")]
@@ -284,7 +369,7 @@ pub enum ProduceError {
 }
 
 /// Error that caused [`Transport::consume`] to fail.
-#[derive(Debug, Error, Eq, PartialEq)]
+#[derive(Debug, Error)]
 pub enum ConsumeError {
     /// Producer with specified id not found.
     #[error("Producer with id \"{0}\" not found")]
@@ -301,7 +386,7 @@ pub enum ConsumeError {
 }
 
 /// Error that caused [`Transport::produce_data`] to fail.
-#[derive(Debug, Error, Eq, PartialEq)]
+#[derive(Debug, Error)]
 pub enum ProduceDataError {
     /// Data producer with the same id already exists.
     #[error("Data producer with the same id \"{0}\" already exists")]
@@ -315,7 +400,7 @@ pub enum ProduceDataError {
 }
 
 /// Error that caused [`Transport::consume_data`] to fail.
-#[derive(Debug, Error, Eq, PartialEq)]
+#[derive(Debug, Error)]
 pub enum ConsumeDataError {
     /// Data producer with specified id not found
     #[error("Data producer with id \"{0}\" not found")]
@@ -331,8 +416,6 @@ pub enum ConsumeDataError {
 #[async_trait]
 pub(super) trait TransportImpl: TransportGeneric {
     fn channel(&self) -> &Channel;
-
-    fn payload_channel(&self) -> &PayloadChannel;
 
     fn executor(&self) -> &Arc<Executor<'static>>;
 
@@ -362,13 +445,13 @@ pub(super) trait TransportImpl: TransportGeneric {
         }
     }
 
-    async fn dump_impl(&self) -> Result<Value, RequestError> {
+    async fn dump_impl(&self) -> Result<response::Body, RequestError> {
         self.channel()
             .request(self.id(), TransportDumpRequest {})
             .await
     }
 
-    async fn get_stats_impl(&self) -> Result<Value, RequestError> {
+    async fn get_stats_impl(&self) -> Result<response::Body, RequestError> {
         self.channel()
             .request(self.id(), TransportGetStatsRequest {})
             .await
@@ -392,6 +475,12 @@ pub(super) trait TransportImpl: TransportGeneric {
     ) -> Result<(), RequestError> {
         self.channel()
             .request(self.id(), TransportEnableTraceEventRequest { types })
+            .await
+    }
+
+    async fn set_min_outgoing_bitrate_impl(&self, bitrate: u32) -> Result<(), RequestError> {
+        self.channel()
+            .request(self.id(), TransportSetMinOutgoingBitrateRequest { bitrate })
             .await
     }
 
@@ -486,7 +575,6 @@ pub(super) trait TransportImpl: TransportGeneric {
             paused,
             Arc::clone(self.executor()),
             self.channel().clone(),
-            self.payload_channel().clone(),
             app_data,
             Arc::new(self.clone()),
             transport_type == TransportType::Direct,
@@ -507,6 +595,7 @@ pub(super) trait TransportImpl: TransportGeneric {
             paused,
             mid,
             preferred_layers,
+            enable_rtx,
             ignore_dtx,
             pipe,
             app_data,
@@ -521,6 +610,8 @@ pub(super) trait TransportImpl: TransportGeneric {
             }
         };
 
+        let enable_rtx = enable_rtx.unwrap_or(producer.kind() == MediaKind::Video);
+
         let rtp_parameters = if transport_type == TransportType::Pipe {
             ortc::get_pipe_consumer_rtp_parameters(producer.consumable_rtp_parameters(), rtx)
         } else {
@@ -528,6 +619,7 @@ pub(super) trait TransportImpl: TransportGeneric {
                 producer.consumable_rtp_parameters(),
                 &rtp_capabilities,
                 pipe,
+                enable_rtx,
             )
             .map_err(ConsumeError::BadConsumerRtpParameters)?;
 
@@ -586,7 +678,6 @@ pub(super) trait TransportImpl: TransportGeneric {
             response.paused,
             Arc::clone(self.executor()),
             self.channel().clone(),
-            self.payload_channel(),
             response.producer_paused,
             response.score,
             response.preferred_layers,
@@ -627,6 +718,7 @@ pub(super) trait TransportImpl: TransportGeneric {
             sctp_stream_parameters,
             label,
             protocol,
+            paused,
             app_data,
         } = data_producer_options;
 
@@ -644,6 +736,7 @@ pub(super) trait TransportImpl: TransportGeneric {
                     sctp_stream_parameters,
                     label,
                     protocol,
+                    paused,
                 },
             )
             .await
@@ -655,9 +748,9 @@ pub(super) trait TransportImpl: TransportGeneric {
             response.sctp_stream_parameters,
             response.label,
             response.protocol,
+            response.paused,
             Arc::clone(self.executor()),
             self.channel().clone(),
-            self.payload_channel().clone(),
             app_data,
             Arc::new(self.clone()),
             transport_type == TransportType::Direct,
@@ -675,6 +768,8 @@ pub(super) trait TransportImpl: TransportGeneric {
             ordered,
             max_packet_life_time,
             max_retransmits,
+            paused,
+            subchannels,
             app_data,
         } = data_consumer_options;
 
@@ -687,24 +782,33 @@ pub(super) trait TransportImpl: TransportGeneric {
 
         let sctp_stream_parameters = match r#type {
             DataConsumerType::Sctp => {
-                let mut sctp_stream_parameters = data_producer.sctp_stream_parameters();
-                if let Some(sctp_stream_parameters) = &mut sctp_stream_parameters {
-                    if let Some(stream_id) = self.allocate_sctp_stream_id() {
-                        sctp_stream_parameters.stream_id = stream_id;
-                    } else {
-                        return Err(ConsumeDataError::NoSctpStreamId);
-                    }
-                    if let Some(ordered) = ordered {
-                        sctp_stream_parameters.ordered = ordered;
-                    }
-                    if let Some(max_packet_life_time) = max_packet_life_time {
-                        sctp_stream_parameters.max_packet_life_time = Some(max_packet_life_time);
-                    }
-                    if let Some(max_retransmits) = max_retransmits {
-                        sctp_stream_parameters.max_retransmits = Some(max_retransmits);
-                    }
+                let stream_id = self
+                    .allocate_sctp_stream_id()
+                    .ok_or(ConsumeDataError::NoSctpStreamId)?;
+                let mut sctp_stream_parameters = data_producer.sctp_stream_parameters().map_or(
+                    SctpStreamParameters {
+                        stream_id,
+                        ordered: true,
+                        max_packet_life_time,
+                        max_retransmits,
+                    },
+                    |mut sctp_parameters| {
+                        sctp_parameters.stream_id = stream_id;
+
+                        sctp_parameters
+                    },
+                );
+                if let Some(ordered) = ordered {
+                    sctp_stream_parameters.ordered = ordered;
                 }
-                sctp_stream_parameters
+                if let Some(max_packet_life_time) = max_packet_life_time {
+                    sctp_stream_parameters.max_packet_life_time = Some(max_packet_life_time);
+                }
+                if let Some(max_retransmits) = max_retransmits {
+                    sctp_stream_parameters.max_retransmits = Some(max_retransmits);
+                }
+
+                Some(sctp_stream_parameters)
             }
             DataConsumerType::Direct => {
                 if ordered.is_some() || max_packet_life_time.is_some() || max_retransmits.is_some()
@@ -730,6 +834,8 @@ pub(super) trait TransportImpl: TransportGeneric {
                     sctp_stream_parameters,
                     label: data_producer.label().clone(),
                     protocol: data_producer.protocol().clone(),
+                    subchannels,
+                    paused,
                 },
             )
             .await
@@ -741,10 +847,12 @@ pub(super) trait TransportImpl: TransportGeneric {
             response.sctp_stream_parameters,
             response.label,
             response.protocol,
+            response.paused,
             data_producer,
             Arc::clone(self.executor()),
             self.channel().clone(),
-            self.payload_channel().clone(),
+            response.data_producer_paused,
+            response.subchannels,
             app_data,
             Arc::new(self.clone()),
             transport_type == TransportType::Direct,

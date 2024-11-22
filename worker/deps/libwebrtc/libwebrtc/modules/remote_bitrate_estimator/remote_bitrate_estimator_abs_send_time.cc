@@ -289,6 +289,8 @@ void RemoteBitrateEstimatorAbsSendTime::IncomingPacketInfo(
     if (payload_size > kMinProbePacketSize &&
         (!remote_rate_.ValidEstimate() ||
          now_ms - first_packet_time_ms_ < kInitialProbingIntervalMs)) {
+
+#if MS_LOG_DEV_LEVEL == 3
       // TODO(holmer): Use a map instead to get correct order?
       if (total_probes_received_ < kMaxProbePackets) {
         int send_delta_ms = -1;
@@ -306,6 +308,8 @@ void RemoteBitrateEstimatorAbsSendTime::IncomingPacketInfo(
             send_delta_ms,
             recv_delta_ms);
       }
+#endif
+
       probes_.push_back(Probe(send_time_ms, arrival_time_ms, payload_size));
       ++total_probes_received_;
       // Make sure that a probe which updated the bitrate immediately has an

@@ -4,17 +4,16 @@
 #include "common.hpp"
 #include "Channel/ChannelRequest.hpp"
 #include "Channel/ChannelSocket.hpp"
-#include "PayloadChannel/PayloadChannelSocket.hpp"
 #include "RTC/RTCP/Packet.hpp"
 #include "RTC/SctpDictionaries.hpp"
 #include "RTC/Shared.hpp"
-#include <nlohmann/json.hpp>
 #include <string>
+#include <vector>
 
 namespace RTC
 {
 	class DataProducer : public Channel::ChannelSocket::RequestHandler,
-	                     public PayloadChannel::PayloadChannelSocket::NotificationHandler
+	                     public Channel::ChannelSocket::NotificationHandler
 	{
 	public:
 		class Listener
@@ -25,7 +24,14 @@ namespace RTC
 		public:
 			virtual void OnDataProducerReceiveData(RTC::DataProducer* producer, size_t len) = 0;
 			virtual void OnDataProducerMessageReceived(
-			  RTC::DataProducer* dataProducer, uint32_t ppid, const uint8_t* msg, size_t len) = 0;
+			  RTC::DataProducer* dataProducer,
+			  const uint8_t* msg,
+			  size_t len,
+			  uint32_t ppid,
+			  std::vector<uint16_t>& subchannels,
+			  std::optional<uint16_t> requiredSubchannel)                       = 0;
+			virtual void OnDataProducerPaused(RTC::DataProducer* dataProducer)  = 0;
+			virtual void OnDataProducerResumed(RTC::DataProducer* dataProducer) = 0;
 		};
 
 	public:
@@ -41,12 +47,14 @@ namespace RTC
 		  const std::string& id,
 		  size_t maxMessageSize,
 		  RTC::DataProducer::Listener* listener,
-		  json& data);
-		virtual ~DataProducer();
+		  const FBS::Transport::ProduceDataRequest* data);
+		~DataProducer() override;
 
 	public:
-		void FillJson(json& jsonObject) const;
-		void FillJsonStats(json& jsonArray) const;
+		flatbuffers::Offset<FBS::DataProducer::DumpResponse> FillBuffer(
+		  flatbuffers::FlatBufferBuilder& builder) const;
+		flatbuffers::Offset<FBS::DataProducer::GetStatsResponse> FillBufferStats(
+		  flatbuffers::FlatBufferBuilder& builder) const;
 		Type GetType() const
 		{
 			return this->type;
@@ -55,15 +63,24 @@ namespace RTC
 		{
 			return this->sctpStreamParameters;
 		}
-		void ReceiveMessage(uint32_t ppid, const uint8_t* msg, size_t len);
+		bool IsPaused() const
+		{
+			return this->paused;
+		}
+		void ReceiveMessage(
+		  const uint8_t* msg,
+		  size_t len,
+		  uint32_t ppid,
+		  std::vector<uint16_t>& subchannels,
+		  std::optional<uint16_t> requiredSubchannel);
 
 		/* Methods inherited from Channel::ChannelSocket::RequestHandler. */
 	public:
 		void HandleRequest(Channel::ChannelRequest* request) override;
 
-		/* Methods inherited from PayloadChannel::PayloadChannelSocket::NotificationHandler. */
+		/* Methods inherited from Channel::ChannelSocket::NotificationHandler. */
 	public:
-		void HandleNotification(PayloadChannel::PayloadChannelNotification* notification) override;
+		void HandleNotification(Channel::ChannelNotification* notification) override;
 
 	public:
 		// Passed by argument.
@@ -76,10 +93,10 @@ namespace RTC
 		RTC::DataProducer::Listener* listener{ nullptr };
 		// Others.
 		Type type;
-		std::string typeString;
 		RTC::SctpStreamParameters sctpStreamParameters;
 		std::string label;
 		std::string protocol;
+		bool paused{ false };
 		size_t messagesReceived{ 0u };
 		size_t bytesReceived{ 0u };
 	};

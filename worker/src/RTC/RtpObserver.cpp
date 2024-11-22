@@ -24,9 +24,9 @@ namespace RTC
 	{
 		MS_TRACE();
 
-		switch (request->methodId)
+		switch (request->method)
 		{
-			case Channel::ChannelRequest::MethodId::RTP_OBSERVER_PAUSE:
+			case Channel::ChannelRequest::Method::RTPOBSERVER_PAUSE:
 			{
 				this->Pause();
 
@@ -35,7 +35,7 @@ namespace RTC
 				break;
 			}
 
-			case Channel::ChannelRequest::MethodId::RTP_OBSERVER_RESUME:
+			case Channel::ChannelRequest::Method::RTPOBSERVER_RESUME:
 			{
 				this->Resume();
 
@@ -44,10 +44,11 @@ namespace RTC
 				break;
 			}
 
-			case Channel::ChannelRequest::MethodId::RTP_OBSERVER_ADD_PRODUCER:
+			case Channel::ChannelRequest::Method::RTPOBSERVER_ADD_PRODUCER:
 			{
-				// This may throw.
-				auto producerId         = GetProducerIdFromData(request->data);
+				const auto* body = request->data->body_as<FBS::RtpObserver::AddProducerRequest>();
+				auto producerId  = body->producerId()->str();
+
 				RTC::Producer* producer = this->listener->RtpObserverGetProducer(this, producerId);
 
 				this->AddProducer(producer);
@@ -59,10 +60,11 @@ namespace RTC
 				break;
 			}
 
-			case Channel::ChannelRequest::MethodId::RTP_OBSERVER_REMOVE_PRODUCER:
+			case Channel::ChannelRequest::Method::RTPOBSERVER_REMOVE_PRODUCER:
 			{
-				// This may throw.
-				auto producerId         = GetProducerIdFromData(request->data);
+				const auto* body = request->data->body_as<FBS::RtpObserver::RemoveProducerRequest>();
+				auto producerId  = body->producerId()->str();
+
 				RTC::Producer* producer = this->listener->RtpObserverGetProducer(this, producerId);
 
 				this->RemoveProducer(producer);
@@ -77,7 +79,7 @@ namespace RTC
 
 			default:
 			{
-				MS_THROW_ERROR("unknown method '%s'", request->method.c_str());
+				MS_THROW_ERROR("unknown method '%s'", request->methodCStr);
 			}
 		}
 	}
@@ -87,7 +89,9 @@ namespace RTC
 		MS_TRACE();
 
 		if (this->paused)
+		{
 			return;
+		}
 
 		this->paused = true;
 
@@ -99,22 +103,12 @@ namespace RTC
 		MS_TRACE();
 
 		if (!this->paused)
+		{
 			return;
+		}
 
 		this->paused = false;
 
 		Resumed();
-	}
-
-	std::string RtpObserver::GetProducerIdFromData(json& data) const
-	{
-		MS_TRACE();
-
-		auto jsonRouterIdIt = data.find("producerId");
-
-		if (jsonRouterIdIt == data.end() || !jsonRouterIdIt->is_string())
-			MS_THROW_ERROR("missing data.producerId");
-
-		return jsonRouterIdIt->get<std::string>();
 	}
 } // namespace RTC

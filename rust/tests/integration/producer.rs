@@ -1,7 +1,7 @@
 use async_io::Timer;
 use futures_lite::future;
 use hash_hasher::{HashedMap, HashedSet};
-use mediasoup::data_structures::{AppData, ListenIp};
+use mediasoup::data_structures::{AppData, ListenInfo, Protocol};
 use mediasoup::prelude::*;
 use mediasoup::producer::{ProducerOptions, ProducerTraceEventType, ProducerType};
 use mediasoup::router::{Router, RouterOptions};
@@ -12,7 +12,9 @@ use mediasoup::rtp_parameters::{
 };
 use mediasoup::scalability_modes::ScalabilityMode;
 use mediasoup::transport::ProduceError;
-use mediasoup::webrtc_transport::{TransportListenIps, WebRtcTransport, WebRtcTransportOptions};
+use mediasoup::webrtc_transport::{
+    WebRtcTransport, WebRtcTransportListenInfos, WebRtcTransportOptions,
+};
 use mediasoup::worker::{Worker, WorkerSettings};
 use mediasoup::worker_manager::WorkerManager;
 use std::env;
@@ -199,10 +201,17 @@ async fn init() -> (Worker, Router, WebRtcTransport, WebRtcTransport) {
         .await
         .expect("Failed to create router");
 
-    let transport_options = WebRtcTransportOptions::new(TransportListenIps::new(ListenIp {
-        ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-        announced_ip: None,
-    }));
+    let transport_options =
+        WebRtcTransportOptions::new(WebRtcTransportListenInfos::new(ListenInfo {
+            protocol: Protocol::Udp,
+            ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
+            announced_address: None,
+            port: None,
+            port_range: None,
+            flags: None,
+            send_buffer_size: None,
+            recv_buffer_size: None,
+        }));
 
     let transport_1 = router
         .create_webrtc_transport(transport_options.clone())
@@ -635,7 +644,7 @@ fn produce_already_used_mid_ssrc() {
 }
 
 #[test]
-fn produce_no_mid_single_encoding_without_dir_or_ssrc() {
+fn produce_no_mid_single_encoding_without_rid_or_ssrc() {
     future::block_on(async move {
         let (_worker, _router, transport_1, _transport_2) = init().await;
 
@@ -699,7 +708,6 @@ fn dump_succeeds() {
                     rtx: None,
                     dtx: None,
                     scalability_mode: ScalabilityMode::None,
-                    scale_resolution_down_by: None,
                     max_bitrate: None
                 }],
             );
@@ -737,7 +745,6 @@ fn dump_succeeds() {
                         rtx: Some(RtpEncodingParametersRtx { ssrc: 22222223 }),
                         dtx: None,
                         scalability_mode: "L1T3".parse().unwrap(),
-                        scale_resolution_down_by: None,
                         max_bitrate: None
                     },
                     RtpEncodingParameters {
@@ -747,7 +754,6 @@ fn dump_succeeds() {
                         rtx: Some(RtpEncodingParametersRtx { ssrc: 22222225 }),
                         dtx: None,
                         scalability_mode: ScalabilityMode::None,
-                        scale_resolution_down_by: None,
                         max_bitrate: None
                     },
                     RtpEncodingParameters {
@@ -757,7 +763,6 @@ fn dump_succeeds() {
                         rtx: Some(RtpEncodingParametersRtx { ssrc: 22222227 }),
                         dtx: None,
                         scalability_mode: ScalabilityMode::None,
-                        scale_resolution_down_by: None,
                         max_bitrate: None
                     },
                     RtpEncodingParameters {
@@ -767,7 +772,6 @@ fn dump_succeeds() {
                         rtx: Some(RtpEncodingParametersRtx { ssrc: 22222229 }),
                         dtx: None,
                         scalability_mode: ScalabilityMode::None,
-                        scale_resolution_down_by: None,
                         max_bitrate: None
                     },
                 ],
@@ -880,7 +884,10 @@ fn enable_trace_event_succeeds() {
                 .await
                 .expect("Failed to dump audio producer");
 
-            assert_eq!(dump.trace_event_types.as_str(), "rtp,pli");
+            assert_eq!(
+                dump.trace_event_types,
+                vec![ProducerTraceEventType::Rtp, ProducerTraceEventType::Pli]
+            );
         }
 
         {
@@ -894,7 +901,7 @@ fn enable_trace_event_succeeds() {
                 .await
                 .expect("Failed to dump audio producer");
 
-            assert_eq!(dump.trace_event_types.as_str(), "");
+            assert_eq!(dump.trace_event_types, vec![]);
         }
     });
 }

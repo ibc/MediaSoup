@@ -2,8 +2,9 @@
 #define MS_RTC_DTLS_TRANSPORT_HPP
 
 #include "common.hpp"
+#include "FBS/webRtcTransport.h"
 #include "RTC/SrtpSession.hpp"
-#include "handles/Timer.hpp"
+#include "handles/TimerHandle.hpp"
 #include <openssl/bio.h>
 #include <openssl/ssl.h>
 #include <openssl/x509.h>
@@ -13,7 +14,7 @@
 
 namespace RTC
 {
-	class DtlsTransport : public Timer::Listener
+	class DtlsTransport : public TimerHandle::Listener
 	{
 	public:
 		enum class DtlsState
@@ -28,7 +29,6 @@ namespace RTC
 	public:
 		enum class Role
 		{
-			NONE = 0,
 			AUTO = 1,
 			CLIENT,
 			SERVER
@@ -37,7 +37,6 @@ namespace RTC
 	public:
 		enum class FingerprintAlgorithm
 		{
-			NONE = 0,
 			SHA1 = 1,
 			SHA224,
 			SHA256,
@@ -48,7 +47,7 @@ namespace RTC
 	public:
 		struct Fingerprint
 		{
-			FingerprintAlgorithm algorithm{ FingerprintAlgorithm::NONE };
+			FingerprintAlgorithm algorithm;
 			std::string value;
 		};
 
@@ -97,30 +96,11 @@ namespace RTC
 	public:
 		static void ClassInit();
 		static void ClassDestroy();
-		static Role StringToRole(const std::string& role)
-		{
-			auto it = DtlsTransport::string2Role.find(role);
-
-			if (it != DtlsTransport::string2Role.end())
-				return it->second;
-			else
-				return DtlsTransport::Role::NONE;
-		}
-		static FingerprintAlgorithm GetFingerprintAlgorithm(const std::string& fingerprint)
-		{
-			auto it = DtlsTransport::string2FingerprintAlgorithm.find(fingerprint);
-
-			if (it != DtlsTransport::string2FingerprintAlgorithm.end())
-				return it->second;
-			else
-				return DtlsTransport::FingerprintAlgorithm::NONE;
-		}
-		static std::string& GetFingerprintAlgorithmString(FingerprintAlgorithm fingerprint)
-		{
-			auto it = DtlsTransport::fingerprintAlgorithm2String.find(fingerprint);
-
-			return it->second;
-		}
+		static Role RoleFromFbs(FBS::WebRtcTransport::DtlsRole role);
+		static FBS::WebRtcTransport::DtlsRole RoleToFbs(Role role);
+		static FBS::WebRtcTransport::DtlsState StateToFbs(DtlsState state);
+		static FingerprintAlgorithm AlgorithmFromFbs(FBS::WebRtcTransport::FingerprintAlgorithm algorithm);
+		static FBS::WebRtcTransport::FingerprintAlgorithm AlgorithmToFbs(FingerprintAlgorithm algorithm);
 		static bool IsDtls(const uint8_t* data, size_t len)
 		{
 			// clang-format off
@@ -131,6 +111,10 @@ namespace RTC
 				(data[0] > 19 && data[0] < 64)
 			);
 			// clang-format on
+		}
+		static std::vector<Fingerprint>& GetLocalFingerprints()
+		{
+			return DtlsTransport::localFingerprints;
 		}
 
 	private:
@@ -157,21 +141,19 @@ namespace RTC
 	public:
 		void Dump() const;
 		void Run(Role localRole);
-		std::vector<Fingerprint>& GetLocalFingerprints() const
-		{
-			return DtlsTransport::localFingerprints;
-		}
 		bool SetRemoteFingerprint(const Fingerprint& fingerprint);
 		void ProcessDtlsData(const uint8_t* data, size_t len);
 		DtlsState GetState() const
 		{
 			return this->state;
 		}
-		Role GetLocalRole() const
+		std::optional<Role> GetLocalRole() const
 		{
 			return this->localRole;
 		}
 		void SendApplicationData(const uint8_t* data, size_t len);
+		// This method must be public since it's called within an OpenSSL callback.
+		void SendDtlsData(const uint8_t* data, size_t len);
 
 	private:
 		bool IsRunning() const
@@ -193,20 +175,19 @@ namespace RTC
 		}
 		void Reset();
 		bool CheckStatus(int returnCode);
-		void SendPendingOutgoingDtlsData();
 		bool SetTimeout();
 		bool ProcessHandshake();
 		bool CheckRemoteFingerprint();
 		void ExtractSrtpKeys(RTC::SrtpSession::CryptoSuite srtpCryptoSuite);
-		RTC::SrtpSession::CryptoSuite GetNegotiatedSrtpCryptoSuite();
+		std::optional<RTC::SrtpSession::CryptoSuite> GetNegotiatedSrtpCryptoSuite();
 
 		/* Callbacks fired by OpenSSL events. */
 	public:
 		void OnSslInfo(int where, int ret);
 
-		/* Pure virtual methods inherited from Timer::Listener. */
+		/* Pure virtual methods inherited from TimerHandle::Listener. */
 	public:
-		void OnTimer(Timer* timer) override;
+		void OnTimer(TimerHandle* timer) override;
 
 	private:
 		// Passed by argument.
@@ -215,11 +196,11 @@ namespace RTC
 		SSL* ssl{ nullptr };
 		BIO* sslBioFromNetwork{ nullptr }; // The BIO from which ssl reads.
 		BIO* sslBioToNetwork{ nullptr };   // The BIO in which ssl writes.
-		Timer* timer{ nullptr };
+		TimerHandle* timer{ nullptr };
 		// Others.
 		DtlsState state{ DtlsState::NEW };
-		Role localRole{ Role::NONE };
-		Fingerprint remoteFingerprint;
+		std::optional<Role> localRole;
+		std::optional<Fingerprint> remoteFingerprint;
 		bool handshakeDone{ false };
 		bool handshakeDoneNow{ false };
 		std::string remoteCert;

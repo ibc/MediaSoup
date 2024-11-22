@@ -1,24 +1,30 @@
 ## Meson.
+/worker/out
 /worker/subprojects/*
 !/worker/subprojects/*.wrap
+!/worker/subprojects/.clang-tidy
 
 ## Node.
 /node_modules
 /node/lib
+# flatc generated files.
+/node/src/fbs
 
 ## Rust.
-/Cargo.lock
 /rust/examples-frontend/*/node_modules
 /rust/examples-frontend/*/package-lock.json
 /target
 
 ## Worker.
-/worker/out
 /worker/scripts/node_modules
-# Vistual Studio generated Stuff.
+# Flatc generated files.
+/worker/include/FBS
+/worker/prebuild
+# Python invoke.
+/worker/pip_invoke
+# Build artifacts.
 /worker/**/Debug
 /worker/**/Release
-/worker/.vs
 # clang-fuzzer stuff is too big.
 /worker/deps/clang-fuzzer
 # Ignore all fuzzer generated test inputs.
@@ -28,11 +34,5 @@
 ## Others.
 /coverage
 /.cache
-/NO_GIT
-*.swp
-*.swo
-.DS_Store
-# Vistual Studio Code stuff.
-/.vscode
-# JetBrains IDE stuff.
-/.idea
+# Packaged module.
+*.tgz

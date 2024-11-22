@@ -4,17 +4,19 @@ mod tests;
 use crate::data_structures::{AppData, WebRtcMessage};
 use crate::messages::{
     DataProducerCloseRequest, DataProducerDumpRequest, DataProducerGetStatsRequest,
-    DataProducerSendNotification,
+    DataProducerPauseRequest, DataProducerResumeRequest, DataProducerSendNotification,
 };
 use crate::sctp_parameters::SctpStreamParameters;
 use crate::transport::Transport;
 use crate::uuid_based_wrapper_type;
-use crate::worker::{Channel, NotificationError, PayloadChannel, RequestError};
+use crate::worker::{Channel, NotificationError, RequestError};
 use async_executor::Executor;
-use event_listener_primitives::{BagOnce, HandlerId};
+use event_listener_primitives::{Bag, BagOnce, HandlerId};
 use log::{debug, error};
+use mediasoup_sys::fbs::{data_producer, response};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use std::error::Error;
 use std::fmt;
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -41,6 +43,8 @@ pub struct DataProducerOptions {
     pub label: String,
     /// Name of the sub-protocol used by this DataChannel.
     pub protocol: String,
+    /// Whether the data producer must start in paused mode. Default false.
+    pub paused: bool,
     /// Custom application data.
     pub app_data: AppData,
 }
@@ -56,6 +60,7 @@ impl DataProducerOptions {
             sctp_stream_parameters: Some(sctp_stream_parameters),
             label: "".to_string(),
             protocol: "".to_string(),
+            paused: false,
             app_data: AppData::default(),
         }
     }
@@ -68,6 +73,7 @@ impl DataProducerOptions {
             sctp_stream_parameters: Some(sctp_stream_parameters),
             label: "".to_string(),
             protocol: "".to_string(),
+            paused: false,
             app_data: AppData::default(),
         }
     }
@@ -80,6 +86,7 @@ impl DataProducerOptions {
             sctp_stream_parameters: None,
             label: "".to_string(),
             protocol: "".to_string(),
+            paused: false,
             app_data: AppData::default(),
         }
     }
@@ -105,6 +112,28 @@ pub struct DataProducerDump {
     pub label: String,
     pub protocol: String,
     pub sctp_stream_parameters: Option<SctpStreamParameters>,
+    pub paused: bool,
+}
+
+impl DataProducerDump {
+    pub(crate) fn from_fbs(
+        dump: data_producer::DumpResponse,
+    ) -> Result<Self, Box<dyn Error + Send + Sync>> {
+        Ok(Self {
+            id: dump.id.parse()?,
+            r#type: if dump.type_ == data_producer::Type::Sctp {
+                DataProducerType::Sctp
+            } else {
+                DataProducerType::Direct
+            },
+            label: dump.label,
+            protocol: dump.protocol,
+            sctp_stream_parameters: dump
+                .sctp_stream_parameters
+                .map(|parameters| SctpStreamParameters::from_fbs(*parameters)),
+            paused: dump.paused,
+        })
+    }
 }
 
 /// RTC statistics of the data producer.
@@ -117,13 +146,27 @@ pub struct DataProducerStat {
     pub timestamp: u64,
     pub label: String,
     pub protocol: String,
-    pub messages_received: usize,
-    pub bytes_received: usize,
+    pub messages_received: u64,
+    pub bytes_received: u64,
+}
+
+impl DataProducerStat {
+    pub(crate) fn from_fbs(stats: &data_producer::GetStatsResponse) -> Self {
+        Self {
+            timestamp: stats.timestamp,
+            label: stats.label.to_string(),
+            protocol: stats.protocol.to_string(),
+            messages_received: stats.messages_received,
+            bytes_received: stats.bytes_received,
+        }
+    }
 }
 
 #[derive(Default)]
 #[allow(clippy::type_complexity)]
 struct Handlers {
+    pause: Bag<Arc<dyn Fn() + Send + Sync>>,
+    resume: Bag<Arc<dyn Fn() + Send + Sync>>,
     transport_close: BagOnce<Box<dyn FnOnce() + Send>>,
     close: BagOnce<Box<dyn FnOnce() + Send>>,
 }
@@ -134,10 +177,10 @@ struct Inner {
     sctp_stream_parameters: Option<SctpStreamParameters>,
     label: String,
     protocol: String,
+    paused: AtomicBool,
     direct: bool,
     executor: Arc<Executor<'static>>,
     channel: Channel,
-    payload_channel: PayloadChannel,
     handlers: Arc<Handlers>,
     app_data: AppData,
     transport: Arc<dyn Transport>,
@@ -194,6 +237,7 @@ impl fmt::Debug for RegularDataProducer {
             .field("sctp_stream_parameters", &self.inner.sctp_stream_parameters)
             .field("label", &self.inner.label)
             .field("protocol", &self.inner.protocol)
+            .field("paused", &self.inner.paused)
             .field("transport", &self.inner.transport)
             .field("closed", &self.inner.closed)
             .finish()
@@ -221,6 +265,7 @@ impl fmt::Debug for DirectDataProducer {
             .field("sctp_stream_parameters", &self.inner.sctp_stream_parameters)
             .field("label", &self.inner.label)
             .field("protocol", &self.inner.protocol)
+            .field("paused", &self.inner.paused)
             .field("transport", &self.inner.transport)
             .field("closed", &self.inner.closed)
             .finish()
@@ -267,9 +312,9 @@ impl DataProducer {
         sctp_stream_parameters: Option<SctpStreamParameters>,
         label: String,
         protocol: String,
+        paused: bool,
         executor: Arc<Executor<'static>>,
         channel: Channel,
-        payload_channel: PayloadChannel,
         app_data: AppData,
         transport: Arc<dyn Transport>,
         direct: bool,
@@ -296,10 +341,10 @@ impl DataProducer {
             sctp_stream_parameters,
             label,
             protocol,
+            paused: AtomicBool::new(paused),
             direct,
             executor,
             channel,
-            payload_channel,
             handlers,
             app_data,
             transport,
@@ -339,6 +384,12 @@ impl DataProducer {
         self.inner().sctp_stream_parameters
     }
 
+    /// Whether the DataProducer is paused.
+    #[must_use]
+    pub fn paused(&self) -> bool {
+        self.inner().paused.load(Ordering::SeqCst)
+    }
+
     /// The data producer label.
     #[must_use]
     pub fn label(&self) -> &String {
@@ -368,10 +419,17 @@ impl DataProducer {
     pub async fn dump(&self) -> Result<DataProducerDump, RequestError> {
         debug!("dump()");
 
-        self.inner()
+        let response = self
+            .inner()
             .channel
             .request(self.id(), DataProducerDumpRequest {})
-            .await
+            .await?;
+
+        if let response::Body::DataProducerDumpResponse(data) = response {
+            Ok(DataProducerDump::from_fbs(*data).expect("Error parsing dump response"))
+        } else {
+            panic!("Wrong message from worker");
+        }
     }
 
     /// Returns current statistics of the data producer.
@@ -381,10 +439,57 @@ impl DataProducer {
     pub async fn get_stats(&self) -> Result<Vec<DataProducerStat>, RequestError> {
         debug!("get_stats()");
 
-        self.inner()
+        let response = self
+            .inner()
             .channel
             .request(self.id(), DataProducerGetStatsRequest {})
-            .await
+            .await?;
+
+        if let response::Body::DataProducerGetStatsResponse(data) = response {
+            Ok(vec![DataProducerStat::from_fbs(&data)])
+        } else {
+            panic!("Wrong message from worker");
+        }
+    }
+
+    /// Pauses the data producer (no message is sent to its associated data consumers).
+    /// Calls [`DataConsumer::on_data_producer_pause`](crate::data_consumer::DataConsumer::on_data_producer_pause)
+    /// callback on all its associated data consumers.
+    pub async fn pause(&self) -> Result<(), RequestError> {
+        debug!("pause()");
+
+        self.inner()
+            .channel
+            .request(self.id(), DataProducerPauseRequest {})
+            .await?;
+
+        let was_paused = self.inner().paused.swap(true, Ordering::SeqCst);
+
+        if !was_paused {
+            self.inner().handlers.pause.call_simple();
+        }
+
+        Ok(())
+    }
+
+    /// Resumes the data producer (messages are sent to its associated data consumers).
+    /// Calls [`DataConsumer::on_data_producer_resume`](crate::data_consumer::DataConsumer::on_data_producer_resume)
+    /// callback on all its associated data consumers.
+    pub async fn resume(&self) -> Result<(), RequestError> {
+        debug!("resume()");
+
+        self.inner()
+            .channel
+            .request(self.id(), DataProducerResumeRequest {})
+            .await?;
+
+        let was_paused = self.inner().paused.swap(false, Ordering::SeqCst);
+
+        if was_paused {
+            self.inner().handlers.resume.call_simple();
+        }
+
+        Ok(())
     }
 
     /// Callback is called when the transport this data producer belongs to is closed for whatever
@@ -395,6 +500,16 @@ impl DataProducer {
             .handlers
             .transport_close
             .add(Box::new(callback))
+    }
+
+    /// Callback is called when the data producer is paused.
+    pub fn on_pause<F: Fn() + Send + Sync + 'static>(&self, callback: F) -> HandlerId {
+        self.inner().handlers.pause.add(Arc::new(callback))
+    }
+
+    /// Callback is called when the data producer is resumed.
+    pub fn on_resume<F: Fn() + Send + Sync + 'static>(&self, callback: F) -> HandlerId {
+        self.inner().handlers.resume.add(Arc::new(callback))
     }
 
     /// Callback is called when the producer is closed for whatever reason.
@@ -430,13 +545,22 @@ impl DataProducer {
 
 impl DirectDataProducer {
     /// Sends direct messages from the Rust to the worker.
-    pub fn send(&self, message: WebRtcMessage<'_>) -> Result<(), NotificationError> {
+    pub fn send(
+        &self,
+        message: WebRtcMessage<'_>,
+        subchannels: Option<Vec<u16>>,
+        required_subchannel: Option<u16>,
+    ) -> Result<(), NotificationError> {
         let (ppid, payload) = message.into_ppid_and_payload();
 
-        self.inner.payload_channel.notify(
+        self.inner.channel.notify(
             self.inner.id,
-            DataProducerSendNotification { ppid },
-            payload.into_owned(),
+            DataProducerSendNotification {
+                ppid,
+                payload: payload.into_owned(),
+                subchannels,
+                required_subchannel,
+            },
         )
     }
 }

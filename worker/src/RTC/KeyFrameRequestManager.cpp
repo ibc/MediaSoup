@@ -4,16 +4,15 @@
 #include "RTC/KeyFrameRequestManager.hpp"
 #include "Logger.hpp"
 
-static constexpr uint32_t KeyFrameRetransmissionWaitTime{ 1000 };
+static constexpr uint32_t KeyFrameRetransmissionWaitTime{ 1000u };
 
 /* PendingKeyFrameInfo methods. */
 
 RTC::PendingKeyFrameInfo::PendingKeyFrameInfo(PendingKeyFrameInfo::Listener* listener, uint32_t ssrc)
-  : listener(listener), ssrc(ssrc)
+  : listener(listener), ssrc(ssrc), timer(new TimerHandle(this))
 {
 	MS_TRACE();
 
-	this->timer = new Timer(this);
 	this->timer->Start(KeyFrameRetransmissionWaitTime);
 }
 
@@ -25,23 +24,24 @@ RTC::PendingKeyFrameInfo::~PendingKeyFrameInfo()
 	delete this->timer;
 }
 
-inline void RTC::PendingKeyFrameInfo::OnTimer(Timer* timer)
+inline void RTC::PendingKeyFrameInfo::OnTimer(TimerHandle* timer)
 {
 	MS_TRACE();
 
 	if (timer == this->timer)
+	{
 		this->listener->OnKeyFrameRequestTimeout(this);
+	}
 }
 
 /* KeyFrameRequestDelayer methods. */
 
 RTC::KeyFrameRequestDelayer::KeyFrameRequestDelayer(
   KeyFrameRequestDelayer::Listener* listener, uint32_t ssrc, uint32_t delay)
-  : listener(listener), ssrc(ssrc)
+  : listener(listener), ssrc(ssrc), timer(new TimerHandle(this))
 {
 	MS_TRACE();
 
-	this->timer = new Timer(this);
 	this->timer->Start(delay);
 }
 
@@ -53,12 +53,14 @@ RTC::KeyFrameRequestDelayer::~KeyFrameRequestDelayer()
 	delete this->timer;
 }
 
-inline void RTC::KeyFrameRequestDelayer::OnTimer(Timer* timer)
+inline void RTC::KeyFrameRequestDelayer::OnTimer(TimerHandle* timer)
 {
 	MS_TRACE();
 
 	if (timer == this->timer)
+	{
 		this->listener->OnKeyFrameDelayTimeout(this);
+	}
 }
 
 /* KeyFrameRequestManager methods. */
@@ -185,7 +187,9 @@ void RTC::KeyFrameRequestManager::KeyFrameReceived(uint32_t ssrc)
 
 	// There is no pending key frame for the given ssrc.
 	if (it == this->mapSsrcPendingKeyFrameInfo.end())
+	{
 		return;
+	}
 
 	auto* pendingKeyFrameInfo = it->second;
 

@@ -9,7 +9,7 @@
 
 /* Static. */
 
-static std::once_flag globalInitOnce;
+static std::once_flag GlobalInitOnce;
 
 /* Static methods. */
 
@@ -21,7 +21,7 @@ void DepLibWebRTC::ClassInit()
 	  info, "libwebrtc field trials: \"%s\"", Settings::configuration.libwebrtcFieldTrials.c_str());
 
 	std::call_once(
-	  globalInitOnce,
+	  GlobalInitOnce,
 	  []
 	  {
 		  webrtc::field_trial::InitFieldTrialsFromString(

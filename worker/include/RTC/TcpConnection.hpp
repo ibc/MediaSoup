@@ -2,11 +2,11 @@
 #define MS_RTC_TCP_CONNECTION_HPP
 
 #include "common.hpp"
-#include "handles/TcpConnectionHandler.hpp"
+#include "handles/TcpConnectionHandle.hpp"
 
 namespace RTC
 {
-	class TcpConnection : public ::TcpConnectionHandler
+	class TcpConnection : public ::TcpConnectionHandle
 	{
 	public:
 		class Listener
@@ -24,9 +24,9 @@ namespace RTC
 		~TcpConnection() override;
 
 	public:
-		void Send(const uint8_t* data, size_t len, ::TcpConnectionHandler::onSendCallback* cb);
+		void Send(const uint8_t* data, size_t len, ::TcpConnectionHandle::onSendCallback* cb);
 
-		/* Pure virtual methods inherited from ::TcpConnectionHandler. */
+		/* Pure virtual methods inherited from ::TcpConnectionHandle. */
 	public:
 		void UserOnTcpConnectionRead() override;
 

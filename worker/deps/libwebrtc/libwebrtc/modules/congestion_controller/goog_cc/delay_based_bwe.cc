@@ -61,7 +61,7 @@ DelayBasedBwe::DelayBasedBwe(const WebRtcKeyValueConfig* key_value_config,
       network_state_predictor_(network_state_predictor),
       inter_arrival_(),
       delay_detector_(
-          new TrendlineEstimator(key_value_config_, network_state_predictor_)),
+          new TrendlineEstimator(network_state_predictor_)),
       last_seen_packet_(Timestamp::MinusInfinity()),
       uma_recorded_(false),
       rate_control_(key_value_config, /*send_side=*/true),
@@ -127,7 +127,7 @@ void DelayBasedBwe::IncomingPacketFeedback(const PacketResult& packet_feedback,
         new InterArrival((kTimestampGroupLengthMs << kInterArrivalShift) / 1000,
                          kTimestampToMs, true));
     delay_detector_.reset(
-        new TrendlineEstimator(key_value_config_, network_state_predictor_));
+        new TrendlineEstimator(network_state_predictor_));
   }
   last_seen_packet_ = at_time;
 

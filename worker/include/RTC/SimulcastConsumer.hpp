@@ -1,9 +1,9 @@
 #ifndef MS_RTC_SIMULCAST_CONSUMER_HPP
 #define MS_RTC_SIMULCAST_CONSUMER_HPP
 
+#include "FBS/consumer.h"
 #include "RTC/Codecs/PayloadDescriptorHandler.hpp"
 #include "RTC/Consumer.hpp"
-#include "RTC/RtpStreamSend.hpp"
 #include "RTC/SeqManager.hpp"
 #include "RTC/Shared.hpp"
 
@@ -17,13 +17,16 @@ namespace RTC
 		  const std::string& id,
 		  const std::string& producerId,
 		  RTC::Consumer::Listener* listener,
-		  json& data);
+		  const FBS::Transport::ConsumeRequest* data);
 		~SimulcastConsumer() override;
 
 	public:
-		void FillJson(json& jsonObject) const override;
-		void FillJsonStats(json& jsonArray) const override;
-		void FillJsonScore(json& jsonObject) const override;
+		flatbuffers::Offset<FBS::Consumer::DumpResponse> FillBuffer(
+		  flatbuffers::FlatBufferBuilder& builder) const;
+		flatbuffers::Offset<FBS::Consumer::GetStatsResponse> FillBufferStats(
+		  flatbuffers::FlatBufferBuilder& builder) override;
+		flatbuffers::Offset<FBS::Consumer::ConsumerScore> FillBufferScore(
+		  flatbuffers::FlatBufferBuilder& builder) const override;
 		RTC::Consumer::Layers GetPreferredLayers() const override
 		{
 			RTC::Consumer::Layers layers;
@@ -41,18 +44,21 @@ namespace RTC
 				std::any_of(
 					this->producerRtpStreams.begin(),
 					this->producerRtpStreams.end(),
-					[](const RTC::RtpStream* rtpStream)
+					[](const RTC::RtpStreamRecv* rtpStream)
 					{
-						return (rtpStream != nullptr && (rtpStream->GetScore() > 0u || rtpStream->HasDtx()));
+						// If there is no RTP inactivity check do not consider the stream
+						// inactive despite it has score 0.
+						return (rtpStream != nullptr && (rtpStream->GetScore() > 0u || !rtpStream->HasRtpInactivityCheckEnabled()));
 					}
 				)
 			);
 			// clang-format on
 		}
-		void ProducerRtpStream(RTC::RtpStream* rtpStream, uint32_t mappedSsrc) override;
-		void ProducerNewRtpStream(RTC::RtpStream* rtpStream, uint32_t mappedSsrc) override;
-		void ProducerRtpStreamScore(RTC::RtpStream* rtpStream, uint8_t score, uint8_t previousScore) override;
-		void ProducerRtcpSenderReport(RTC::RtpStream* rtpStream, bool first) override;
+		void ProducerRtpStream(RTC::RtpStreamRecv* rtpStream, uint32_t mappedSsrc) override;
+		void ProducerNewRtpStream(RTC::RtpStreamRecv* rtpStream, uint32_t mappedSsrc) override;
+		void ProducerRtpStreamScore(
+		  RTC::RtpStreamRecv* rtpStream, uint8_t score, uint8_t previousScore) override;
+		void ProducerRtcpSenderReport(RTC::RtpStreamRecv* rtpStream, bool first) override;
 		uint8_t GetBitratePriority() const override;
 		uint32_t IncreaseLayer(uint32_t bitrate, bool considerLoss) override;
 		void ApplyLayers() override;
@@ -90,9 +96,9 @@ namespace RTC
 		bool CanSwitchToSpatialLayer(int16_t spatialLayer) const;
 		void EmitScore() const;
 		void EmitLayersChange() const;
-		RTC::RtpStream* GetProducerCurrentRtpStream() const;
-		RTC::RtpStream* GetProducerTargetRtpStream() const;
-		RTC::RtpStream* GetProducerTsReferenceRtpStream() const;
+		RTC::RtpStreamRecv* GetProducerCurrentRtpStream() const;
+		RTC::RtpStreamRecv* GetProducerTargetRtpStream() const;
+		RTC::RtpStreamRecv* GetProducerTsReferenceRtpStream() const;
 
 		/* Pure virtual methods inherited from RtpStreamSend::Listener. */
 	public:
@@ -105,11 +111,11 @@ namespace RTC
 		// Others.
 		absl::flat_hash_map<uint32_t, int16_t> mapMappedSsrcSpatialLayer;
 		std::vector<RTC::RtpStreamSend*> rtpStreams;
-		std::vector<RTC::RtpStream*> producerRtpStreams; // Indexed by spatial layer.
+		std::vector<RTC::RtpStreamRecv*> producerRtpStreams; // Indexed by spatial layer.
 		bool syncRequired{ false };
 		int16_t spatialLayerToSync{ -1 };
 		bool lastSentPacketHasMarker{ false };
-		RTC::SeqManager<uint16_t> rtpSeqManager;
+		std::unique_ptr<RTC::SeqManager<uint16_t>> rtpSeqManager;
 		int16_t preferredSpatialLayer{ -1 };
 		int16_t preferredTemporalLayer{ -1 };
 		int16_t provisionalTargetSpatialLayer{ -1 };

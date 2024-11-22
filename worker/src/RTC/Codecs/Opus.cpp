@@ -14,12 +14,72 @@ namespace RTC
 		{
 			MS_TRACE();
 
+			if (len < 1)
+			{
+				MS_WARN_DEV("ignoring empty payload");
+
+				return nullptr;
+			}
+
 			std::unique_ptr<PayloadDescriptor> payloadDescriptor(new PayloadDescriptor());
 
-			// libopus generates a single byte payload (TOC, no frames) to generate DTX.
-			if (len == 1)
+			uint8_t byte = data[0];
+
+			payloadDescriptor->stereo = (byte >> 2) & 0x01;
+			payloadDescriptor->code   = byte & 0x03;
+
+			switch (payloadDescriptor->code)
 			{
-				payloadDescriptor->isDtx = true;
+				case 0:
+				case 1:
+				{
+					// In code 0 and 1 packets, DTX is determined by total length = 1 (TOC
+					// byte only).
+					if (len == 1)
+					{
+						payloadDescriptor->isDtx = true;
+					}
+
+					break;
+				}
+
+				case 2:
+				{
+					// As per spec, a 1-byte code 2 packet is always invalid.
+					if (len == 1)
+					{
+						MS_WARN_DEV("ignoring invalid payload (1)");
+
+						return nullptr;
+					}
+
+					// In code 2 packets, DTX is determined by total length = 2 (TOC byte
+					// only). Per spec, the only valid 2-byte code 2 packet is one where
+					// the length of both frames is zero.
+					if (len == 2)
+					{
+						payloadDescriptor->isDtx = true;
+					}
+
+					break;
+				}
+
+				case 3:
+				{
+					// As per spec, a 1-byte code 3 packet is always invalid.
+					if (len == 1)
+					{
+						MS_WARN_DEV("ignoring invalid payload (2)");
+
+						return nullptr;
+					}
+
+					// A code 3 packet can never be DTX.
+
+					break;
+				}
+
+				default:;
 			}
 
 			return payloadDescriptor.release();
@@ -34,6 +94,11 @@ namespace RTC
 
 			PayloadDescriptor* payloadDescriptor = Opus::Parse(data, len);
 
+			if (!payloadDescriptor)
+			{
+				return;
+			}
+
 			auto* payloadDescriptorHandler = new PayloadDescriptorHandler(payloadDescriptor);
 
 			packet->SetPayloadDescriptorHandler(payloadDescriptorHandler);
@@ -45,9 +110,11 @@ namespace RTC
 		{
 			MS_TRACE();
 
-			MS_DUMP("<PayloadDescriptor>");
-			MS_DUMP("  isDtx : %s", this->isDtx ? "true" : "false");
-			MS_DUMP("</PayloadDescriptor>");
+			MS_DUMP("<Opus::PayloadDescriptor>");
+			MS_DUMP("  stereo: %" PRIu8, this->stereo);
+			MS_DUMP("  code: %" PRIu8, this->code);
+			MS_DUMP("  isDtx: %s", this->isDtx ? "true" : "false");
+			MS_DUMP("</Opus::PayloadDescriptor>");
 		}
 
 		Opus::PayloadDescriptorHandler::PayloadDescriptorHandler(Opus::PayloadDescriptor* payloadDescriptor)

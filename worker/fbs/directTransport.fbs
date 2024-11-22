@@ -1,0 +1,22 @@
+include "transport.fbs";
+
+namespace FBS.DirectTransport;
+
+table DirectTransportOptions {
+    base: FBS.Transport.Options (required);
+}
+
+table DumpResponse {
+    base: FBS.Transport.Dump (required);
+}
+
+table GetStatsResponse {
+    base: FBS.Transport.Stats (required);
+}
+
+// Notifications from Worker.
+
+table RtcpNotification {
+    data: [uint8] (required);
+}
+

@@ -4,6 +4,7 @@
 #include "RTC/WebRtcServer.hpp"
 #include "Logger.hpp"
 #include "MediaSoupErrors.hpp"
+#include "Settings.hpp"
 #include "Utils.hpp"
 #include <cmath> // std::pow()
 
@@ -25,115 +26,181 @@ namespace RTC
 		       std::pow(2, 0) * (256 - IceComponent);
 	}
 
+	/* Class methods. */
+
+	inline std::string WebRtcServer::GetLocalIceUsernameFragmentFromReceivedStunPacket(
+	  RTC::StunPacket* packet)
+	{
+		MS_TRACE();
+
+		// Here we inspect the USERNAME attribute of a received STUN request and
+		// extract its remote usernameFragment (the one given to our IceServer as
+		// local usernameFragment) which is the first value in the attribute value
+		// before the ":" symbol.
+
+		const auto& username  = packet->GetUsername();
+		const size_t colonPos = username.find(':');
+
+		// If no colon is found just return the whole USERNAME attribute anyway.
+		if (colonPos == std::string::npos)
+		{
+			return username;
+		}
+
+		return username.substr(0, colonPos);
+	}
+
 	/* Instance methods. */
 
-	WebRtcServer::WebRtcServer(RTC::Shared* shared, const std::string& id, json& data)
+	WebRtcServer::WebRtcServer(
+	  RTC::Shared* shared,
+	  const std::string& id,
+	  const flatbuffers::Vector<flatbuffers::Offset<FBS::Transport::ListenInfo>>* listenInfos)
 	  : id(id), shared(shared)
 	{
 		MS_TRACE();
 
-		auto jsonListenInfosIt = data.find("listenInfos");
-
-		if (jsonListenInfosIt == data.end())
-			MS_THROW_TYPE_ERROR("missing listenInfos");
-		else if (!jsonListenInfosIt->is_array())
-			MS_THROW_TYPE_ERROR("wrong listenInfos (not an array)");
-		else if (jsonListenInfosIt->empty())
-			MS_THROW_TYPE_ERROR("wrong listenInfos (empty array)");
-		else if (jsonListenInfosIt->size() > 8)
-			MS_THROW_TYPE_ERROR("wrong listenInfos (too many entries)");
-
-		std::vector<ListenInfo> listenInfos(jsonListenInfosIt->size());
-
-		for (size_t i{ 0 }; i < jsonListenInfosIt->size(); ++i)
+		if (listenInfos->size() == 0)
 		{
-			auto& jsonListenInfo = (*jsonListenInfosIt)[i];
-			auto& listenInfo     = listenInfos[i];
-
-			if (!jsonListenInfo.is_object())
-				MS_THROW_TYPE_ERROR("wrong listenInfo (not an object)");
-
-			auto jsonProtocolIt = jsonListenInfo.find("protocol");
-
-			if (jsonProtocolIt == jsonListenInfo.end())
-				MS_THROW_TYPE_ERROR("missing listenInfo.protocol");
-			else if (!jsonProtocolIt->is_string())
-				MS_THROW_TYPE_ERROR("wrong listenInfo.protocol (not an string");
-
-			std::string protocolStr = jsonProtocolIt->get<std::string>();
-
-			Utils::String::ToLowerCase(protocolStr);
-
-			if (protocolStr == "udp")
-				listenInfo.protocol = RTC::TransportTuple::Protocol::UDP;
-			else if (protocolStr == "tcp")
-				listenInfo.protocol = RTC::TransportTuple::Protocol::TCP;
-			else
-				MS_THROW_TYPE_ERROR("invalid listenInfo.protocol (must be 'udp' or 'tcp'");
-
-			auto jsonIpIt = jsonListenInfo.find("ip");
-
-			if (jsonIpIt == jsonListenInfo.end())
-				MS_THROW_TYPE_ERROR("missing listenInfo.ip");
-			else if (!jsonIpIt->is_string())
-				MS_THROW_TYPE_ERROR("wrong listenInfo.ip (not an string");
-
-			listenInfo.ip.assign(jsonIpIt->get<std::string>());
-
-			// This may throw.
-			Utils::IP::NormalizeIp(listenInfo.ip);
-
-			auto jsonAnnouncedIpIt = jsonListenInfo.find("announcedIp");
-
-			if (jsonAnnouncedIpIt != jsonListenInfo.end())
-			{
-				if (!jsonAnnouncedIpIt->is_string())
-					MS_THROW_TYPE_ERROR("wrong listenInfo.announcedIp (not an string)");
-
-				listenInfo.announcedIp.assign(jsonAnnouncedIpIt->get<std::string>());
-			}
-
-			uint16_t port{ 0 };
-			auto jsonPortIt = jsonListenInfo.find("port");
-
-			if (jsonPortIt != jsonListenInfo.end())
-			{
-				if (!(jsonPortIt->is_number() && Utils::Json::IsPositiveInteger(*jsonPortIt)))
-					MS_THROW_TYPE_ERROR("wrong port (not a positive number)");
-
-				port = jsonPortIt->get<uint16_t>();
-			}
-
-			listenInfo.port = port;
+			MS_THROW_TYPE_ERROR("wrong listenInfos (empty array)");
+		}
+		else if (listenInfos->size() > 8)
+		{
+			MS_THROW_TYPE_ERROR("wrong listenInfos (too many entries)");
 		}
 
 		try
 		{
-			for (auto& listenInfo : listenInfos)
+			for (const auto* listenInfo : *listenInfos)
 			{
-				if (listenInfo.protocol == RTC::TransportTuple::Protocol::UDP)
+				auto ip = listenInfo->ip()->str();
+
+				// This may throw.
+				Utils::IP::NormalizeIp(ip);
+
+				std::string announcedAddress;
+
+				if (flatbuffers::IsFieldPresent(listenInfo, FBS::Transport::ListenInfo::VT_ANNOUNCEDADDRESS))
+				{
+					announcedAddress = listenInfo->announcedAddress()->str();
+				}
+
+				RTC::Transport::SocketFlags flags;
+
+				flags.ipv6Only     = listenInfo->flags()->ipv6Only();
+				flags.udpReusePort = listenInfo->flags()->udpReusePort();
+
+				if (listenInfo->protocol() == FBS::Transport::Protocol::UDP)
 				{
 					// This may throw.
 					RTC::UdpSocket* udpSocket;
 
-					if (listenInfo.port != 0)
-						udpSocket = new RTC::UdpSocket(this, listenInfo.ip, listenInfo.port);
-					else
-						udpSocket = new RTC::UdpSocket(this, listenInfo.ip);
+					if (listenInfo->portRange()->min() != 0 && listenInfo->portRange()->max() != 0)
+					{
+						uint64_t portRangeHash{ 0u };
 
-					this->udpSocketOrTcpServers.emplace_back(udpSocket, nullptr, listenInfo.announcedIp);
+						udpSocket = new RTC::UdpSocket(
+						  this,
+						  ip,
+						  listenInfo->portRange()->min(),
+						  listenInfo->portRange()->max(),
+						  flags,
+						  portRangeHash);
+					}
+					else if (listenInfo->port() != 0)
+					{
+						udpSocket = new RTC::UdpSocket(this, ip, listenInfo->port(), flags);
+					}
+					// NOTE: This is temporal to allow deprecated usage of worker port range.
+					// In the future this should throw since |port| or |portRange| will be
+					// required.
+					else
+					{
+						uint64_t portRangeHash{ 0u };
+
+						udpSocket = new RTC::UdpSocket(
+						  this,
+						  ip,
+						  Settings::configuration.rtcMinPort,
+						  Settings::configuration.rtcMaxPort,
+						  flags,
+						  portRangeHash);
+					}
+
+					this->udpSocketOrTcpServers.emplace_back(udpSocket, nullptr, announcedAddress);
+
+					if (listenInfo->sendBufferSize() != 0)
+					{
+						udpSocket->SetSendBufferSize(listenInfo->sendBufferSize());
+					}
+
+					if (listenInfo->recvBufferSize() != 0)
+					{
+						udpSocket->SetRecvBufferSize(listenInfo->recvBufferSize());
+					}
+
+					MS_DEBUG_TAG(
+					  info,
+					  "UDP socket send buffer size: %d, recv buffer size: %d",
+					  udpSocket->GetSendBufferSize(),
+					  udpSocket->GetRecvBufferSize());
 				}
-				else if (listenInfo.protocol == RTC::TransportTuple::Protocol::TCP)
+				else if (listenInfo->protocol() == FBS::Transport::Protocol::TCP)
 				{
 					// This may throw.
 					RTC::TcpServer* tcpServer;
 
-					if (listenInfo.port != 0)
-						tcpServer = new RTC::TcpServer(this, this, listenInfo.ip, listenInfo.port);
-					else
-						tcpServer = new RTC::TcpServer(this, this, listenInfo.ip);
+					if (listenInfo->portRange()->min() != 0 && listenInfo->portRange()->max() != 0)
+					{
+						uint64_t portRangeHash{ 0u };
 
-					this->udpSocketOrTcpServers.emplace_back(nullptr, tcpServer, listenInfo.announcedIp);
+						tcpServer = new RTC::TcpServer(
+						  this,
+						  this,
+						  ip,
+						  listenInfo->portRange()->min(),
+						  listenInfo->portRange()->max(),
+						  flags,
+						  portRangeHash);
+					}
+					else if (listenInfo->port() != 0)
+					{
+						tcpServer = new RTC::TcpServer(this, this, ip, listenInfo->port(), flags);
+					}
+					// NOTE: This is temporal to allow deprecated usage of worker port range.
+					// In the future this should throw since |port| or |portRange| will be
+					// required.
+					else
+					{
+						uint64_t portRangeHash{ 0u };
+
+						tcpServer = new RTC::TcpServer(
+						  this,
+						  this,
+						  ip,
+						  Settings::configuration.rtcMinPort,
+						  Settings::configuration.rtcMaxPort,
+						  flags,
+						  portRangeHash);
+					}
+
+					this->udpSocketOrTcpServers.emplace_back(nullptr, tcpServer, announcedAddress);
+
+					if (listenInfo->sendBufferSize() != 0)
+					{
+						tcpServer->SetSendBufferSize(listenInfo->sendBufferSize());
+					}
+
+					if (listenInfo->recvBufferSize() != 0)
+					{
+						tcpServer->SetRecvBufferSize(listenInfo->recvBufferSize());
+					}
+
+					MS_DEBUG_TAG(
+					  info,
+					  "TCP server send buffer size: %d, recv buffer size: %d",
+					  tcpServer->GetSendBufferSize(),
+					  tcpServer->GetRecvBufferSize());
 				}
 			}
 
@@ -141,8 +208,7 @@ namespace RTC
 			this->shared->channelMessageRegistrator->RegisterHandler(
 			  this->id,
 			  /*channelRequestHandler*/ this,
-			  /*payloadChannelRequestHandler*/ nullptr,
-			  /*payloadChannelNotificationHandler*/ nullptr);
+			  /*channelNotificationHandler*/ nullptr);
 		}
 		catch (const MediaSoupError& error)
 		{
@@ -166,7 +232,18 @@ namespace RTC
 	{
 		MS_TRACE();
 
+		this->closing = true;
+
 		this->shared->channelMessageRegistrator->UnregisterHandler(this->id);
+
+		// NOTE: We need to close WebRtcTransports first since they may need to
+		// send DTLS Close Alert so UDP sockets and TCP connections must remain
+		// open.
+		for (auto* webRtcTransport : this->webRtcTransports)
+		{
+			webRtcTransport->ListenServerClosed();
+		}
+		this->webRtcTransports.clear();
 
 		for (auto& item : this->udpSocketOrTcpServers)
 		{
@@ -177,169 +254,146 @@ namespace RTC
 			item.tcpServer = nullptr;
 		}
 		this->udpSocketOrTcpServers.clear();
-
-		for (auto* webRtcTransport : this->webRtcTransports)
-		{
-			webRtcTransport->ListenServerClosed();
-		}
-		this->webRtcTransports.clear();
 	}
 
-	void WebRtcServer::FillJson(json& jsonObject) const
+	flatbuffers::Offset<FBS::WebRtcServer::DumpResponse> WebRtcServer::FillBuffer(
+	  flatbuffers::FlatBufferBuilder& builder) const
 	{
 		MS_TRACE();
 
-		// Add id.
-		jsonObject["id"] = this->id;
-
 		// Add udpSockets and tcpServers.
-		jsonObject["udpSockets"] = json::array();
-		auto jsonUdpSocketsIt    = jsonObject.find("udpSockets");
-		jsonObject["tcpServers"] = json::array();
-		auto jsonTcpServersIt    = jsonObject.find("tcpServers");
+		std::vector<flatbuffers::Offset<FBS::WebRtcServer::IpPort>> udpSockets;
+		std::vector<flatbuffers::Offset<FBS::WebRtcServer::IpPort>> tcpServers;
 
-		size_t udpSocketIdx{ 0 };
-		size_t tcpServerIdx{ 0 };
-
-		for (auto& item : this->udpSocketOrTcpServers)
+		for (const auto& item : this->udpSocketOrTcpServers)
 		{
 			if (item.udpSocket)
 			{
-				jsonUdpSocketsIt->emplace_back(json::value_t::object);
-
-				auto& jsonEntry = (*jsonUdpSocketsIt)[udpSocketIdx];
-
-				jsonEntry["ip"]   = item.udpSocket->GetLocalIp();
-				jsonEntry["port"] = item.udpSocket->GetLocalPort();
-
-				++udpSocketIdx;
+				udpSockets.emplace_back(FBS::WebRtcServer::CreateIpPortDirect(
+				  builder, item.udpSocket->GetLocalIp().c_str(), item.udpSocket->GetLocalPort()));
 			}
 			else if (item.tcpServer)
 			{
-				jsonTcpServersIt->emplace_back(json::value_t::object);
-
-				auto& jsonEntry = (*jsonTcpServersIt)[tcpServerIdx];
-
-				jsonEntry["ip"]   = item.tcpServer->GetLocalIp();
-				jsonEntry["port"] = item.tcpServer->GetLocalPort();
-
-				++tcpServerIdx;
+				tcpServers.emplace_back(FBS::WebRtcServer::CreateIpPortDirect(
+				  builder, item.tcpServer->GetLocalIp().c_str(), item.tcpServer->GetLocalPort()));
 			}
 		}
 
 		// Add webRtcTransportIds.
-		jsonObject["webRtcTransportIds"] = json::array();
-		auto jsonWebRtcTransportIdsIt    = jsonObject.find("webRtcTransportIds");
+		std::vector<flatbuffers::Offset<flatbuffers::String>> webRtcTransportIds;
 
 		for (auto* webRtcTransport : this->webRtcTransports)
 		{
-			jsonWebRtcTransportIdsIt->emplace_back(webRtcTransport->id);
+			webRtcTransportIds.emplace_back(builder.CreateString(webRtcTransport->id));
 		}
 
-		size_t idx;
-
 		// Add localIceUsernameFragments.
-		jsonObject["localIceUsernameFragments"] = json::array();
-		auto jsonLocalIceUsernamesIt            = jsonObject.find("localIceUsernameFragments");
+		std::vector<flatbuffers::Offset<FBS::WebRtcServer::IceUserNameFragment>> localIceUsernameFragments;
 
-		idx = 0;
-		for (auto& kv : this->mapLocalIceUsernameFragmentWebRtcTransport)
+		for (const auto& kv : this->mapLocalIceUsernameFragmentWebRtcTransport)
 		{
 			const auto& localIceUsernameFragment = kv.first;
 			const auto* webRtcTransport          = kv.second;
 
-			jsonLocalIceUsernamesIt->emplace_back(json::value_t::object);
-
-			auto& jsonEntry = (*jsonLocalIceUsernamesIt)[idx];
-
-			jsonEntry["localIceUsernameFragment"] = localIceUsernameFragment;
-			jsonEntry["webRtcTransportId"]        = webRtcTransport->id;
-
-			++idx;
+			localIceUsernameFragments.emplace_back(FBS::WebRtcServer::CreateIceUserNameFragmentDirect(
+			  builder, localIceUsernameFragment.c_str(), webRtcTransport->id.c_str()));
 		}
 
 		// Add tupleHashes.
-		jsonObject["tupleHashes"] = json::array();
-		auto jsonTupleHashesIt    = jsonObject.find("tupleHashes");
+		std::vector<flatbuffers::Offset<FBS::WebRtcServer::TupleHash>> tupleHashes;
 
-		idx = 0;
-		for (auto& kv : this->mapTupleWebRtcTransport)
+		for (const auto& kv : this->mapTupleWebRtcTransport)
 		{
 			const auto& tupleHash       = kv.first;
 			const auto* webRtcTransport = kv.second;
 
-			jsonTupleHashesIt->emplace_back(json::value_t::object);
-
-			auto& jsonEntry = (*jsonTupleHashesIt)[idx];
-
-			jsonEntry["tupleHash"]         = tupleHash;
-			jsonEntry["webRtcTransportId"] = webRtcTransport->id;
-
-			++idx;
+			tupleHashes.emplace_back(
+			  FBS::WebRtcServer::CreateTupleHashDirect(builder, tupleHash, webRtcTransport->id.c_str()));
 		}
+
+		return FBS::WebRtcServer::CreateDumpResponseDirect(
+		  builder,
+		  this->id.c_str(),
+		  &udpSockets,
+		  &tcpServers,
+		  &webRtcTransportIds,
+		  &localIceUsernameFragments,
+		  &tupleHashes);
 	}
 
 	void WebRtcServer::HandleRequest(Channel::ChannelRequest* request)
 	{
 		MS_TRACE();
 
-		switch (request->methodId)
+		switch (request->method)
 		{
-			case Channel::ChannelRequest::MethodId::WEBRTC_SERVER_DUMP:
+			case Channel::ChannelRequest::Method::WEBRTCSERVER_DUMP:
 			{
-				json data = json::object();
+				auto dumpOffset = FillBuffer(request->GetBufferBuilder());
 
-				FillJson(data);
-
-				request->Accept(data);
+				request->Accept(FBS::Response::Body::WebRtcServer_DumpResponse, dumpOffset);
 
 				break;
 			}
 
 			default:
 			{
-				MS_THROW_ERROR("unknown method '%s'", request->method.c_str());
+				MS_THROW_ERROR("unknown method '%s'", request->methodCStr);
 			}
 		}
 	}
 
 	std::vector<RTC::IceCandidate> WebRtcServer::GetIceCandidates(
-	  bool enableUdp, bool enableTcp, bool preferUdp, bool preferTcp)
+	  bool enableUdp, bool enableTcp, bool preferUdp, bool preferTcp) const
 	{
 		MS_TRACE();
 
 		std::vector<RTC::IceCandidate> iceCandidates;
 		uint16_t iceLocalPreferenceDecrement{ 0 };
 
-		for (auto& item : this->udpSocketOrTcpServers)
+		for (const auto& item : this->udpSocketOrTcpServers)
 		{
 			if (item.udpSocket && enableUdp)
 			{
 				uint16_t iceLocalPreference = IceCandidateDefaultLocalPriority - iceLocalPreferenceDecrement;
 
 				if (preferUdp)
+				{
 					iceLocalPreference += 1000;
+				}
 
-				uint32_t icePriority = generateIceCandidatePriority(iceLocalPreference);
+				const uint32_t icePriority = generateIceCandidatePriority(iceLocalPreference);
 
-				if (item.announcedIp.empty())
+				if (item.announcedAddress.empty())
+				{
 					iceCandidates.emplace_back(item.udpSocket, icePriority);
+				}
 				else
-					iceCandidates.emplace_back(item.udpSocket, icePriority, item.announcedIp);
+				{
+					iceCandidates.emplace_back(
+					  item.udpSocket, icePriority, const_cast<std::string&>(item.announcedAddress));
+				}
 			}
 			else if (item.tcpServer && enableTcp)
 			{
 				uint16_t iceLocalPreference = IceCandidateDefaultLocalPriority - iceLocalPreferenceDecrement;
 
 				if (preferTcp)
+				{
 					iceLocalPreference += 1000;
+				}
 
-				uint32_t icePriority = generateIceCandidatePriority(iceLocalPreference);
+				const uint32_t icePriority = generateIceCandidatePriority(iceLocalPreference);
 
-				if (item.announcedIp.empty())
+				if (item.announcedAddress.empty())
+				{
 					iceCandidates.emplace_back(item.tcpServer, icePriority);
+				}
 				else
-					iceCandidates.emplace_back(item.tcpServer, icePriority, item.announcedIp);
+				{
+					iceCandidates.emplace_back(
+					  item.tcpServer, icePriority, const_cast<std::string&>(item.announcedAddress));
+				}
 			}
 
 			// Decrement initial ICE local preference for next IP.
@@ -347,26 +401,6 @@ namespace RTC
 		}
 
 		return iceCandidates;
-	}
-
-	inline std::string WebRtcServer::GetLocalIceUsernameFragmentFromReceivedStunPacket(
-	  RTC::StunPacket* packet) const
-	{
-		MS_TRACE();
-
-		// Here we inspect the USERNAME attribute of a received STUN request and
-		// extract its remote usernameFragment (the one given to our IceServer as
-		// local usernameFragment) which is the first value in the attribute value
-		// before the ":" symbol.
-
-		auto& username  = packet->GetUsername();
-		size_t colonPos = username.find(':');
-
-		// If no colon is found just return the whole USERNAME attribute anyway.
-		if (colonPos == std::string::npos)
-			return username;
-
-		return username.substr(0, colonPos);
 	}
 
 	inline void WebRtcServer::OnPacketReceived(RTC::TransportTuple* tuple, const uint8_t* data, size_t len)
@@ -411,7 +445,7 @@ namespace RTC
 		}
 
 		// Otherwise try to match the local ICE username fragment.
-		auto key = GetLocalIceUsernameFragmentFromReceivedStunPacket(packet);
+		auto key = WebRtcServer::GetLocalIceUsernameFragmentFromReceivedStunPacket(packet);
 		auto it2 = this->mapLocalIceUsernameFragmentWebRtcTransport.find(key);
 
 		if (it2 == this->mapLocalIceUsernameFragmentWebRtcTransport.end())
@@ -468,7 +502,14 @@ namespace RTC
 		  this->webRtcTransports.find(webRtcTransport) != this->webRtcTransports.end(),
 		  "WebRtcTransport not handled");
 
-		this->webRtcTransports.erase(webRtcTransport);
+		// NOTE: If WebRtcServer is closing then do not remove the transport from
+		// the set since it would modify the set while the WebRtcServer destructor
+		// is iterating it.
+		// See: https://github.com/versatica/mediasoup/pull/1369#issuecomment-2044672247
+		if (!this->closing)
+		{
+			this->webRtcTransports.erase(webRtcTransport);
+		}
 	}
 
 	inline void WebRtcServer::OnWebRtcTransportLocalIceUsernameFragmentAdded(
@@ -485,7 +526,7 @@ namespace RTC
 	}
 
 	inline void WebRtcServer::OnWebRtcTransportLocalIceUsernameFragmentRemoved(
-	  RTC::WebRtcTransport* webRtcTransport, const std::string& usernameFragment)
+	  RTC::WebRtcTransport* /*webRtcTransport*/, const std::string& usernameFragment)
 	{
 		MS_TRACE();
 
@@ -513,13 +554,13 @@ namespace RTC
 	}
 
 	inline void WebRtcServer::OnWebRtcTransportTransportTupleRemoved(
-	  RTC::WebRtcTransport* webRtcTransport, RTC::TransportTuple* tuple)
+	  RTC::WebRtcTransport* /*webRtcTransport*/, RTC::TransportTuple* tuple)
 	{
 		MS_TRACE();
 
 		if (this->mapTupleWebRtcTransport.find(tuple->hash) == this->mapTupleWebRtcTransport.end())
 		{
-			MS_WARN_TAG(ice, "tuple hash not found in the table");
+			MS_DEBUG_TAG(ice, "tuple hash not found in the table");
 
 			return;
 		}
@@ -551,7 +592,9 @@ namespace RTC
 		auto it = this->mapTupleWebRtcTransport.find(tuple.hash);
 
 		if (it == this->mapTupleWebRtcTransport.end())
+		{
 			return;
+		}
 
 		auto* webRtcTransport = it->second;
 

@@ -1,0 +1,7 @@
+# Bad workaround to disable clang-tidy checks in worker/subprojects folder.
+# Ideally we should use a modern version so worker/.clang-tidy-ignore would be
+# honored. Here we should also be able to do Checks: '-*' to disable all rules
+# but if we do it it fails with "Error: no checks enable".
+---
+Checks: 'modernize-*'
+...

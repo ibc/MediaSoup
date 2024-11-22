@@ -106,11 +106,6 @@ namespace RTC
 			{
 				switch (type)
 				{
-					case RTC::RtpParameters::Type::NONE:
-					{
-						return false;
-					}
-
 					case RTC::RtpParameters::Type::SIMPLE:
 					{
 						return true;
@@ -165,11 +160,6 @@ namespace RTC
 					case RTC::RtpParameters::Type::PIPE:
 					{
 						return true;
-					}
-
-					default:
-					{
-						return false;
 					}
 				}
 			}

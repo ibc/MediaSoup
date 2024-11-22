@@ -1,61 +1,40 @@
 import { Logger } from './Logger';
-import { EnhancedEventEmitter } from './EnhancedEventEmitter';
-import { Channel } from './Channel';
-import { PayloadChannel } from './PayloadChannel';
-import { RouterInternal } from './Router';
-import { Producer } from './Producer';
+import { EnhancedEventEmitter } from './enhancedEvents';
+import type {
+	RtpObserverEvents,
+	RtpObserverObserver,
+} from './RtpObserverTypes';
+import type { Channel } from './Channel';
+import type { RouterInternal } from './Router';
+import type { Producer } from './ProducerTypes';
+import type { AppData } from './types';
+import * as FbsRequest from './fbs/request';
+import * as FbsRouter from './fbs/router';
+import * as FbsRtpObserver from './fbs/rtp-observer';
 
-export type RtpObserverEvents =
-{
-	routerclose: [];
-	// Private events.
-	'@close': [];
-};
-
-export type RtpObserverObserverEvents =
-{
-	close: [];
-	pause: [];
-	resume: [];
-	addproducer: [Producer];
-	removeproducer: [Producer];
-};
-
-export type RtpObserverConstructorOptions =
-{
+export type RtpObserverConstructorOptions<RtpObserverAppData> = {
 	internal: RtpObserverObserverInternal;
 	channel: Channel;
-	payloadChannel: PayloadChannel;
-	appData?: Record<string, unknown>;
+	appData?: RtpObserverAppData;
 	getProducerById: (producerId: string) => Producer | undefined;
 };
 
-export type RtpObserverObserverInternal = RouterInternal &
-{
+type RtpObserverObserverInternal = RouterInternal & {
 	rtpObserverId: string;
 };
 
 const logger = new Logger('RtpObserver');
 
-export type RtpObserverAddRemoveProducerOptions =
-{
-	/**
-	 * The id of the Producer to be added or removed.
-	 */
-	producerId: string;
-};
-
-export class RtpObserver<E extends RtpObserverEvents = RtpObserverEvents>
-	extends EnhancedEventEmitter<E>
-{
+export abstract class RtpObserverImpl<
+	RtpObserverAppData extends AppData = AppData,
+	Events extends RtpObserverEvents = RtpObserverEvents,
+	Observer extends RtpObserverObserver = RtpObserverObserver,
+> extends EnhancedEventEmitter<Events> {
 	// Internal data.
 	protected readonly internal: RtpObserverObserverInternal;
 
 	// Channel instance.
 	protected readonly channel: Channel;
-
-	// PayloadChannel instance.
-	protected readonly payloadChannel: PayloadChannel;
 
 	// Closed flag.
 	#closed = false;
@@ -64,94 +43,64 @@ export class RtpObserver<E extends RtpObserverEvents = RtpObserverEvents>
 	#paused = false;
 
 	// Custom app data.
-	readonly #appData: Record<string, unknown>;
+	#appData: RtpObserverAppData;
 
 	// Method to retrieve a Producer.
-	protected readonly getProducerById: (producerId: string) => Producer | undefined;
+	protected readonly getProducerById: (
+		producerId: string
+	) => Producer | undefined;
 
 	// Observer instance.
-	readonly #observer = new EnhancedEventEmitter<RtpObserverObserverEvents>();
+	readonly #observer: Observer;
 
-	/**
-	 * @private
-	 * @interface
-	 */
-	constructor(
+	protected constructor(
 		{
 			internal,
 			channel,
-			payloadChannel,
 			appData,
-			getProducerById
-		}: RtpObserverConstructorOptions
-	)
-	{
+			getProducerById,
+		}: RtpObserverConstructorOptions<RtpObserverAppData>,
+		observer: Observer
+	) {
 		super();
 
 		logger.debug('constructor()');
 
 		this.internal = internal;
 		this.channel = channel;
-		this.payloadChannel = payloadChannel;
-		this.#appData = appData || {};
+		this.#appData = appData ?? ({} as RtpObserverAppData);
 		this.getProducerById = getProducerById;
+		this.#observer = observer;
 	}
 
-	/**
-	 * RtpObserver id.
-	 */
-	get id(): string
-	{
+	get id(): string {
 		return this.internal.rtpObserverId;
 	}
 
-	/**
-	 * Whether the RtpObserver is closed.
-	 */
-	get closed(): boolean
-	{
+	get closed(): boolean {
 		return this.#closed;
 	}
 
-	/**
-	 * Whether the RtpObserver is paused.
-	 */
-	get paused(): boolean
-	{
+	get paused(): boolean {
 		return this.#paused;
 	}
 
-	/**
-	 * App custom data.
-	 */
-	get appData(): Record<string, unknown>
-	{
+	get appData(): RtpObserverAppData {
 		return this.#appData;
 	}
 
-	/**
-	 * Invalid setter.
-	 */
-	set appData(appData: Record<string, unknown>) // eslint-disable-line no-unused-vars
-	{
-		throw new Error('cannot override appData object');
+	set appData(appData: RtpObserverAppData) {
+		this.#appData = appData;
 	}
 
-	/**
-	 * Observer.
-	 */
-	get observer(): EnhancedEventEmitter<RtpObserverObserverEvents>
-	{
+	get observer(): Observer {
 		return this.#observer;
 	}
 
-	/**
-	 * Close the RtpObserver.
-	 */
-	close(): void
-	{
-		if (this.#closed)
+	close(): void {
+		if (this.#closed) {
 			return;
+		}
 
 		logger.debug('close()');
 
@@ -159,11 +108,19 @@ export class RtpObserver<E extends RtpObserverEvents = RtpObserverEvents>
 
 		// Remove notification subscriptions.
 		this.channel.removeAllListeners(this.internal.rtpObserverId);
-		this.payloadChannel.removeAllListeners(this.internal.rtpObserverId);
 
-		const reqData = { rtpObserverId: this.internal.rtpObserverId };
+		/* Build Request. */
+		const requestOffset = new FbsRouter.CloseRtpObserverRequestT(
+			this.internal.rtpObserverId
+		).pack(this.channel.bufferBuilder);
 
-		this.channel.request('router.closeRtpObserver', this.internal.routerId, reqData)
+		this.channel
+			.request(
+				FbsRequest.Method.ROUTER_CLOSE_RTPOBSERVER,
+				FbsRequest.Body.Router_CloseRtpObserverRequest,
+				requestOffset,
+				this.internal.routerId
+			)
 			.catch(() => {});
 
 		this.emit('@close');
@@ -172,15 +129,10 @@ export class RtpObserver<E extends RtpObserverEvents = RtpObserverEvents>
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Router was closed.
-	 *
-	 * @private
-	 */
-	routerClosed(): void
-	{
-		if (this.#closed)
+	routerClosed(): void {
+		if (this.#closed) {
 			return;
+		}
 
 		logger.debug('routerClosed()');
 
@@ -188,7 +140,6 @@ export class RtpObserver<E extends RtpObserverEvents = RtpObserverEvents>
 
 		// Remove notification subscriptions.
 		this.channel.removeAllListeners(this.internal.rtpObserverId);
-		this.payloadChannel.removeAllListeners(this.internal.rtpObserverId);
 
 		this.safeEmit('routerclose');
 
@@ -196,77 +147,89 @@ export class RtpObserver<E extends RtpObserverEvents = RtpObserverEvents>
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Pause the RtpObserver.
-	 */
-	async pause(): Promise<void>
-	{
+	async pause(): Promise<void> {
 		logger.debug('pause()');
 
 		const wasPaused = this.#paused;
 
-		await this.channel.request('rtpObserver.pause', this.internal.rtpObserverId);
+		await this.channel.request(
+			FbsRequest.Method.RTPOBSERVER_PAUSE,
+			undefined,
+			undefined,
+			this.internal.rtpObserverId
+		);
 
 		this.#paused = true;
 
 		// Emit observer event.
-		if (!wasPaused)
+		if (!wasPaused) {
 			this.#observer.safeEmit('pause');
+		}
 	}
 
-	/**
-	 * Resume the RtpObserver.
-	 */
-	async resume(): Promise<void>
-	{
+	async resume(): Promise<void> {
 		logger.debug('resume()');
 
 		const wasPaused = this.#paused;
 
-		await this.channel.request('rtpObserver.resume', this.internal.rtpObserverId);
+		await this.channel.request(
+			FbsRequest.Method.RTPOBSERVER_RESUME,
+			undefined,
+			undefined,
+			this.internal.rtpObserverId
+		);
 
 		this.#paused = false;
 
 		// Emit observer event.
-		if (wasPaused)
+		if (wasPaused) {
 			this.#observer.safeEmit('resume');
+		}
 	}
 
-	/**
-	 * Add a Producer to the RtpObserver.
-	 */
-	async addProducer({ producerId }: RtpObserverAddRemoveProducerOptions): Promise<void>
-	{
+	async addProducer({ producerId }: { producerId: string }): Promise<void> {
 		logger.debug('addProducer()');
 
 		const producer = this.getProducerById(producerId);
 
-		if (!producer)
+		if (!producer) {
 			throw Error(`Producer with id "${producerId}" not found`);
+		}
 
-		const reqData = { producerId };
+		const requestOffset = new FbsRtpObserver.AddProducerRequestT(
+			producerId
+		).pack(this.channel.bufferBuilder);
 
-		await this.channel.request('rtpObserver.addProducer', this.internal.rtpObserverId, reqData);
+		await this.channel.request(
+			FbsRequest.Method.RTPOBSERVER_ADD_PRODUCER,
+			FbsRequest.Body.RtpObserver_AddProducerRequest,
+			requestOffset,
+			this.internal.rtpObserverId
+		);
 
 		// Emit observer event.
 		this.#observer.safeEmit('addproducer', producer);
 	}
 
-	/**
-	 * Remove a Producer from the RtpObserver.
-	 */
-	async removeProducer({ producerId }: RtpObserverAddRemoveProducerOptions): Promise<void>
-	{
+	async removeProducer({ producerId }: { producerId: string }): Promise<void> {
 		logger.debug('removeProducer()');
 
 		const producer = this.getProducerById(producerId);
 
-		if (!producer)
+		if (!producer) {
 			throw Error(`Producer with id "${producerId}" not found`);
+		}
 
-		const reqData = { producerId };
+		const requestOffset = new FbsRtpObserver.RemoveProducerRequestT(
+			producerId
+		).pack(this.channel.bufferBuilder);
 
-		await this.channel.request('rtpObserver.removeProducer', this.internal.rtpObserverId, reqData);
+		await this.channel.request(
+			FbsRequest.Method.RTPOBSERVER_REMOVE_PRODUCER,
+			FbsRequest.Body.RtpObserver_RemoveProducerRequest,
+			requestOffset,
+			this.internal.rtpObserverId
+		);
 
 		// Emit observer event.
 		this.#observer.safeEmit('removeproducer', producer);

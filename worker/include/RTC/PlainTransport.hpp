@@ -1,6 +1,7 @@
 #ifndef MS_RTC_PLAIN_TRANSPORT_HPP
 #define MS_RTC_PLAIN_TRANSPORT_HPP
 
+#include "FBS/plainTransport.h"
 #include "RTC/Shared.hpp"
 #include "RTC/SrtpSession.hpp"
 #include "RTC/Transport.hpp"
@@ -12,33 +13,24 @@ namespace RTC
 {
 	class PlainTransport : public RTC::Transport, public RTC::UdpSocket::Listener
 	{
-	private:
-		struct ListenIp
-		{
-			std::string ip;
-			std::string announcedIp;
-		};
-
-	private:
-		static absl::flat_hash_map<std::string, RTC::SrtpSession::CryptoSuite> string2SrtpCryptoSuite;
-		static absl::flat_hash_map<RTC::SrtpSession::CryptoSuite, std::string> srtpCryptoSuite2String;
-
 	public:
 		PlainTransport(
-		  RTC::Shared* shared, const std::string& id, RTC::Transport::Listener* listener, json& data);
+		  RTC::Shared* shared,
+		  const std::string& id,
+		  RTC::Transport::Listener* listener,
+		  const FBS::PlainTransport::PlainTransportOptions* options);
 		~PlainTransport() override;
 
 	public:
-		void FillJson(json& jsonObject) const override;
-		void FillJsonStats(json& jsonArray) override;
+		flatbuffers::Offset<FBS::PlainTransport::GetStatsResponse> FillBufferStats(
+		  flatbuffers::FlatBufferBuilder& builder);
+		flatbuffers::Offset<FBS::PlainTransport::DumpResponse> FillBuffer(
+		  flatbuffers::FlatBufferBuilder& builder) const;
 
 		/* Methods inherited from Channel::ChannelSocket::RequestHandler. */
 	public:
 		void HandleRequest(Channel::ChannelRequest* request) override;
-
-		/* Methods inherited from PayloadChannel::PayloadChannelSocket::NotificationHandler. */
-	public:
-		void HandleNotification(PayloadChannel::PayloadChannelNotification* notification) override;
+		void HandleNotification(Channel::ChannelNotification* notification) override;
 
 	private:
 		bool IsConnected() const override;
@@ -52,9 +44,9 @@ namespace RTC
 		void SendRtcpCompoundPacket(RTC::RTCP::CompoundPacket* packet) override;
 		void SendMessage(
 		  RTC::DataConsumer* dataConsumer,
-		  uint32_t ppid,
 		  const uint8_t* msg,
 		  size_t len,
+		  uint32_t ppid,
 		  onQueuedCallback* cb = nullptr) override;
 		void SendSctpData(const uint8_t* data, size_t len) override;
 		void RecvStreamClosed(uint32_t ssrc) override;
@@ -63,6 +55,8 @@ namespace RTC
 		void OnRtpDataReceived(RTC::TransportTuple* tuple, const uint8_t* data, size_t len);
 		void OnRtcpDataReceived(RTC::TransportTuple* tuple, const uint8_t* data, size_t len);
 		void OnSctpDataReceived(RTC::TransportTuple* tuple, const uint8_t* data, size_t len);
+		void EmitTuple() const;
+		void EmitRtcpTuple() const;
 
 		/* Pure virtual methods inherited from RTC::UdpSocket::Listener. */
 	public:
@@ -78,11 +72,16 @@ namespace RTC
 		RTC::SrtpSession* srtpRecvSession{ nullptr };
 		RTC::SrtpSession* srtpSendSession{ nullptr };
 		// Others.
-		ListenIp listenIp;
+		ListenInfo listenInfo;
+		ListenInfo rtcpListenInfo;
 		bool rtcpMux{ true };
 		bool comedia{ false };
-		struct sockaddr_storage remoteAddrStorage;
-		struct sockaddr_storage rtcpRemoteAddrStorage;
+		struct sockaddr_storage remoteAddrStorage
+		{
+		};
+		struct sockaddr_storage rtcpRemoteAddrStorage
+		{
+		};
 		RTC::SrtpSession::CryptoSuite srtpCryptoSuite{
 			RTC::SrtpSession::CryptoSuite::AES_CM_128_HMAC_SHA1_80
 		};

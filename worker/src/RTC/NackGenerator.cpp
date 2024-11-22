@@ -21,12 +21,10 @@ namespace RTC
 	/* Instance methods. */
 
 	NackGenerator::NackGenerator(Listener* listener, unsigned int sendNackDelayMs)
-	  : listener(listener), sendNackDelayMs(sendNackDelayMs), rtt(DefaultRtt)
+	  : listener(listener), sendNackDelayMs(sendNackDelayMs), timer(new TimerHandle(this)),
+	    rtt(DefaultRtt)
 	{
 		MS_TRACE();
-
-		// Set the timer.
-		this->timer = new Timer(this);
 	}
 
 	NackGenerator::~NackGenerator()
@@ -42,7 +40,7 @@ namespace RTC
 	{
 		MS_TRACE();
 
-		uint16_t seq          = packet->GetSequenceNumber();
+		const uint16_t seq    = packet->GetSequenceNumber();
 		const bool isKeyFrame = packet->IsKeyFrame();
 
 		if (!this->started)
@@ -51,14 +49,18 @@ namespace RTC
 			this->lastSeq = seq;
 
 			if (isKeyFrame)
+			{
 				this->keyFrameList.insert(seq);
+			}
 
 			return false;
 		}
 
 		// Obviously never nacked, so ignore.
 		if (seq == this->lastSeq)
+		{
 			return false;
+		}
 
 		// May be an out of order packet, or already handled retransmitted packet,
 		// or a retransmitted packet.
@@ -79,10 +81,7 @@ namespace RTC
 
 				this->nackList.erase(it);
 
-				if (retries != 0)
-					return true;
-				else
-					return false;
+				return retries != 0;
 			}
 
 			// Out of order packet or already handled NACKed packet.
@@ -101,14 +100,18 @@ namespace RTC
 		// newer than the latest seq seen.
 
 		if (isKeyFrame)
+		{
 			this->keyFrameList.insert(seq);
+		}
 
 		// Remove old keyframes.
 		{
 			auto it = this->keyFrameList.lower_bound(seq - MaxPacketAge);
 
 			if (it != this->keyFrameList.begin())
+			{
 				this->keyFrameList.erase(this->keyFrameList.begin(), it);
+			}
 		}
 
 		if (isRecovered)
@@ -119,7 +122,9 @@ namespace RTC
 			auto it = this->recoveredList.lower_bound(seq - MaxPacketAge);
 
 			if (it != this->recoveredList.begin())
+			{
 				this->recoveredList.erase(this->recoveredList.begin(), it);
+			}
 
 			// Do not let a packet pass if it's newer than last seen seq and came via
 			// RTX.
@@ -131,15 +136,19 @@ namespace RTC
 		this->lastSeq = seq;
 
 		// Check if there are any nacks that are waiting for this seq number.
-		std::vector<uint16_t> nackBatch = GetNackBatch(NackFilter::SEQ);
+		const std::vector<uint16_t> nackBatch = GetNackBatch(NackFilter::SEQ);
 
 		if (!nackBatch.empty())
+		{
 			this->listener->OnNackGeneratorNackRequired(nackBatch);
+		}
 
 		// This is important. Otherwise the running timer (filter:TIME) would be
 		// interrupted and NACKs would never been sent more than once for each seq.
 		if (!this->timer->IsActive())
+		{
 			MayRunTimer();
+		}
 
 		return false;
 	}
@@ -187,7 +196,9 @@ namespace RTC
 
 			// Do not send NACK for packets that are already recovered by RTX.
 			if (this->recoveredList.find(seq) != this->recoveredList.end())
+			{
 				continue;
+			}
 
 			this->nackList.emplace(std::make_pair(
 			  seq,
@@ -236,7 +247,7 @@ namespace RTC
 		while (it != this->nackList.end())
 		{
 			NackInfo& nackInfo = it->second;
-			uint16_t seq       = nackInfo.seq;
+			const uint16_t seq = nackInfo.seq;
 
 			if (this->sendNackDelayMs > 0 && nowMs - nackInfo.createdAtMs < this->sendNackDelayMs)
 			{
@@ -277,7 +288,10 @@ namespace RTC
 				continue;
 			}
 
-			if (filter == NackFilter::TIME && (nackInfo.sentAtMs == 0 || nowMs - nackInfo.sentAtMs >= this->rtt))
+			if (
+			  filter == NackFilter::TIME &&
+			  (nackInfo.sentAtMs == 0 ||
+			   nowMs - nackInfo.sentAtMs >= (this->rtt > 0u ? this->rtt : DefaultRtt)))
 			{
 				nackBatch.emplace_back(seq);
 				nackInfo.retries++;
@@ -313,9 +327,13 @@ namespace RTC
 			seqsStream << nackBatch.back();
 
 			if (filter == NackFilter::SEQ)
+			{
 				MS_DEBUG_DEV("[filter:SEQ, asking seqs:%s]", seqsStream.str().c_str());
+			}
 			else
+			{
 				MS_DEBUG_DEV("[filter:TIME, asking seqs:%s]", seqsStream.str().c_str());
+			}
 		}
 #endif
 
@@ -329,25 +347,32 @@ namespace RTC
 		this->nackList.clear();
 		this->keyFrameList.clear();
 		this->recoveredList.clear();
-
 		this->started = false;
 		this->lastSeq = 0u;
 	}
 
 	inline void NackGenerator::MayRunTimer() const
 	{
-		if (!this->nackList.empty())
+		if (this->nackList.empty())
+		{
+			this->timer->Stop();
+		}
+		else
+		{
 			this->timer->Start(TimerInterval);
+		}
 	}
 
-	inline void NackGenerator::OnTimer(Timer* /*timer*/)
+	inline void NackGenerator::OnTimer(TimerHandle* /*timer*/)
 	{
 		MS_TRACE();
 
-		std::vector<uint16_t> nackBatch = GetNackBatch(NackFilter::TIME);
+		const std::vector<uint16_t> nackBatch = GetNackBatch(NackFilter::TIME);
 
 		if (!nackBatch.empty())
+		{
 			this->listener->OnNackGeneratorNackRequired(nackBatch);
+		}
 
 		MayRunTimer();
 	}

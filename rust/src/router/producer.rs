@@ -1,8 +1,10 @@
 #[cfg(test)]
 mod tests;
 
-use crate::consumer::RtpStreamParams;
-use crate::data_structures::{AppData, RtpPacketTraceInfo, SsrcTraceInfo, TraceEventDirection};
+use crate::consumer::{RtpStreamParams, RtxStreamParams};
+use crate::data_structures::{
+    AppData, RtpPacketTraceInfo, SrTraceInfo, SsrcTraceInfo, TraceEventDirection,
+};
 use crate::messages::{
     ProducerCloseRequest, ProducerDumpRequest, ProducerEnableTraceEventRequest,
     ProducerGetStatsRequest, ProducerPauseRequest, ProducerResumeRequest, ProducerSendNotification,
@@ -12,15 +14,16 @@ use crate::rtp_parameters::{MediaKind, MimeType, RtpParameters};
 use crate::transport::Transport;
 use crate::uuid_based_wrapper_type;
 use crate::worker::{
-    Channel, NotificationError, PayloadChannel, RequestError, SubscriptionHandler,
+    Channel, NotificationError, NotificationParseError, RequestError, SubscriptionHandler,
 };
 use async_executor::Executor;
 use event_listener_primitives::{Bag, BagOnce, HandlerId};
-use hash_hasher::HashedMap;
 use log::{debug, error};
+use mediasoup_sys::fbs::{notification, producer, response, rtp_parameters, rtp_stream};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
+use std::error::Error;
 use std::fmt;
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -91,15 +94,35 @@ impl ProducerOptions {
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[doc(hidden)]
+pub struct RtxStream {
+    pub params: RtxStreamParams,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[doc(hidden)]
 pub struct RtpStreamRecv {
     pub params: RtpStreamParams,
     pub score: u8,
-    // `type` field is present in worker, but ignored here
-    pub jitter: u32,
-    pub packet_count: usize,
-    pub byte_count: usize,
-    pub bitrate: u32,
-    pub bitrate_by_layer: Option<HashedMap<String, u32>>,
+    pub rtx_stream: Option<RtxStream>,
+}
+
+impl RtpStreamRecv {
+    pub(crate) fn from_fbs_ref(
+        dump: rtp_stream::DumpRef<'_>,
+    ) -> Result<Self, Box<dyn Error + Send + Sync>> {
+        Ok(Self {
+            params: RtpStreamParams::from_fbs_ref(dump.params()?)?,
+            score: dump.score()?,
+            rtx_stream: if let Some(rtx_stream) = dump.rtx_stream()? {
+                Some(RtxStream {
+                    params: RtxStreamParams::from_fbs_ref(rtx_stream.params()?)?,
+                })
+            } else {
+                None
+            },
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -113,8 +136,36 @@ pub struct ProducerDump {
     pub rtp_mapping: RtpMapping,
     pub rtp_parameters: RtpParameters,
     pub rtp_streams: Vec<RtpStreamRecv>,
-    pub trace_event_types: String,
+    pub trace_event_types: Vec<ProducerTraceEventType>,
     pub r#type: ProducerType,
+}
+
+impl ProducerDump {
+    pub(crate) fn from_fbs_ref(
+        dump: producer::DumpResponseRef<'_>,
+    ) -> Result<Self, Box<dyn Error + Send + Sync>> {
+        Ok(Self {
+            id: dump.id()?.parse()?,
+            kind: MediaKind::from_fbs(dump.kind()?),
+            paused: dump.paused()?,
+            rtp_mapping: RtpMapping::from_fbs_ref(dump.rtp_mapping()?)?,
+            rtp_parameters: RtpParameters::from_fbs_ref(dump.rtp_parameters()?)?,
+            rtp_streams: dump
+                .rtp_streams()?
+                .iter()
+                .map(|rtp_stream| RtpStreamRecv::from_fbs_ref(rtp_stream?))
+                .collect::<Result<_, Box<dyn Error + Send + Sync>>>()?,
+            trace_event_types: dump
+                .trace_event_types()?
+                .iter()
+                .map(|trace_event_type| {
+                    ProducerTraceEventType::from_fbs(&trace_event_type.unwrap())
+                })
+                .collect(),
+
+            r#type: ProducerType::from_fbs(dump.type_()?),
+        })
+    }
 }
 
 /// Producer type.
@@ -129,6 +180,19 @@ pub enum ProducerType {
     Svc,
 }
 
+impl ProducerType {
+    pub(crate) fn from_fbs(producer_type: rtp_parameters::Type) -> Self {
+        match producer_type {
+            rtp_parameters::Type::Simple => ProducerType::Simple,
+            rtp_parameters::Type::Simulcast => ProducerType::Simulcast,
+            rtp_parameters::Type::Svc => ProducerType::Svc,
+            // TODO: Create a new FBS type ProducerType with just Simple,
+            // Simulcast and Svc.
+            rtp_parameters::Type::Pipe => unimplemented!(),
+        }
+    }
+}
+
 /// Score of the RTP stream in the producer representing its transmission quality.
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -141,6 +205,17 @@ pub struct ProducerScore {
     pub rid: Option<String>,
     /// RTP stream score (from 0 to 10) representing the transmission quality.
     pub score: u8,
+}
+
+impl ProducerScore {
+    pub(crate) fn from_fbs(producer_score: &producer::Score) -> Self {
+        Self {
+            encoding_idx: producer_score.encoding_idx,
+            ssrc: producer_score.ssrc,
+            rid: producer_score.rid.clone(),
+            score: producer_score.score,
+        }
+    }
 }
 
 /// Rotation angle
@@ -169,6 +244,34 @@ pub struct ProducerVideoOrientation {
     pub rotation: Rotation,
 }
 
+impl ProducerVideoOrientation {
+    pub(crate) fn from_fbs(
+        video_orientation: producer::VideoOrientationChangeNotification,
+    ) -> Self {
+        Self {
+            camera: video_orientation.camera,
+            flip: video_orientation.flip,
+            rotation: match video_orientation.rotation {
+                0 => Rotation::None,
+                90 => Rotation::Clockwise,
+                180 => Rotation::Rotate180,
+                270 => Rotation::CounterClockwise,
+                _ => Rotation::None,
+            },
+        }
+    }
+}
+
+/// Bitrate  by layer.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+#[allow(missing_docs)]
+pub struct BitrateByLayer {
+    layer: String,
+    bitrate: u32,
+}
+
 /// RTC statistics of the producer.
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -181,26 +284,71 @@ pub struct ProducerStat {
     pub ssrc: u32,
     pub rtx_ssrc: Option<u32>,
     pub rid: Option<String>,
-    pub kind: String,
+    pub kind: MediaKind,
     pub mime_type: MimeType,
-    pub packets_lost: u32,
+    pub packets_lost: u64,
     pub fraction_lost: u8,
-    pub packets_discarded: usize,
-    pub packets_retransmitted: usize,
-    pub packets_repaired: usize,
-    pub nack_count: usize,
-    pub nack_packet_count: usize,
-    pub pli_count: usize,
-    pub fir_count: usize,
+    pub packets_discarded: u64,
+    pub packets_retransmitted: u64,
+    pub packets_repaired: u64,
+    pub nack_count: u64,
+    pub nack_packet_count: u64,
+    pub pli_count: u64,
+    pub fir_count: u64,
     pub score: u8,
-    pub packet_count: usize,
-    pub byte_count: usize,
+    pub packet_count: u64,
+    pub byte_count: u64,
     pub bitrate: u32,
     pub round_trip_time: Option<f32>,
-    pub rtx_packets_discarded: Option<u32>,
+    pub rtx_packets_discarded: Option<u64>,
     // RtpStreamRecv specific.
     pub jitter: u32,
-    pub bitrate_by_layer: Option<HashedMap<String, u32>>,
+    pub bitrate_by_layer: Vec<BitrateByLayer>,
+}
+
+impl ProducerStat {
+    pub(crate) fn from_fbs(stats: &rtp_stream::Stats) -> Self {
+        let rtp_stream::StatsData::RecvStats(ref stats) = stats.data else {
+            panic!("Wrong message from worker");
+        };
+
+        let rtp_stream::StatsData::BaseStats(ref base) = stats.base.data else {
+            panic!("Wrong message from worker");
+        };
+
+        Self {
+            timestamp: base.timestamp,
+            ssrc: base.ssrc,
+            rtx_ssrc: base.rtx_ssrc,
+            rid: base.rid.clone(),
+            kind: MediaKind::from_fbs(base.kind),
+            mime_type: base.mime_type.to_string().parse().unwrap(),
+            packets_lost: base.packets_lost,
+            fraction_lost: base.fraction_lost,
+            packets_discarded: base.packets_discarded,
+            packets_retransmitted: base.packets_retransmitted,
+            packets_repaired: base.packets_repaired,
+            nack_count: base.nack_count,
+            nack_packet_count: base.nack_packet_count,
+            pli_count: base.pli_count,
+            fir_count: base.fir_count,
+            score: base.score,
+            packet_count: stats.packet_count,
+            byte_count: stats.byte_count,
+            bitrate: stats.bitrate,
+            round_trip_time: Some(base.round_trip_time),
+            rtx_packets_discarded: Some(base.rtx_packets_discarded),
+            jitter: stats.jitter,
+            bitrate_by_layer: stats
+                .bitrate_by_layer
+                .iter()
+                .map(|bitrate_by_layer| BitrateByLayer {
+                    layer: bitrate_by_layer.layer.to_string(),
+                    bitrate: bitrate_by_layer.bitrate,
+                })
+                .collect(),
+        }
+    }
 }
 
 /// 'trace' event data.
@@ -250,6 +398,81 @@ pub enum ProducerTraceEventData {
         /// SSRC info.
         info: SsrcTraceInfo,
     },
+    /// RTCP Sender Report.
+    Sr {
+        /// Event timestamp.
+        timestamp: u64,
+        /// Event direction.
+        direction: TraceEventDirection,
+        /// SSRC info.
+        info: SrTraceInfo,
+    },
+}
+
+impl ProducerTraceEventData {
+    pub(crate) fn from_fbs(data: producer::TraceNotification) -> Self {
+        match data.type_ {
+            producer::TraceEventType::Rtp => ProducerTraceEventData::Rtp {
+                timestamp: data.timestamp,
+                direction: TraceEventDirection::from_fbs(data.direction),
+                info: {
+                    let Some(producer::TraceInfo::RtpTraceInfo(info)) = data.info else {
+                        panic!("Wrong message from worker: {data:?}");
+                    };
+
+                    RtpPacketTraceInfo::from_fbs(*info.rtp_packet, info.is_rtx)
+                },
+            },
+            producer::TraceEventType::Keyframe => ProducerTraceEventData::KeyFrame {
+                timestamp: data.timestamp,
+                direction: TraceEventDirection::from_fbs(data.direction),
+                info: {
+                    let Some(producer::TraceInfo::KeyFrameTraceInfo(info)) = data.info else {
+                        panic!("Wrong message from worker: {data:?}");
+                    };
+
+                    RtpPacketTraceInfo::from_fbs(*info.rtp_packet, info.is_rtx)
+                },
+            },
+            producer::TraceEventType::Nack => ProducerTraceEventData::Nack {
+                timestamp: data.timestamp,
+                direction: TraceEventDirection::from_fbs(data.direction),
+            },
+            producer::TraceEventType::Pli => ProducerTraceEventData::Pli {
+                timestamp: data.timestamp,
+                direction: TraceEventDirection::from_fbs(data.direction),
+                info: {
+                    let Some(producer::TraceInfo::PliTraceInfo(info)) = data.info else {
+                        panic!("Wrong message from worker: {data:?}");
+                    };
+
+                    SsrcTraceInfo { ssrc: info.ssrc }
+                },
+            },
+            producer::TraceEventType::Fir => ProducerTraceEventData::Fir {
+                timestamp: data.timestamp,
+                direction: TraceEventDirection::from_fbs(data.direction),
+                info: {
+                    let Some(producer::TraceInfo::FirTraceInfo(info)) = data.info else {
+                        panic!("Wrong message from worker: {data:?}");
+                    };
+
+                    SsrcTraceInfo { ssrc: info.ssrc }
+                },
+            },
+            producer::TraceEventType::Sr => ProducerTraceEventData::Sr {
+                timestamp: data.timestamp,
+                direction: TraceEventDirection::from_fbs(data.direction),
+                info: {
+                    let Some(producer::TraceInfo::SrTraceInfo(info)) = data.info else {
+                        panic!("Wrong message from worker: {data:?}");
+                    };
+
+                    SrTraceInfo::from_fbs(*info)
+                },
+            },
+        }
+    }
 }
 
 /// Types of consumer trace events.
@@ -266,6 +489,32 @@ pub enum ProducerTraceEventType {
     Pli,
     /// RTCP FIR packet.
     Fir,
+    /// RTCP Sender Report.
+    SR,
+}
+
+impl ProducerTraceEventType {
+    pub(crate) fn to_fbs(self) -> producer::TraceEventType {
+        match self {
+            ProducerTraceEventType::Rtp => producer::TraceEventType::Rtp,
+            ProducerTraceEventType::KeyFrame => producer::TraceEventType::Keyframe,
+            ProducerTraceEventType::Nack => producer::TraceEventType::Nack,
+            ProducerTraceEventType::Pli => producer::TraceEventType::Pli,
+            ProducerTraceEventType::Fir => producer::TraceEventType::Fir,
+            ProducerTraceEventType::SR => producer::TraceEventType::Sr,
+        }
+    }
+
+    pub(crate) fn from_fbs(event_type: &producer::TraceEventType) -> Self {
+        match event_type {
+            producer::TraceEventType::Rtp => ProducerTraceEventType::Rtp,
+            producer::TraceEventType::Keyframe => ProducerTraceEventType::KeyFrame,
+            producer::TraceEventType::Nack => ProducerTraceEventType::Nack,
+            producer::TraceEventType::Pli => ProducerTraceEventType::Pli,
+            producer::TraceEventType::Fir => ProducerTraceEventType::Fir,
+            producer::TraceEventType::Sr => ProducerTraceEventType::SR,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -274,6 +523,59 @@ enum Notification {
     Score(Vec<ProducerScore>),
     VideoOrientationChange(ProducerVideoOrientation),
     Trace(ProducerTraceEventData),
+}
+
+impl Notification {
+    pub(crate) fn from_fbs(
+        notification: notification::NotificationRef<'_>,
+    ) -> Result<Self, NotificationParseError> {
+        match notification.event().unwrap() {
+            notification::Event::ProducerScore => {
+                let Ok(Some(notification::BodyRef::ProducerScoreNotification(body))) =
+                    notification.body()
+                else {
+                    panic!("Wrong message from worker: {notification:?}");
+                };
+
+                let scores_fbs: Vec<_> = body
+                    .scores()
+                    .unwrap()
+                    .iter()
+                    .map(|score| producer::Score::try_from(score.unwrap()).unwrap())
+                    .collect();
+                let scores = scores_fbs.iter().map(ProducerScore::from_fbs).collect();
+
+                Ok(Notification::Score(scores))
+            }
+            notification::Event::ProducerVideoOrientationChange => {
+                let Ok(Some(notification::BodyRef::ProducerVideoOrientationChangeNotification(
+                    body,
+                ))) = notification.body()
+                else {
+                    panic!("Wrong message from worker: {notification:?}");
+                };
+
+                let video_orientation_fbs =
+                    producer::VideoOrientationChangeNotification::try_from(body).unwrap();
+                let video_orientation = ProducerVideoOrientation::from_fbs(video_orientation_fbs);
+
+                Ok(Notification::VideoOrientationChange(video_orientation))
+            }
+            notification::Event::ProducerTrace => {
+                let Ok(Some(notification::BodyRef::ProducerTraceNotification(body))) =
+                    notification.body()
+                else {
+                    panic!("Wrong message from worker: {notification:?}");
+                };
+
+                let trace_notification_fbs = producer::TraceNotification::try_from(body).unwrap();
+                let trace_notification = ProducerTraceEventData::from_fbs(trace_notification_fbs);
+
+                Ok(Notification::Trace(trace_notification))
+            }
+            _ => Err(NotificationParseError::InvalidEvent),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -299,7 +601,6 @@ struct Inner {
     score: Arc<Mutex<Vec<ProducerScore>>>,
     executor: Arc<Executor<'static>>,
     channel: Channel,
-    payload_channel: PayloadChannel,
     handlers: Arc<Handlers>,
     app_data: AppData,
     transport: Arc<dyn Transport>,
@@ -441,7 +742,6 @@ impl Producer {
         paused: bool,
         executor: Arc<Executor<'static>>,
         channel: Channel,
-        payload_channel: PayloadChannel,
         app_data: AppData,
         transport: Arc<dyn Transport>,
         direct: bool,
@@ -456,10 +756,10 @@ impl Producer {
             let score = Arc::clone(&score);
 
             channel.subscribe_to_notifications(id.into(), move |notification| {
-                match serde_json::from_slice::<Notification>(notification) {
+                match Notification::from_fbs(notification) {
                     Ok(notification) => match notification {
                         Notification::Score(scores) => {
-                            *score.lock() = scores.clone();
+                            score.lock().clone_from(&scores);
                             handlers.score.call(|callback| {
                                 callback(&scores);
                             });
@@ -503,7 +803,6 @@ impl Producer {
             score,
             executor,
             channel,
-            payload_channel,
             handlers,
             app_data,
             transport,
@@ -596,10 +895,17 @@ impl Producer {
     pub async fn get_stats(&self) -> Result<Vec<ProducerStat>, RequestError> {
         debug!("get_stats()");
 
-        self.inner()
+        let response = self
+            .inner()
             .channel
             .request(self.id(), ProducerGetStatsRequest {})
-            .await
+            .await?;
+
+        if let response::Body::ProducerGetStatsResponse(data) = response {
+            Ok(data.stats.iter().map(ProducerStat::from_fbs).collect())
+        } else {
+            panic!("Wrong message from worker");
+        }
     }
 
     /// Pauses the producer (no RTP is sent to its associated consumers).  Calls
@@ -622,7 +928,7 @@ impl Producer {
         Ok(())
     }
 
-    /// Resumes the producer (no RTP is sent to its associated consumers). Calls
+    /// Resumes the producer (RTP is sent to its associated consumers). Calls
     /// [`Consumer::on_producer_resume`](crate::consumer::Consumer::on_producer_resume) callback on
     /// all its associated consumers.
     pub async fn resume(&self) -> Result<(), RequestError> {
@@ -747,8 +1053,8 @@ impl DirectProducer {
     /// Sends a RTP packet from the Rust process.
     pub fn send(&self, rtp_packet: Vec<u8>) -> Result<(), NotificationError> {
         self.inner
-            .payload_channel
-            .notify(self.inner.id, ProducerSendNotification {}, rtp_packet)
+            .channel
+            .notify(self.inner.id, ProducerSendNotification { rtp_packet })
     }
 }
 

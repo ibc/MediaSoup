@@ -1,5 +1,6 @@
 //! Collection of SCTP-related data structures that are used to specify SCTP association parameters.
 
+use mediasoup_sys::fbs::sctp_parameters;
 use serde::{Deserialize, Serialize};
 
 /// Number of SCTP streams.
@@ -42,6 +43,15 @@ impl Default for NumSctpStreams {
     }
 }
 
+impl NumSctpStreams {
+    pub(crate) fn to_fbs(self) -> sctp_parameters::NumSctpStreams {
+        sctp_parameters::NumSctpStreams {
+            os: self.os,
+            mis: self.mis,
+        }
+    }
+}
+
 /// Parameters of the SCTP association.
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -55,7 +65,18 @@ pub struct SctpParameters {
     #[serde(rename = "MIS")]
     pub mis: u16,
     /// Maximum allowed size for SCTP messages.
-    pub max_message_size: usize,
+    pub max_message_size: u32,
+}
+
+impl SctpParameters {
+    pub(crate) fn from_fbs(parameters: &sctp_parameters::SctpParameters) -> Self {
+        Self {
+            port: parameters.port,
+            os: parameters.os,
+            mis: parameters.mis,
+            max_message_size: parameters.max_message_size,
+        }
+    }
 }
 
 /// SCTP stream parameters describe the reliability of a certain SCTP stream.
@@ -107,6 +128,26 @@ impl SctpStreamParameters {
     #[must_use]
     pub fn max_retransmits(&self) -> Option<u16> {
         self.max_retransmits
+    }
+}
+
+impl SctpStreamParameters {
+    pub(crate) fn to_fbs(self) -> sctp_parameters::SctpStreamParameters {
+        sctp_parameters::SctpStreamParameters {
+            stream_id: self.stream_id,
+            ordered: Some(self.ordered),
+            max_packet_life_time: self.max_packet_life_time,
+            max_retransmits: self.max_retransmits,
+        }
+    }
+
+    pub(crate) fn from_fbs(stream_parameters: sctp_parameters::SctpStreamParameters) -> Self {
+        Self {
+            stream_id: stream_parameters.stream_id,
+            ordered: stream_parameters.ordered.unwrap_or(false),
+            max_packet_life_time: stream_parameters.max_packet_life_time,
+            max_retransmits: stream_parameters.max_retransmits,
+        }
     }
 }
 

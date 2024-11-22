@@ -71,11 +71,15 @@ namespace RTC
 
 				// Possitive value.
 				if (((value >> 23) & 1) == 0)
+				{
 					return value;
+				}
 
 				// Negative value.
 				if (value != 0x0800000)
+				{
 					value &= ~(1 << 23);
+				}
 
 				return -value;
 			}
@@ -102,9 +106,9 @@ namespace RTC
 			{
 				return uint32_t{ ntohl(this->header->jitter) };
 			}
-			void SetJitter(uint32_t jitter)
+			void SetJitter(float jitter)
 			{
-				this->header->jitter = uint32_t{ htonl(jitter) };
+				this->header->jitter = uint32_t{ htonl(static_cast<uint32_t>(jitter)) };
 			}
 			uint32_t GetLastSenderReport() const
 			{
@@ -170,7 +174,9 @@ namespace RTC
 				auto it = std::find(this->reports.begin(), this->reports.end(), report);
 
 				if (it != this->reports.end())
+				{
 					this->reports.erase(it);
+				}
 			}
 			Iterator Begin()
 			{

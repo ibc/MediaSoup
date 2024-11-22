@@ -42,7 +42,9 @@ namespace RTC
 				offset += 1u;
 
 				if (length <= len - offset)
+				{
 					packet->SetReason(std::string(reinterpret_cast<const char*>(data) + offset, length));
+				}
 			}
 
 			return packet.release();
@@ -75,7 +77,7 @@ namespace RTC
 			}
 
 			// 32 bits padding.
-			size_t padding = (-offset) & 3;
+			const size_t padding = (-offset) & 3;
 
 			for (size_t i{ 0 }; i < padding; ++i)
 			{
@@ -92,10 +94,12 @@ namespace RTC
 			MS_DUMP("<ByePacket>");
 			for (auto ssrc : this->ssrcs)
 			{
-				MS_DUMP("  ssrc   : %" PRIu32, ssrc);
+				MS_DUMP("  ssrc: %" PRIu32, ssrc);
 			}
 			if (!this->reason.empty())
-				MS_DUMP("  reason : %s", this->reason.c_str());
+			{
+				MS_DUMP("  reason: %s", this->reason.c_str());
+			}
 			MS_DUMP("</ByePacket>");
 		}
 	} // namespace RTCP

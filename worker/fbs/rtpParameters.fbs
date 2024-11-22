@@ -1,0 +1,129 @@
+namespace FBS.RtpParameters;
+
+enum MediaKind: uint8 {
+    AUDIO,
+    VIDEO
+}
+
+enum Type: uint8 {
+    SIMPLE,
+    SIMULCAST,
+    SVC,
+    PIPE
+}
+
+// Boolean is a uint8/byte type.
+table Boolean {
+    value: uint8;
+}
+
+table Integer32 {
+    value: int32;
+}
+
+table Integer32Array {
+    value: [int32];
+}
+
+table Double {
+    value: double;
+}
+
+table String {
+    value: string (required);
+}
+
+union Value {
+    Boolean,
+    Integer32,
+    Double,
+    String,
+    Integer32Array,
+}
+
+table Parameter {
+    name: string (required);
+    value: Value (required);
+}
+
+table RtcpFeedback {
+    // TODO: Create a specifc type.
+    type: string (required);
+    parameter: string;
+}
+
+table RtpCodecParameters {
+    mime_type: string (required);
+    payload_type: uint8;
+    clock_rate: uint32;
+    channels: uint8 = null;
+    parameters: [Parameter];
+    rtcp_feedback: [RtcpFeedback];
+}
+
+enum RtpHeaderExtensionUri: uint8 {
+    Mid,
+    RtpStreamId,
+    RepairRtpStreamId,
+    FrameMarkingDraft07,
+    FrameMarking,
+    AudioLevel,
+    VideoOrientation,
+    TimeOffset,
+    TransportWideCcDraft01,
+    AbsSendTime,
+    AbsCaptureTime,
+    PlayoutDelay,
+}
+
+table RtpHeaderExtensionParameters {
+    uri: RtpHeaderExtensionUri;
+    id: uint8;
+    encrypt: bool = false;
+    parameters: [Parameter];
+}
+
+table Rtx {
+    ssrc: uint32;
+}
+
+table RtpEncodingParameters {
+    ssrc: uint32 = null;
+    rid: string;
+    codec_payload_type: uint8 = null;
+    rtx: Rtx;
+    dtx: bool = false;
+    scalability_mode: string;
+    max_bitrate: uint32 = null;
+}
+
+table RtcpParameters {
+    cname: string;
+    reduced_size: bool = true;
+}
+
+table RtpParameters {
+    mid: string;
+    codecs: [RtpCodecParameters] (required);
+    header_extensions: [RtpHeaderExtensionParameters] (required);
+    encodings: [RtpEncodingParameters] (required);
+    rtcp: RtcpParameters (required);
+}
+
+table CodecMapping {
+    payload_type: uint8;
+    mapped_payload_type: uint8;
+}
+
+table EncodingMapping {
+    rid: string;
+    ssrc: uint32 = null;
+    scalability_mode: string;
+    mapped_ssrc: uint32;
+}
+
+table RtpMapping {
+    codecs: [CodecMapping] (required);
+    encodings: [EncodingMapping] (required);
+}
+

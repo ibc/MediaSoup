@@ -145,9 +145,15 @@ impl EchoConnection {
         // For simplicity we will create plain transport for audio producer right away
         let plain_transport = router
             .create_plain_transport({
-                let mut options = PlainTransportOptions::new(ListenIp {
+                let mut options = PlainTransportOptions::new(ListenInfo {
+                    protocol: Protocol::Udp,
                     ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                    announced_ip: None,
+                    announced_address: None,
+                    port: None,
+                    port_range: None,
+                    flags: None,
+                    send_buffer_size: None,
+                    recv_buffer_size: None,
                 });
 
                 options.comedia = true;
@@ -193,9 +199,9 @@ impl EchoConnection {
             RTCP listening on {}:{}\n  \
             PT=100\n  \
             SSRC=1111",
-            plain_transport.tuple().local_ip(),
+            plain_transport.tuple().local_address(),
             plain_transport.tuple().local_port(),
-            plain_transport.rtcp_tuple().unwrap().local_ip(),
+            plain_transport.rtcp_tuple().unwrap().local_address(),
             plain_transport.rtcp_tuple().unwrap().local_port(),
         );
 
@@ -215,9 +221,9 @@ impl EchoConnection {
                 rtpbin.send_rtp_sink_0 \\\n  \
                 rtpbin.send_rtp_src_0 ! udpsink host={} port={} sync=false async=false \\\n  \
                 rtpbin.send_rtcp_src_0 ! udpsink host={} port={} sync=false async=false",
-                plain_transport.tuple().local_ip(),
+                plain_transport.tuple().local_address(),
                 plain_transport.tuple().local_port(),
-                plain_transport.rtcp_tuple().unwrap().local_ip(),
+                plain_transport.rtcp_tuple().unwrap().local_address(),
                 plain_transport.rtcp_tuple().unwrap().local_port(),
         );
 
@@ -225,12 +231,18 @@ impl EchoConnection {
         // it right away. This may not be the case for real-world applications or you may create
         // this at a different time and/or in different order.
         let consumer_transport = router
-            .create_webrtc_transport(WebRtcTransportOptions::new(TransportListenIps::new(
-                ListenIp {
+            .create_webrtc_transport(WebRtcTransportOptions::new(
+                WebRtcTransportListenInfos::new(ListenInfo {
+                    protocol: Protocol::Udp,
                     ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                    announced_ip: None,
-                },
-            )))
+                    announced_address: None,
+                    port: None,
+                    port_range: None,
+                    flags: None,
+                    send_buffer_size: None,
+                    recv_buffer_size: None,
+                }),
+            ))
             .await
             .map_err(|error| format!("Failed to create consumer transport: {error}"))?;
 

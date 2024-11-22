@@ -4,20 +4,25 @@ mod tests;
 use crate::data_producer::{DataProducer, DataProducerId, WeakDataProducer};
 use crate::data_structures::{AppData, WebRtcMessage};
 use crate::messages::{
-    DataConsumerCloseRequest, DataConsumerDumpRequest, DataConsumerGetBufferedAmountRequest,
-    DataConsumerGetStatsRequest, DataConsumerSendRequest,
-    DataConsumerSetBufferedAmountLowThresholdRequest,
+    DataConsumerAddSubchannelRequest, DataConsumerCloseRequest, DataConsumerDumpRequest,
+    DataConsumerGetBufferedAmountRequest, DataConsumerGetStatsRequest, DataConsumerPauseRequest,
+    DataConsumerRemoveSubchannelRequest, DataConsumerResumeRequest, DataConsumerSendRequest,
+    DataConsumerSetBufferedAmountLowThresholdRequest, DataConsumerSetSubchannelsRequest,
 };
 use crate::sctp_parameters::SctpStreamParameters;
 use crate::transport::Transport;
 use crate::uuid_based_wrapper_type;
-use crate::worker::{Channel, PayloadChannel, RequestError, SubscriptionHandler};
+use crate::worker::{Channel, NotificationParseError, RequestError, SubscriptionHandler};
 use async_executor::Executor;
 use event_listener_primitives::{Bag, BagOnce, HandlerId};
 use log::{debug, error};
+use mediasoup_sys::fbs::{data_consumer, data_producer, notification, response};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
+use std::error::Error;
+// TODO.
+// use std::borrow::Cow;
 use std::fmt;
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -50,6 +55,12 @@ pub struct DataConsumerOptions {
     /// Defaults to the value in the [`DataProducer`](crate::data_producer::DataProducer) if it
     /// has type `Sctp` or unset if it has type `Direct`.
     pub(super) max_retransmits: Option<u16>,
+    /// Whether the DataConsumer must start in paused mode. Default false.
+    pub paused: bool,
+    /// Subchannels this DataConsumer initially subscribes to.
+    /// Only used in case this DataConsumer receives messages from a local DataProducer
+    /// that specifies subchannel(s) when calling send().
+    pub subchannels: Option<Vec<u16>>,
     /// Custom application data.
     pub app_data: AppData,
 }
@@ -64,18 +75,22 @@ impl DataConsumerOptions {
             ordered: None,
             max_packet_life_time: None,
             max_retransmits: None,
+            subchannels: None,
+            paused: false,
             app_data: AppData::default(),
         }
     }
 
     /// For [`DirectTransport`](crate::direct_transport::DirectTransport).
     #[must_use]
-    pub fn new_direct(data_producer_id: DataProducerId) -> Self {
+    pub fn new_direct(data_producer_id: DataProducerId, subchannels: Option<Vec<u16>>) -> Self {
         Self {
             data_producer_id,
             ordered: Some(true),
             max_packet_life_time: None,
             max_retransmits: None,
+            paused: false,
+            subchannels,
             app_data: AppData::default(),
         }
     }
@@ -88,6 +103,8 @@ impl DataConsumerOptions {
             ordered: None,
             max_packet_life_time: None,
             max_retransmits: None,
+            paused: false,
+            subchannels: None,
             app_data: AppData::default(),
         }
     }
@@ -104,6 +121,8 @@ impl DataConsumerOptions {
             ordered: None,
             max_packet_life_time: Some(max_packet_life_time),
             max_retransmits: None,
+            paused: false,
+            subchannels: None,
             app_data: AppData::default(),
         }
     }
@@ -119,6 +138,8 @@ impl DataConsumerOptions {
             ordered: None,
             max_packet_life_time: None,
             max_retransmits: Some(max_retransmits),
+            paused: false,
+            subchannels: None,
             app_data: AppData::default(),
         }
     }
@@ -136,6 +157,34 @@ pub struct DataConsumerDump {
     pub protocol: String,
     pub sctp_stream_parameters: Option<SctpStreamParameters>,
     pub buffered_amount_low_threshold: u32,
+    pub paused: bool,
+    pub subchannels: Vec<u16>,
+    pub data_producer_paused: bool,
+}
+
+impl DataConsumerDump {
+    pub(crate) fn from_fbs(
+        dump: data_consumer::DumpResponse,
+    ) -> Result<Self, Box<dyn Error + Send + Sync>> {
+        Ok(Self {
+            id: dump.id.parse()?,
+            data_producer_id: dump.data_producer_id.parse()?,
+            r#type: if dump.type_ == data_producer::Type::Sctp {
+                DataConsumerType::Sctp
+            } else {
+                DataConsumerType::Direct
+            },
+            label: dump.label,
+            protocol: dump.protocol,
+            sctp_stream_parameters: dump
+                .sctp_stream_parameters
+                .map(|parameters| SctpStreamParameters::from_fbs(*parameters)),
+            buffered_amount_low_threshold: dump.buffered_amount_low_threshold,
+            paused: dump.paused,
+            subchannels: dump.subchannels,
+            data_producer_paused: dump.data_producer_paused,
+        })
+    }
 }
 
 /// RTC statistics of the data consumer.
@@ -148,9 +197,22 @@ pub struct DataConsumerStat {
     pub timestamp: u64,
     pub label: String,
     pub protocol: String,
-    pub messages_sent: usize,
-    pub bytes_sent: usize,
+    pub messages_sent: u64,
+    pub bytes_sent: u64,
     pub buffered_amount: u32,
+}
+
+impl DataConsumerStat {
+    pub(crate) fn from_fbs(stats: &data_consumer::GetStatsResponse) -> Self {
+        Self {
+            timestamp: stats.timestamp,
+            label: stats.label.to_string(),
+            protocol: stats.protocol.to_string(),
+            messages_sent: stats.messages_sent,
+            bytes_sent: stats.bytes_sent,
+            buffered_amount: stats.buffered_amount,
+        }
+    }
 }
 
 /// Data consumer type.
@@ -167,17 +229,63 @@ pub enum DataConsumerType {
 #[serde(tag = "event", rename_all = "lowercase", content = "data")]
 enum Notification {
     DataProducerClose,
+    DataProducerPause,
+    DataProducerResume,
     SctpSendBufferFull,
+    Message {
+        ppid: u32,
+        data: Vec<u8>,
+    },
     #[serde(rename_all = "camelCase")]
     BufferedAmountLow {
         buffered_amount: u32,
     },
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(tag = "event", rename_all = "lowercase", content = "data")]
-enum PayloadNotification {
-    Message { ppid: u32 },
+impl Notification {
+    pub(crate) fn from_fbs(
+        notification: notification::NotificationRef<'_>,
+    ) -> Result<Self, NotificationParseError> {
+        match notification.event().unwrap() {
+            notification::Event::DataconsumerDataproducerClose => {
+                Ok(Notification::DataProducerClose)
+            }
+            notification::Event::DataconsumerDataproducerPause => {
+                Ok(Notification::DataProducerPause)
+            }
+            notification::Event::DataconsumerDataproducerResume => {
+                Ok(Notification::DataProducerResume)
+            }
+            notification::Event::DataconsumerSctpSendbufferFull => {
+                Ok(Notification::SctpSendBufferFull)
+            }
+            notification::Event::DataconsumerMessage => {
+                let Ok(Some(notification::BodyRef::DataConsumerMessageNotification(body))) =
+                    notification.body()
+                else {
+                    panic!("Wrong message from worker: {notification:?}");
+                };
+
+                Ok(Notification::Message {
+                    ppid: body.ppid().unwrap(),
+                    data: body.data().unwrap().into(),
+                })
+            }
+            notification::Event::DataconsumerBufferedAmountLow => {
+                let Ok(Some(notification::BodyRef::DataConsumerBufferedAmountLowNotification(
+                    body,
+                ))) = notification.body()
+                else {
+                    panic!("Wrong message from worker: {notification:?}");
+                };
+
+                Ok(Notification::BufferedAmountLow {
+                    buffered_amount: body.buffered_amount().unwrap(),
+                })
+            }
+            _ => Err(NotificationParseError::InvalidEvent),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -187,6 +295,10 @@ struct Handlers {
     sctp_send_buffer_full: Bag<Arc<dyn Fn() + Send + Sync>>,
     buffered_amount_low: Bag<Arc<dyn Fn(u32) + Send + Sync>>,
     data_producer_close: BagOnce<Box<dyn FnOnce() + Send>>,
+    pause: Bag<Arc<dyn Fn() + Send + Sync>>,
+    resume: Bag<Arc<dyn Fn() + Send + Sync>>,
+    data_producer_pause: Bag<Arc<dyn Fn() + Send + Sync>>,
+    data_producer_resume: Bag<Arc<dyn Fn() + Send + Sync>>,
     transport_close: BagOnce<Box<dyn FnOnce() + Send>>,
     close: BagOnce<Box<dyn FnOnce() + Send>>,
 }
@@ -199,9 +311,11 @@ struct Inner {
     protocol: String,
     data_producer_id: DataProducerId,
     direct: bool,
+    paused: Arc<Mutex<bool>>,
+    subchannels: Arc<Mutex<Vec<u16>>>,
+    data_producer_paused: Arc<Mutex<bool>>,
     executor: Arc<Executor<'static>>,
     channel: Channel,
-    payload_channel: PayloadChannel,
     handlers: Arc<Handlers>,
     app_data: AppData,
     transport: Arc<dyn Transport>,
@@ -267,6 +381,9 @@ impl fmt::Debug for RegularDataConsumer {
             .field("label", &self.inner.label)
             .field("protocol", &self.inner.protocol)
             .field("data_producer_id", &self.inner.data_producer_id)
+            .field("paused", &self.inner.paused)
+            .field("data_producer_paused", &self.inner.data_producer_paused)
+            .field("subchannels", &self.inner.subchannels)
             .field("transport", &self.inner.transport)
             .field("closed", &self.inner.closed)
             .finish()
@@ -295,6 +412,9 @@ impl fmt::Debug for DirectDataConsumer {
             .field("label", &self.inner.label)
             .field("protocol", &self.inner.protocol)
             .field("data_producer_id", &self.inner.data_producer_id)
+            .field("paused", &self.inner.paused)
+            .field("data_producer_paused", &self.inner.data_producer_paused)
+            .field("subchannels", &self.inner.subchannels)
             .field("transport", &self.inner.transport)
             .field("closed", &self.inner.closed)
             .finish()
@@ -342,10 +462,12 @@ impl DataConsumer {
         sctp_stream_parameters: Option<SctpStreamParameters>,
         label: String,
         protocol: String,
+        paused: bool,
         data_producer: DataProducer,
         executor: Arc<Executor<'static>>,
         channel: Channel,
-        payload_channel: PayloadChannel,
+        data_producer_paused: bool,
+        subchannels: Vec<u16>,
         app_data: AppData,
         transport: Arc<dyn Transport>,
         direct: bool,
@@ -354,15 +476,21 @@ impl DataConsumer {
 
         let handlers = Arc::<Handlers>::default();
         let closed = Arc::new(AtomicBool::new(false));
+        let paused = Arc::new(Mutex::new(paused));
+        #[allow(clippy::mutex_atomic)]
+        let data_producer_paused = Arc::new(Mutex::new(data_producer_paused));
+        let subchannels = Arc::new(Mutex::new(subchannels));
 
         let inner_weak = Arc::<Mutex<Option<Weak<Inner>>>>::default();
         let subscription_handler = {
             let handlers = Arc::clone(&handlers);
             let closed = Arc::clone(&closed);
+            let paused = Arc::clone(&paused);
+            let data_producer_paused = Arc::clone(&data_producer_paused);
             let inner_weak = Arc::clone(&inner_weak);
 
             channel.subscribe_to_notifications(id.into(), move |notification| {
-                match serde_json::from_slice::<Notification>(notification) {
+                match Notification::from_fbs(notification) {
                     Ok(notification) => match notification {
                         Notification::DataProducerClose => {
                             if !closed.load(Ordering::SeqCst) {
@@ -383,30 +511,33 @@ impl DataConsumer {
                                 }
                             }
                         }
+                        Notification::DataProducerPause => {
+                            let mut data_producer_paused = data_producer_paused.lock();
+                            let paused = *paused.lock();
+                            *data_producer_paused = true;
+
+                            handlers.data_producer_pause.call_simple();
+
+                            if !paused {
+                                handlers.pause.call_simple();
+                            }
+                        }
+                        Notification::DataProducerResume => {
+                            let mut data_producer_paused = data_producer_paused.lock();
+                            let paused = *paused.lock();
+                            *data_producer_paused = false;
+
+                            handlers.data_producer_resume.call_simple();
+
+                            if !paused {
+                                handlers.resume.call_simple();
+                            }
+                        }
                         Notification::SctpSendBufferFull => {
                             handlers.sctp_send_buffer_full.call_simple();
                         }
-                        Notification::BufferedAmountLow { buffered_amount } => {
-                            handlers.buffered_amount_low.call(|callback| {
-                                callback(buffered_amount);
-                            });
-                        }
-                    },
-                    Err(error) => {
-                        error!("Failed to parse notification: {}", error);
-                    }
-                }
-            })
-        };
-
-        let payload_subscription_handler = {
-            let handlers = Arc::clone(&handlers);
-
-            payload_channel.subscribe_to_notifications(id.into(), move |message, payload| {
-                match serde_json::from_slice::<PayloadNotification>(message) {
-                    Ok(notification) => match notification {
-                        PayloadNotification::Message { ppid } => {
-                            match WebRtcMessage::new(ppid, Cow::from(payload)) {
+                        Notification::Message { ppid, data } => {
+                            match WebRtcMessage::new(ppid, Cow::from(data)) {
                                 Ok(message) => {
                                     handlers.message.call(|callback| {
                                         callback(&message);
@@ -417,9 +548,14 @@ impl DataConsumer {
                                 }
                             }
                         }
+                        Notification::BufferedAmountLow { buffered_amount } => {
+                            handlers.buffered_amount_low.call(|callback| {
+                                callback(buffered_amount);
+                            });
+                        }
                     },
                     Err(error) => {
-                        error!("Failed to parse payload notification: {}", error);
+                        error!("Failed to parse notification: {}", error);
                     }
                 }
             })
@@ -443,19 +579,18 @@ impl DataConsumer {
             label,
             protocol,
             data_producer_id: data_producer.id(),
+            paused,
+            data_producer_paused,
             direct,
             executor,
             channel,
-            payload_channel,
             handlers,
+            subchannels,
             app_data,
             transport,
             weak_data_producer: data_producer.downgrade(),
             closed,
-            _subscription_handlers: Mutex::new(vec![
-                subscription_handler,
-                payload_subscription_handler,
-            ]),
+            _subscription_handlers: Mutex::new(vec![subscription_handler]),
             _on_transport_close_handler: Mutex::new(on_transport_close_handler),
         });
 
@@ -491,6 +626,19 @@ impl DataConsumer {
         self.inner().r#type
     }
 
+    /// Whether the data consumer is paused. It does not take into account whether the
+    /// associated data producer is paused.
+    #[must_use]
+    pub fn paused(&self) -> bool {
+        *self.inner().paused.lock()
+    }
+
+    /// Whether the associate data producer is paused.
+    #[must_use]
+    pub fn producer_paused(&self) -> bool {
+        *self.inner().data_producer_paused.lock()
+    }
+
     /// The SCTP stream parameters (just if the data consumer type is `Sctp`).
     #[must_use]
     pub fn sctp_stream_parameters(&self) -> Option<SctpStreamParameters> {
@@ -507,6 +655,12 @@ impl DataConsumer {
     #[must_use]
     pub fn protocol(&self) -> &String {
         &self.inner().protocol
+    }
+
+    /// The data consumer subchannels.
+    #[must_use]
+    pub fn subchannels(&self) -> Vec<u16> {
+        self.inner().subchannels.lock().clone()
     }
 
     /// Custom application data.
@@ -526,10 +680,17 @@ impl DataConsumer {
     pub async fn dump(&self) -> Result<DataConsumerDump, RequestError> {
         debug!("dump()");
 
-        self.inner()
+        let response = self
+            .inner()
             .channel
             .request(self.id(), DataConsumerDumpRequest {})
-            .await
+            .await?;
+
+        if let response::Body::DataConsumerDumpResponse(data) = response {
+            Ok(DataConsumerDump::from_fbs(*data).expect("Error parsing dump response"))
+        } else {
+            panic!("Wrong message from worker");
+        }
     }
 
     /// Returns current statistics of the data consumer.
@@ -539,10 +700,57 @@ impl DataConsumer {
     pub async fn get_stats(&self) -> Result<Vec<DataConsumerStat>, RequestError> {
         debug!("get_stats()");
 
-        self.inner()
+        let response = self
+            .inner()
             .channel
             .request(self.id(), DataConsumerGetStatsRequest {})
-            .await
+            .await?;
+
+        if let response::Body::DataConsumerGetStatsResponse(data) = response {
+            Ok(vec![DataConsumerStat::from_fbs(&data)])
+        } else {
+            panic!("Wrong message from worker");
+        }
+    }
+
+    /// Pauses the data consumer (no mossage is sent to the consuming endpoint).
+    pub async fn pause(&self) -> Result<(), RequestError> {
+        debug!("pause()");
+
+        self.inner()
+            .channel
+            .request(self.id(), DataConsumerPauseRequest {})
+            .await?;
+
+        let mut paused = self.inner().paused.lock();
+        let was_paused = *paused || *self.inner().data_producer_paused.lock();
+        *paused = true;
+
+        if !was_paused {
+            self.inner().handlers.pause.call_simple();
+        }
+
+        Ok(())
+    }
+
+    /// Resumes the data consumer (messages are sent again to the consuming endpoint).
+    pub async fn resume(&self) -> Result<(), RequestError> {
+        debug!("resume()");
+
+        self.inner()
+            .channel
+            .request(self.id(), DataConsumerResumeRequest {})
+            .await?;
+
+        let mut paused = self.inner().paused.lock();
+        let was_paused = *paused || *self.inner().data_producer_paused.lock();
+        *paused = false;
+
+        if was_paused {
+            self.inner().handlers.resume.call_simple();
+        }
+
+        Ok(())
     }
 
     /// Returns the number of bytes of data currently buffered to be sent over the underlying SCTP
@@ -582,6 +790,48 @@ impl DataConsumer {
                 DataConsumerSetBufferedAmountLowThresholdRequest { threshold },
             )
             .await
+    }
+
+    /// Sets subchannels to the worker DataConsumer.
+    pub async fn set_subchannels(&self, subchannels: Vec<u16>) -> Result<(), RequestError> {
+        let response = self
+            .inner()
+            .channel
+            .request(self.id(), DataConsumerSetSubchannelsRequest { subchannels })
+            .await?;
+
+        *self.inner().subchannels.lock() = response.subchannels;
+
+        Ok(())
+    }
+
+    /// Adds a subchannel to the worker DataConsumer.
+    pub async fn add_subchannel(&self, subchannel: u16) -> Result<(), RequestError> {
+        let response = self
+            .inner()
+            .channel
+            .request(self.id(), DataConsumerAddSubchannelRequest { subchannel })
+            .await?;
+
+        *self.inner().subchannels.lock() = response.subchannels;
+
+        Ok(())
+    }
+
+    /// Removes a subchannel to the worker DataConsumer.
+    pub async fn remove_subchannel(&self, subchannel: u16) -> Result<(), RequestError> {
+        let response = self
+            .inner()
+            .channel
+            .request(
+                self.id(),
+                DataConsumerRemoveSubchannelRequest { subchannel },
+            )
+            .await?;
+
+        *self.inner().subchannels.lock() = response.subchannels;
+
+        Ok(())
     }
 
     /// Callback is called when a message has been received from the corresponding data producer.
@@ -631,6 +881,40 @@ impl DataConsumer {
             .add(Box::new(callback))
     }
 
+    /// Callback is called when the data consumer or its associated data producer is
+    /// paused and, as result, the data consumer becomes paused.
+    pub fn on_pause<F: Fn() + Send + Sync + 'static>(&self, callback: F) -> HandlerId {
+        self.inner().handlers.pause.add(Arc::new(callback))
+    }
+
+    /// Callback is called when the data consumer or its associated data producer is
+    /// resumed and, as result, the data consumer is no longer paused.
+    pub fn on_resume<F: Fn() + Send + Sync + 'static>(&self, callback: F) -> HandlerId {
+        self.inner().handlers.resume.add(Arc::new(callback))
+    }
+
+    /// Callback is called when the associated data producer is paused.
+    pub fn on_data_producer_pause<F: Fn() + Send + Sync + 'static>(
+        &self,
+        callback: F,
+    ) -> HandlerId {
+        self.inner()
+            .handlers
+            .data_producer_pause
+            .add(Arc::new(callback))
+    }
+
+    /// Callback is called when the associated data producer is resumed.
+    pub fn on_data_producer_resume<F: Fn() + Send + Sync + 'static>(
+        &self,
+        callback: F,
+    ) -> HandlerId {
+        self.inner()
+            .handlers
+            .data_producer_resume
+            .add(Arc::new(callback))
+    }
+
     /// Callback is called when the transport this data consumer belongs to is closed for whatever
     /// reason. The data consumer itself is also closed.
     pub fn on_transport_close<F: FnOnce() + Send + 'static>(&self, callback: F) -> HandlerId {
@@ -673,11 +957,13 @@ impl DirectDataConsumer {
         let (ppid, payload) = message.into_ppid_and_payload();
 
         self.inner
-            .payload_channel
+            .channel
             .request(
                 self.inner.id,
-                DataConsumerSendRequest { ppid },
-                payload.into_owned(),
+                DataConsumerSendRequest {
+                    ppid,
+                    payload: payload.into_owned(),
+                },
             )
             .await
     }

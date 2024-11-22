@@ -1,0 +1,83 @@
+include "transport.fbs";
+include "webRtcTransport.fbs";
+include "plainTransport.fbs";
+include "directTransport.fbs";
+include "producer.fbs";
+include "dataProducer.fbs";
+include "dataConsumer.fbs";
+include "activeSpeakerObserver.fbs";
+include "audioLevelObserver.fbs";
+
+namespace FBS.Notification;
+
+enum Event: uint8 {
+    // Notifications to worker.
+    TRANSPORT_SEND_RTCP = 0,
+    PRODUCER_SEND,
+    DATAPRODUCER_SEND,
+
+    // Notifications from worker.
+    WORKER_RUNNING,
+    TRANSPORT_SCTP_STATE_CHANGE,
+    TRANSPORT_TRACE,
+    WEBRTCTRANSPORT_ICE_SELECTED_TUPLE_CHANGE,
+    WEBRTCTRANSPORT_ICE_STATE_CHANGE,
+    WEBRTCTRANSPORT_DTLS_STATE_CHANGE,
+    PLAINTRANSPORT_TUPLE,
+    PLAINTRANSPORT_RTCP_TUPLE,
+    DIRECTTRANSPORT_RTCP,
+    PRODUCER_SCORE,
+    PRODUCER_TRACE,
+    PRODUCER_VIDEO_ORIENTATION_CHANGE,
+    CONSUMER_PRODUCER_PAUSE,
+    CONSUMER_PRODUCER_RESUME,
+    CONSUMER_PRODUCER_CLOSE,
+    CONSUMER_LAYERS_CHANGE,
+    CONSUMER_RTP,
+    CONSUMER_SCORE,
+    CONSUMER_TRACE,
+    DATACONSUMER_BUFFERED_AMOUNT_LOW,
+    DATACONSUMER_SCTP_SENDBUFFER_FULL,
+    DATACONSUMER_DATAPRODUCER_PAUSE,
+    DATACONSUMER_DATAPRODUCER_RESUME,
+    DATACONSUMER_DATAPRODUCER_CLOSE,
+    DATACONSUMER_MESSAGE,
+    ACTIVESPEAKEROBSERVER_DOMINANT_SPEAKER,
+    AUDIOLEVELOBSERVER_SILENCE,
+    AUDIOLEVELOBSERVER_VOLUMES,
+}
+
+union Body {
+    // Notifications to worker.
+    Transport_SendRtcpNotification: FBS.Transport.SendRtcpNotification,
+    Transport_SctpStateChangeNotification: FBS.Transport.SctpStateChangeNotification,
+    Producer_SendNotification: FBS.Producer.SendNotification,
+    DataProducer_SendNotification: FBS.DataProducer.SendNotification,
+
+    // Notifications from worker.
+    Transport_TraceNotification: FBS.Transport.TraceNotification,
+    WebRtcTransport_IceSelectedTupleChangeNotification: FBS.WebRtcTransport.IceSelectedTupleChangeNotification,
+    WebRtcTransport_IceStateChangeNotification: FBS.WebRtcTransport.IceStateChangeNotification,
+    WebRtcTransport_DtlsStateChangeNotification: FBS.WebRtcTransport.DtlsStateChangeNotification,
+    PlainTransport_TupleNotification: FBS.PlainTransport.TupleNotification,
+    PlainTransport_RtcpTupleNotification: FBS.PlainTransport.RtcpTupleNotification,
+    DirectTransport_RtcpNotification: FBS.DirectTransport.RtcpNotification,
+    Producer_ScoreNotification: FBS.Producer.ScoreNotification,
+    Producer_TraceNotification: FBS.Producer.TraceNotification,
+    Producer_VideoOrientationChangeNotification: FBS.Producer.VideoOrientationChangeNotification,
+    Consumer_LayersChangeNotification: FBS.Consumer.LayersChangeNotification,
+    Consumer_RtpNotification: FBS.Consumer.RtpNotification,
+    Consumer_ScoreNotification: FBS.Consumer.ScoreNotification,
+    Consumer_TraceNotification: FBS.Consumer.TraceNotification,
+    DataConsumer_MessageNotification: FBS.DataConsumer.MessageNotification,
+    DataConsumer_BufferedAmountLowNotification: FBS.DataConsumer.BufferedAmountLowNotification,
+    ActiveSpeakerObserver_DominantSpeakerNotification: FBS.ActiveSpeakerObserver.DominantSpeakerNotification,
+    AudioLevelObserver_VolumesNotification: FBS.AudioLevelObserver.VolumesNotification,
+}
+
+table Notification {
+    handler_id: string (required);
+    event: Event;
+    body: Body;
+}
+

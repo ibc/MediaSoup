@@ -133,7 +133,9 @@ namespace RTC
 				auto it = std::find(this->reports.begin(), this->reports.end(), report);
 
 				if (it != this->reports.end())
+				{
 					this->reports.erase(it);
+				}
 			}
 			Iterator Begin()
 			{

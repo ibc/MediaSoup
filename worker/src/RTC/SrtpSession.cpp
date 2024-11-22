@@ -3,6 +3,9 @@
 
 #include "RTC/SrtpSession.hpp"
 #include "DepLibSRTP.hpp"
+#ifdef MS_LIBURING_SUPPORTED
+#include "DepLibUring.hpp"
+#endif
 #include "Logger.hpp"
 #include "MediaSoupErrors.hpp"
 #include <cstring> // std::memset(), std::memcpy()
@@ -25,6 +28,42 @@ namespace RTC
 		if (DepLibSRTP::IsError(err))
 		{
 			MS_THROW_ERROR("srtp_install_event_handler() failed: %s", DepLibSRTP::GetErrorString(err));
+		}
+	}
+
+	FBS::SrtpParameters::SrtpCryptoSuite SrtpSession::CryptoSuiteToFbs(CryptoSuite cryptoSuite)
+	{
+		switch (cryptoSuite)
+		{
+			case SrtpSession::CryptoSuite::AEAD_AES_256_GCM:
+				return FBS::SrtpParameters::SrtpCryptoSuite::AEAD_AES_256_GCM;
+
+			case SrtpSession::CryptoSuite::AEAD_AES_128_GCM:
+				return FBS::SrtpParameters::SrtpCryptoSuite::AEAD_AES_128_GCM;
+
+			case SrtpSession::CryptoSuite::AES_CM_128_HMAC_SHA1_80:
+				return FBS::SrtpParameters::SrtpCryptoSuite::AES_CM_128_HMAC_SHA1_80;
+
+			case SrtpSession::CryptoSuite::AES_CM_128_HMAC_SHA1_32:
+				return FBS::SrtpParameters::SrtpCryptoSuite::AES_CM_128_HMAC_SHA1_32;
+		}
+	}
+
+	SrtpSession::CryptoSuite SrtpSession::CryptoSuiteFromFbs(FBS::SrtpParameters::SrtpCryptoSuite cryptoSuite)
+	{
+		switch (cryptoSuite)
+		{
+			case FBS::SrtpParameters::SrtpCryptoSuite::AEAD_AES_256_GCM:
+				return SrtpSession::CryptoSuite::AEAD_AES_256_GCM;
+
+			case FBS::SrtpParameters::SrtpCryptoSuite::AEAD_AES_128_GCM:
+				return SrtpSession::CryptoSuite::AEAD_AES_128_GCM;
+
+			case FBS::SrtpParameters::SrtpCryptoSuite::AES_CM_128_HMAC_SHA1_80:
+				return SrtpSession::CryptoSuite::AES_CM_128_HMAC_SHA1_80;
+
+			case FBS::SrtpParameters::SrtpCryptoSuite::AES_CM_128_HMAC_SHA1_32:
+				return SrtpSession::CryptoSuite::AES_CM_128_HMAC_SHA1_32;
 		}
 	}
 
@@ -130,7 +169,9 @@ namespace RTC
 		const srtp_err_status_t err = srtp_create(&this->session, &policy);
 
 		if (DepLibSRTP::IsError(err))
+		{
 			MS_THROW_ERROR("srtp_create() failed: %s", DepLibSRTP::GetErrorString(err));
+		}
 	}
 
 	SrtpSession::~SrtpSession()
@@ -142,25 +183,49 @@ namespace RTC
 			const srtp_err_status_t err = srtp_dealloc(this->session);
 
 			if (DepLibSRTP::IsError(err))
+			{
 				MS_ABORT("srtp_dealloc() failed: %s", DepLibSRTP::GetErrorString(err));
+			}
 		}
 	}
 
-	bool SrtpSession::EncryptRtp(const uint8_t** data, int* len)
+	bool SrtpSession::EncryptRtp(const uint8_t** data, size_t* len)
 	{
 		MS_TRACE();
 
 		// Ensure that the resulting SRTP packet fits into the encrypt buffer.
-		if (static_cast<size_t>(*len) + SRTP_MAX_TRAILER_LEN > EncryptBufferSize)
+		if (*len + SRTP_MAX_TRAILER_LEN > EncryptBufferSize)
 		{
-			MS_WARN_TAG(srtp, "cannot encrypt RTP packet, size too big (%i bytes)", *len);
+			MS_WARN_TAG(srtp, "cannot encrypt RTP packet, size too big (%zu bytes)", *len);
 
 			return false;
 		}
 
-		std::memcpy(EncryptBuffer, *data, *len);
+		uint8_t* encryptBuffer = EncryptBuffer;
 
-		const srtp_err_status_t err = srtp_protect(this->session, static_cast<void*>(EncryptBuffer), len);
+#ifdef MS_LIBURING_SUPPORTED
+		if (DepLibUring::IsEnabled())
+		{
+			if (!DepLibUring::IsActive())
+			{
+				goto protect;
+			}
+
+			// Use a preallocated buffer, if available.
+			auto* sendBuffer = DepLibUring::GetSendBuffer();
+
+			if (sendBuffer)
+			{
+				encryptBuffer = sendBuffer;
+			}
+		}
+
+	protect:
+#endif
+
+		std::memcpy(encryptBuffer, *data, *len);
+
+		const srtp_err_status_t err = srtp_protect(this->session, encryptBuffer, len);
 
 		if (DepLibSRTP::IsError(err))
 		{
@@ -170,16 +235,16 @@ namespace RTC
 		}
 
 		// Update the given data pointer.
-		*data = (const uint8_t*)EncryptBuffer;
+		*data = const_cast<const uint8_t*>(encryptBuffer);
 
 		return true;
 	}
 
-	bool SrtpSession::DecryptSrtp(uint8_t* data, int* len)
+	bool SrtpSession::DecryptSrtp(uint8_t* data, size_t* len)
 	{
 		MS_TRACE();
 
-		const srtp_err_status_t err = srtp_unprotect(this->session, static_cast<void*>(data), len);
+		const srtp_err_status_t err = srtp_unprotect(this->session, data, len);
 
 		if (DepLibSRTP::IsError(err))
 		{
@@ -191,22 +256,21 @@ namespace RTC
 		return true;
 	}
 
-	bool SrtpSession::EncryptRtcp(const uint8_t** data, int* len)
+	bool SrtpSession::EncryptRtcp(const uint8_t** data, size_t* len)
 	{
 		MS_TRACE();
 
 		// Ensure that the resulting SRTCP packet fits into the encrypt buffer.
-		if (static_cast<size_t>(*len) + SRTP_MAX_TRAILER_LEN > EncryptBufferSize)
+		if (*len + SRTP_MAX_TRAILER_LEN > EncryptBufferSize)
 		{
-			MS_WARN_TAG(srtp, "cannot encrypt RTCP packet, size too big (%i bytes)", *len);
+			MS_WARN_TAG(srtp, "cannot encrypt RTCP packet, size too big (%zu bytes)", *len);
 
 			return false;
 		}
 
 		std::memcpy(EncryptBuffer, *data, *len);
 
-		const srtp_err_status_t err =
-		  srtp_protect_rtcp(this->session, static_cast<void*>(EncryptBuffer), len);
+		const srtp_err_status_t err = srtp_protect_rtcp(this->session, EncryptBuffer, len);
 
 		if (DepLibSRTP::IsError(err))
 		{
@@ -221,11 +285,11 @@ namespace RTC
 		return true;
 	}
 
-	bool SrtpSession::DecryptSrtcp(uint8_t* data, int* len)
+	bool SrtpSession::DecryptSrtcp(uint8_t* data, size_t* len)
 	{
 		MS_TRACE();
 
-		const srtp_err_status_t err = srtp_unprotect_rtcp(this->session, static_cast<void*>(data), len);
+		const srtp_err_status_t err = srtp_unprotect_rtcp(this->session, data, len);
 
 		if (DepLibSRTP::IsError(err))
 		{

@@ -2,25 +2,22 @@
 #define MS_RTC_ROUTER_HPP
 
 #include "common.hpp"
+#include "Channel/ChannelNotification.hpp"
 #include "Channel/ChannelRequest.hpp"
-#include "PayloadChannel/PayloadChannelNotification.hpp"
-#include "PayloadChannel/PayloadChannelRequest.hpp"
 #include "RTC/Consumer.hpp"
 #include "RTC/DataConsumer.hpp"
 #include "RTC/DataProducer.hpp"
 #include "RTC/Producer.hpp"
 #include "RTC/RtpObserver.hpp"
 #include "RTC/RtpPacket.hpp"
-#include "RTC/RtpStream.hpp"
+#include "RTC/RtpStreamRecv.hpp"
 #include "RTC/Shared.hpp"
 #include "RTC/Transport.hpp"
 #include "RTC/WebRtcServer.hpp"
 #include <absl/container/flat_hash_map.h>
-#include <nlohmann/json.hpp>
+#include <absl/container/flat_hash_set.h>
 #include <string>
-#include <unordered_set>
-
-using json = nlohmann::json;
+#include <vector>
 
 namespace RTC
 {
@@ -41,20 +38,21 @@ namespace RTC
 
 	public:
 		explicit Router(RTC::Shared* shared, const std::string& id, Listener* listener);
-		virtual ~Router();
+		~Router() override;
 
 	public:
-		void FillJson(json& jsonObject) const;
+		flatbuffers::Offset<FBS::Router::DumpResponse> FillBuffer(
+		  flatbuffers::FlatBufferBuilder& builder) const;
 
 		/* Methods inherited from Channel::ChannelSocket::RequestHandler. */
 	public:
 		void HandleRequest(Channel::ChannelRequest* request) override;
 
 	private:
-		void SetNewTransportIdFromData(json& data, std::string& transportId) const;
-		RTC::Transport* GetTransportFromData(json& data) const;
-		void SetNewRtpObserverIdFromData(json& data, std::string& rtpObserverId) const;
-		RTC::RtpObserver* GetRtpObserverFromData(json& data) const;
+		RTC::Transport* GetTransportById(const std::string& transportId) const;
+		RTC::RtpObserver* GetRtpObserverById(const std::string& rtpObserverId) const;
+		void CheckNoTransport(const std::string& transportId) const;
+		void CheckNoRtpObserver(const std::string& rtpObserverId) const;
 
 		/* Pure virtual methods inherited from RTC::Transport::Listener. */
 	public:
@@ -65,16 +63,19 @@ namespace RTC
 		void OnTransportProducerNewRtpStream(
 		  RTC::Transport* transport,
 		  RTC::Producer* producer,
-		  RTC::RtpStream* rtpStream,
+		  RTC::RtpStreamRecv* rtpStream,
 		  uint32_t mappedSsrc) override;
 		void OnTransportProducerRtpStreamScore(
 		  RTC::Transport* transport,
 		  RTC::Producer* producer,
-		  RTC::RtpStream* rtpStream,
+		  RTC::RtpStreamRecv* rtpStream,
 		  uint8_t score,
 		  uint8_t previousScore) override;
 		void OnTransportProducerRtcpSenderReport(
-		  RTC::Transport* transport, RTC::Producer* producer, RTC::RtpStream* rtpStream, bool first) override;
+		  RTC::Transport* transport,
+		  RTC::Producer* producer,
+		  RTC::RtpStreamRecv* rtpStream,
+		  bool first) override;
 		void OnTransportProducerRtpPacketReceived(
 		  RTC::Transport* transport, RTC::Producer* producer, RTC::RtpPacket* packet) override;
 		void OnTransportNeedWorstRemoteFractionLost(
@@ -83,19 +84,24 @@ namespace RTC
 		  uint32_t mappedSsrc,
 		  uint8_t& worstRemoteFractionLost) override;
 		void OnTransportNewConsumer(
-		  RTC::Transport* transport, RTC::Consumer* consumer, std::string& producerId) override;
+		  RTC::Transport* transport, RTC::Consumer* consumer, const std::string& producerId) override;
 		void OnTransportConsumerClosed(RTC::Transport* transport, RTC::Consumer* consumer) override;
 		void OnTransportConsumerProducerClosed(RTC::Transport* transport, RTC::Consumer* consumer) override;
 		void OnTransportConsumerKeyFrameRequested(
 		  RTC::Transport* transport, RTC::Consumer* consumer, uint32_t mappedSsrc) override;
 		void OnTransportNewDataProducer(RTC::Transport* transport, RTC::DataProducer* dataProducer) override;
 		void OnTransportDataProducerClosed(RTC::Transport* transport, RTC::DataProducer* dataProducer) override;
+		void OnTransportDataProducerPaused(RTC::Transport* transport, RTC::DataProducer* dataProducer) override;
+		void OnTransportDataProducerResumed(
+		  RTC::Transport* transport, RTC::DataProducer* dataProducer) override;
 		void OnTransportDataProducerMessageReceived(
 		  RTC::Transport* transport,
 		  RTC::DataProducer* dataProducer,
-		  uint32_t ppid,
 		  const uint8_t* msg,
-		  size_t len) override;
+		  size_t len,
+		  uint32_t ppid,
+		  std::vector<uint16_t>& subchannels,
+		  std::optional<uint16_t> requiredSubchannel) override;
 		void OnTransportNewDataConsumer(
 		  RTC::Transport* transport, RTC::DataConsumer* dataConsumer, std::string& dataProducerId) override;
 		void OnTransportDataConsumerClosed(RTC::Transport* transport, RTC::DataConsumer* dataConsumer) override;
@@ -105,7 +111,7 @@ namespace RTC
 
 		/* Pure virtual methods inherited from RTC::RtpObserver::Listener. */
 	public:
-		RTC::Producer* RtpObserverGetProducer(RTC::RtpObserver*, const std::string& id) override;
+		RTC::Producer* RtpObserverGetProducer(RTC::RtpObserver* rtpObserver, const std::string& id) override;
 		void OnRtpObserverAddProducer(RTC::RtpObserver* rtpObserver, RTC::Producer* producer) override;
 		void OnRtpObserverRemoveProducer(RTC::RtpObserver* rtpObserver, RTC::Producer* producer) override;
 

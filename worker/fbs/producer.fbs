@@ -1,0 +1,100 @@
+include "common.fbs";
+include "rtpPacket.fbs";
+include "rtpParameters.fbs";
+include "rtpStream.fbs";
+
+namespace FBS.Producer;
+
+enum TraceEventType: uint8 {
+    KEYFRAME = 0,
+    FIR,
+    NACK,
+    PLI,
+    RTP,
+    SR,
+}
+
+table EnableTraceEventRequest {
+    events: [TraceEventType] (required);
+}
+
+table DumpResponse {
+    id: string (required);
+    kind: FBS.RtpParameters.MediaKind;
+    type: FBS.RtpParameters.Type;
+    rtp_parameters: FBS.RtpParameters.RtpParameters (required);
+    rtp_mapping: FBS.RtpParameters.RtpMapping (required);
+    rtp_streams: [FBS.RtpStream.Dump] (required);
+    trace_event_types: [TraceEventType] (required);
+    paused: bool;
+}
+
+table GetStatsResponse {
+    stats: [FBS.RtpStream.Stats] (required);
+}
+
+table SendNotification {
+    data: [uint8] (required);
+}
+
+// Notifications from Worker.
+
+table Score {
+    encoding_idx: uint32;
+    ssrc: uint32;
+    rid: string;
+    score: uint8;
+}
+
+table ScoreNotification {
+    scores: [Score] (required);
+}
+
+table VideoOrientationChangeNotification {
+    camera: bool;
+    flip: bool;
+    rotation: uint16;
+}
+
+union TraceInfo {
+    KeyFrameTraceInfo,
+    FirTraceInfo,
+    PliTraceInfo,
+    RtpTraceInfo,
+    SrTraceInfo,
+}
+
+table KeyFrameTraceInfo {
+    rtp_packet: FBS.RtpPacket.Dump (required);
+    is_rtx: bool;
+}
+
+table FirTraceInfo {
+    ssrc: uint32;
+}
+
+table PliTraceInfo {
+    ssrc: uint32;
+}
+
+table RtpTraceInfo {
+    rtp_packet: FBS.RtpPacket.Dump (required);
+    is_rtx: bool;
+}
+
+table SrTraceInfo {
+    ssrc: uint32;
+    ntp_sec: uint32;
+    ntp_frac: uint32;
+    rtp_ts: uint32;
+    packet_count: uint32;
+    octet_count: uint32;
+}
+
+table TraceNotification {
+    type: TraceEventType;
+    timestamp: uint64;
+    direction: FBS.Common.TraceDirection;
+    info: TraceInfo;
+}
+

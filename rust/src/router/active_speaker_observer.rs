@@ -9,11 +9,12 @@ use crate::messages::{
 use crate::producer::{Producer, ProducerId};
 use crate::router::Router;
 use crate::rtp_observer::{RtpObserver, RtpObserverAddProducerOptions, RtpObserverId};
-use crate::worker::{Channel, RequestError, SubscriptionHandler};
+use crate::worker::{Channel, NotificationParseError, RequestError, SubscriptionHandler};
 use async_executor::Executor;
 use async_trait::async_trait;
 use event_listener_primitives::{Bag, BagOnce, HandlerId};
 use log::{debug, error};
+use mediasoup_sys::fbs::notification;
 use parking_lot::Mutex;
 use serde::Deserialize;
 use std::fmt;
@@ -72,6 +73,29 @@ struct DominantSpeakerNotification {
 #[serde(tag = "event", rename_all = "lowercase", content = "data")]
 enum Notification {
     DominantSpeaker(DominantSpeakerNotification),
+}
+
+impl Notification {
+    pub(crate) fn from_fbs(
+        notification: notification::NotificationRef<'_>,
+    ) -> Result<Self, NotificationParseError> {
+        match notification.event().unwrap() {
+            notification::Event::ActivespeakerobserverDominantSpeaker => {
+                let Ok(Some(
+                    notification::BodyRef::ActiveSpeakerObserverDominantSpeakerNotification(body),
+                )) = notification.body()
+                else {
+                    panic!("Wrong message from worker: {notification:?}");
+                };
+
+                let dominant_speaker_notification = DominantSpeakerNotification {
+                    producer_id: body.producer_id().unwrap().parse().unwrap(),
+                };
+                Ok(Notification::DominantSpeaker(dominant_speaker_notification))
+            }
+            _ => Err(NotificationParseError::InvalidEvent),
+        }
+    }
 }
 
 struct Inner {
@@ -294,7 +318,7 @@ impl ActiveSpeakerObserver {
             let handlers = Arc::clone(&handlers);
 
             channel.subscribe_to_notifications(id.into(), move |notification| {
-                match serde_json::from_slice::<Notification>(notification) {
+                match Notification::from_fbs(notification) {
                     Ok(notification) => match notification {
                         Notification::DominantSpeaker(dominant_speaker) => {
                             let DominantSpeakerNotification { producer_id } = dominant_speaker;

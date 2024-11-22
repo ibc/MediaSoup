@@ -1,0 +1,13 @@
+[wrap-file]
+directory = liburing-liburing-2.5
+source_url = https://github.com/axboe/liburing/archive/refs/tags/liburing-2.5.tar.gz
+source_filename = liburing-2.5.tar.gz
+source_hash = 456f5f882165630f0dc7b75e8fd53bd01a955d5d4720729b4323097e6e9f2a98
+patch_filename = liburing_2.5-1_patch.zip
+patch_url = https://wrapdb.mesonbuild.com/v2/liburing_2.5-1/get_patch
+patch_hash = d72f651e0edd8102535af575d682ce86c3fc2fdabb40b8faa2659d0f7d437f44
+source_fallback_url = https://github.com/mesonbuild/wrapdb/releases/download/liburing_2.5-1/liburing-2.5.tar.gz
+wrapdb_version = 2.5-1
+
+[provide]
+dependency_names = liburing

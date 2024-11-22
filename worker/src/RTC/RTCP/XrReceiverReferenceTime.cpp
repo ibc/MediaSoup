@@ -3,7 +3,7 @@
 
 #include "RTC/RTCP/XrReceiverReferenceTime.hpp"
 #include "Logger.hpp"
-#include <cstring>
+#include <cstring> // std::memcpy
 
 namespace RTC
 {
@@ -35,11 +35,11 @@ namespace RTC
 			MS_TRACE();
 
 			MS_DUMP("<ReceiverReferenceTime>");
-			MS_DUMP("  block type : %" PRIu8, static_cast<uint8_t>(this->type));
-			MS_DUMP("  reserved   : 0");
-			MS_DUMP("  length     : 2");
-			MS_DUMP("  ntp sec    : %" PRIu32, GetNtpSec());
-			MS_DUMP("  ntp frac   : %" PRIu32, GetNtpFrac());
+			MS_DUMP("  block type: %" PRIu8, static_cast<uint8_t>(this->type));
+			MS_DUMP("  reserved: 0");
+			MS_DUMP("  length: 2");
+			MS_DUMP("  ntp sec: %" PRIu32, GetNtpSec());
+			MS_DUMP("  ntp frac: %" PRIu32, GetNtpFrac());
 			MS_DUMP("</ReceiverReferenceTime>");
 		}
 

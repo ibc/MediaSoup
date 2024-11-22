@@ -7,7 +7,7 @@ DEP=$1
 
 current_dir_name=${WORKER_PWD##*/}
 if [ "${current_dir_name}" != "worker" ] ; then
-	echo ">>> [ERROR] $(basename $0) must be called from mediasoup/worker/ directory" >&2
+	echo ">>> [ERROR] $(basename $0) must be called from mediasoup/worker directory" >&2
 	exit 1
 fi
 
@@ -17,24 +17,24 @@ function get_dep()
 	GIT_TAG="$2"
 	DEST="$3"
 
-	echo ">>> [INFO] getting dep '${DEP}' ..."
+	echo ">>> [INFO] getting dep '${DEP}'..."
 
 	if [ -d "${DEST}" ] ; then
-		echo ">>> [INFO] deleting ${DEST} ..."
+		echo ">>> [INFO] deleting ${DEST}..."
 		git rm -rf --ignore-unmatch ${DEST} > /dev/null
 		rm -rf ${DEST}
 	fi
 
-	echo ">>> [INFO] cloning ${GIT_REPO} ..."
+	echo ">>> [INFO] cloning ${GIT_REPO}..."
 	git clone ${GIT_REPO} ${DEST}
 
 	cd ${DEST}
 
-	echo ">>> [INFO] setting '${GIT_TAG}' git tag ..."
+	echo ">>> [INFO] setting '${GIT_TAG}' git tag..."
 	git checkout --quiet ${GIT_TAG}
 	set -e
 
-	echo ">>> [INFO] adding dep source code to the repository ..."
+	echo ">>> [INFO] adding dep source code to the repository..."
 	rm -rf .git
 	git add .
 

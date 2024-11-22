@@ -1,0 +1,82 @@
+include "rtpParameters.fbs";
+include "rtxStream.fbs";
+
+namespace FBS.RtpStream;
+
+table Params {
+    encoding_idx: uint32;
+    ssrc: uint32;
+    payload_type: uint8;
+    mime_type: string (required);
+    clock_rate: uint32;
+    rid: string;
+    cname: string (required);
+    rtx_ssrc: uint32 = null;
+    rtx_payload_type: uint8 = null;
+    use_nack: bool;
+    use_pli: bool;
+    use_fir: bool;
+    use_in_band_fec: bool;
+    use_dtx: bool;
+    spatial_layers: uint8;
+    temporal_layers: uint8;
+}
+
+table Dump {
+    params: Params (required);
+    score: uint8;
+    rtx_stream: FBS.RtxStream.RtxDump;
+}
+
+table BitrateByLayer {
+    layer: string (required);
+    bitrate: uint32;
+}
+
+union StatsData {
+    BaseStats,
+    RecvStats,
+    SendStats,
+}
+
+table Stats {
+    data: StatsData (required);
+}
+
+table BaseStats {
+    timestamp: uint64;
+    ssrc: uint32;
+    kind: FBS.RtpParameters.MediaKind;
+    mime_type: string (required);
+    packets_lost: uint64;
+    fraction_lost: uint8;
+    packets_discarded: uint64;
+    packets_retransmitted: uint64;
+    packets_repaired: uint64;
+    nack_count: uint64;
+    nack_packet_count: uint64;
+    pli_count: uint64;
+    fir_count: uint64;
+    score: uint8;
+    rid: string;
+    rtx_ssrc: uint32 = null;
+    rtx_packets_discarded: uint64;
+    round_trip_time: float;
+}
+
+table RecvStats {
+    base: Stats (required);
+    jitter: uint32;
+    packet_count: uint64;
+    byte_count: uint64;
+    bitrate: uint32;
+    bitrate_by_layer: [BitrateByLayer] (required);
+}
+
+table SendStats {
+    base: Stats (required);
+    packet_count: uint64;
+    byte_count: uint64;
+    bitrate: uint32;
+}
+

@@ -2,9 +2,11 @@
 // #define MS_LOG_DEV_LEVEL 3
 
 #include "RTC/Router.hpp"
+#ifdef MS_LIBURING_SUPPORTED
+#include "DepLibUring.hpp"
+#endif
 #include "Logger.hpp"
 #include "MediaSoupErrors.hpp"
-#include "Utils.hpp"
 #include "RTC/ActiveSpeakerObserver.hpp"
 #include "RTC/AudioLevelObserver.hpp"
 #include "RTC/DirectTransport.hpp"
@@ -25,8 +27,7 @@ namespace RTC
 		this->shared->channelMessageRegistrator->RegisterHandler(
 		  this->id,
 		  /*channelRequestHandler*/ this,
-		  /*payloadChannelRequestHandler*/ nullptr,
-		  /*payloadChannelNotificationHandler*/ nullptr);
+		  /*ChannelNotificationHandler*/ nullptr);
 	}
 
 	Router::~Router()
@@ -63,227 +64,200 @@ namespace RTC
 		this->mapDataProducers.clear();
 	}
 
-	void Router::FillJson(json& jsonObject) const
+	flatbuffers::Offset<FBS::Router::DumpResponse> Router::FillBuffer(
+	  flatbuffers::FlatBufferBuilder& builder) const
 	{
 		MS_TRACE();
 
-		// Add id.
-		jsonObject["id"] = this->id;
-
 		// Add transportIds.
-		jsonObject["transportIds"] = json::array();
-		auto jsonTransportIdsIt    = jsonObject.find("transportIds");
+		std::vector<flatbuffers::Offset<flatbuffers::String>> transportIds;
+		transportIds.reserve(this->mapTransports.size());
 
 		for (const auto& kv : this->mapTransports)
 		{
 			const auto& transportId = kv.first;
 
-			jsonTransportIdsIt->emplace_back(transportId);
+			transportIds.push_back(builder.CreateString(transportId));
 		}
 
 		// Add rtpObserverIds.
-		jsonObject["rtpObserverIds"] = json::array();
-		auto jsonRtpObserverIdsIt    = jsonObject.find("rtpObserverIds");
+		std::vector<flatbuffers::Offset<flatbuffers::String>> rtpObserverIds;
+		rtpObserverIds.reserve(this->mapRtpObservers.size());
 
 		for (const auto& kv : this->mapRtpObservers)
 		{
 			const auto& rtpObserverId = kv.first;
 
-			jsonRtpObserverIdsIt->emplace_back(rtpObserverId);
+			rtpObserverIds.push_back(builder.CreateString(rtpObserverId));
 		}
 
 		// Add mapProducerIdConsumerIds.
-		jsonObject["mapProducerIdConsumerIds"] = json::object();
-		auto jsonMapProducerConsumersIt        = jsonObject.find("mapProducerIdConsumerIds");
+		std::vector<flatbuffers::Offset<FBS::Common::StringStringArray>> mapProducerIdConsumerIds;
+		mapProducerIdConsumerIds.reserve(this->mapProducerConsumers.size());
 
 		for (const auto& kv : this->mapProducerConsumers)
 		{
 			auto* producer        = kv.first;
 			const auto& consumers = kv.second;
 
-			(*jsonMapProducerConsumersIt)[producer->id] = json::array();
-			auto jsonProducerIdIt                       = jsonMapProducerConsumersIt->find(producer->id);
+			std::vector<flatbuffers::Offset<flatbuffers::String>> consumerIds;
+			consumerIds.reserve(consumers.size());
 
 			for (auto* consumer : consumers)
 			{
-				jsonProducerIdIt->emplace_back(consumer->id);
+				consumerIds.emplace_back(builder.CreateString(consumer->id));
 			}
+
+			mapProducerIdConsumerIds.emplace_back(
+			  FBS::Common::CreateStringStringArrayDirect(builder, producer->id.c_str(), &consumerIds));
 		}
 
 		// Add mapConsumerIdProducerId.
-		jsonObject["mapConsumerIdProducerId"] = json::object();
-		auto jsonMapConsumerProducerIt        = jsonObject.find("mapConsumerIdProducerId");
+		std::vector<flatbuffers::Offset<FBS::Common::StringString>> mapConsumerIdProducerId;
+		mapConsumerIdProducerId.reserve(this->mapConsumerProducer.size());
 
 		for (const auto& kv : this->mapConsumerProducer)
 		{
 			auto* consumer = kv.first;
 			auto* producer = kv.second;
 
-			(*jsonMapConsumerProducerIt)[consumer->id] = producer->id;
+			mapConsumerIdProducerId.emplace_back(
+			  FBS::Common::CreateStringStringDirect(builder, consumer->id.c_str(), producer->id.c_str()));
 		}
 
 		// Add mapProducerIdObserverIds.
-		jsonObject["mapProducerIdObserverIds"] = json::object();
-		auto jsonMapProducerRtpObserversIt     = jsonObject.find("mapProducerIdObserverIds");
+		std::vector<flatbuffers::Offset<FBS::Common::StringStringArray>> mapProducerIdObserverIds;
+		mapProducerIdObserverIds.reserve(this->mapProducerRtpObservers.size());
 
 		for (const auto& kv : this->mapProducerRtpObservers)
 		{
 			auto* producer           = kv.first;
 			const auto& rtpObservers = kv.second;
 
-			(*jsonMapProducerRtpObserversIt)[producer->id] = json::array();
-			auto jsonProducerIdIt = jsonMapProducerRtpObserversIt->find(producer->id);
+			std::vector<flatbuffers::Offset<flatbuffers::String>> observerIds;
+			observerIds.reserve(rtpObservers.size());
 
 			for (auto* rtpObserver : rtpObservers)
 			{
-				jsonProducerIdIt->emplace_back(rtpObserver->id);
+				observerIds.emplace_back(builder.CreateString(rtpObserver->id));
 			}
+
+			mapProducerIdObserverIds.emplace_back(
+			  FBS::Common::CreateStringStringArrayDirect(builder, producer->id.c_str(), &observerIds));
 		}
 
 		// Add mapDataProducerIdDataConsumerIds.
-		jsonObject["mapDataProducerIdDataConsumerIds"] = json::object();
-		auto jsonMapDataProducerDataConsumersIt = jsonObject.find("mapDataProducerIdDataConsumerIds");
+		std::vector<flatbuffers::Offset<FBS::Common::StringStringArray>> mapDataProducerIdDataConsumerIds;
+		mapDataProducerIdDataConsumerIds.reserve(this->mapDataProducerDataConsumers.size());
 
 		for (const auto& kv : this->mapDataProducerDataConsumers)
 		{
 			auto* dataProducer        = kv.first;
 			const auto& dataConsumers = kv.second;
 
-			(*jsonMapDataProducerDataConsumersIt)[dataProducer->id] = json::array();
-			auto jsonDataProducerIdIt = jsonMapDataProducerDataConsumersIt->find(dataProducer->id);
+			std::vector<flatbuffers::Offset<flatbuffers::String>> dataConsumerIds;
+			dataConsumerIds.reserve(dataConsumers.size());
 
 			for (auto* dataConsumer : dataConsumers)
 			{
-				jsonDataProducerIdIt->emplace_back(dataConsumer->id);
+				dataConsumerIds.emplace_back(builder.CreateString(dataConsumer->id));
 			}
+
+			mapDataProducerIdDataConsumerIds.emplace_back(FBS::Common::CreateStringStringArrayDirect(
+			  builder, dataProducer->id.c_str(), &dataConsumerIds));
 		}
 
 		// Add mapDataConsumerIdDataProducerId.
-		jsonObject["mapDataConsumerIdDataProducerId"] = json::object();
-		auto jsonMapDataConsumerDataProducerIt = jsonObject.find("mapDataConsumerIdDataProducerId");
+		std::vector<flatbuffers::Offset<FBS::Common::StringString>> mapDataConsumerIdDataProducerId;
+		mapDataConsumerIdDataProducerId.reserve(this->mapDataConsumerDataProducer.size());
 
 		for (const auto& kv : this->mapDataConsumerDataProducer)
 		{
 			auto* dataConsumer = kv.first;
 			auto* dataProducer = kv.second;
 
-			(*jsonMapDataConsumerDataProducerIt)[dataConsumer->id] = dataProducer->id;
+			mapDataConsumerIdDataProducerId.emplace_back(FBS::Common::CreateStringStringDirect(
+			  builder, dataConsumer->id.c_str(), dataProducer->id.c_str()));
 		}
+
+		return FBS::Router::CreateDumpResponseDirect(
+		  builder,
+		  this->id.c_str(),
+		  &transportIds,
+		  &rtpObserverIds,
+		  &mapProducerIdConsumerIds,
+		  &mapConsumerIdProducerId,
+		  &mapProducerIdObserverIds,
+		  &mapDataProducerIdDataConsumerIds,
+		  &mapDataConsumerIdDataProducerId);
 	}
 
 	void Router::HandleRequest(Channel::ChannelRequest* request)
 	{
 		MS_TRACE();
 
-		switch (request->methodId)
+		switch (request->method)
 		{
-			case Channel::ChannelRequest::MethodId::ROUTER_DUMP:
+			case Channel::ChannelRequest::Method::ROUTER_DUMP:
 			{
-				json data = json::object();
+				auto dumpOffset = FillBuffer(request->GetBufferBuilder());
 
-				FillJson(data);
-
-				request->Accept(data);
+				request->Accept(FBS::Response::Body::Router_DumpResponse, dumpOffset);
 
 				break;
 			}
 
-			case Channel::ChannelRequest::MethodId::ROUTER_CREATE_WEBRTC_TRANSPORT:
+			case Channel::ChannelRequest::Method::ROUTER_CREATE_WEBRTCTRANSPORT:
 			{
-				std::string transportId;
+				const auto* body = request->data->body_as<FBS::Router::CreateWebRtcTransportRequest>();
+
+				auto transportId = body->transportId()->str();
 
 				// This may throw.
-				SetNewTransportIdFromData(request->data, transportId);
+				CheckNoTransport(transportId);
 
 				// This may throw.
 				auto* webRtcTransport =
-				  new RTC::WebRtcTransport(this->shared, transportId, this, request->data);
+				  new RTC::WebRtcTransport(this->shared, transportId, this, body->options());
 
 				// Insert into the map.
 				this->mapTransports[transportId] = webRtcTransport;
 
 				MS_DEBUG_DEV("WebRtcTransport created [transportId:%s]", transportId.c_str());
 
-				json data = json::object();
+				auto dumpOffset = webRtcTransport->FillBuffer(request->GetBufferBuilder());
 
-				webRtcTransport->FillJson(data);
-
-				request->Accept(data);
+				request->Accept(FBS::Response::Body::WebRtcTransport_DumpResponse, dumpOffset);
 
 				break;
 			}
 
-			case Channel::ChannelRequest::MethodId::ROUTER_CREATE_WEBRTC_TRANSPORT_WITH_SERVER:
+			case Channel::ChannelRequest::Method::ROUTER_CREATE_WEBRTCTRANSPORT_WITH_SERVER:
 			{
-				std::string transportId;
+				const auto* body = request->data->body_as<FBS::Router::CreateWebRtcTransportRequest>();
+				auto transportId = body->transportId()->str();
 
 				// This may throw.
-				SetNewTransportIdFromData(request->data, transportId);
+				CheckNoTransport(transportId);
 
-				auto jsonWebRtcServerIdIt = request->data.find("webRtcServerId");
+				const auto* options    = body->options();
+				const auto* listenInfo = options->listen_as<FBS::WebRtcTransport::ListenServer>();
 
-				if (jsonWebRtcServerIdIt == request->data.end() || !jsonWebRtcServerIdIt->is_string())
-				{
-					MS_THROW_TYPE_ERROR("missing webRtcServerId");
-				}
-
-				std::string webRtcServerId = jsonWebRtcServerIdIt->get<std::string>();
+				auto webRtcServerId = listenInfo->webRtcServerId()->str();
 
 				auto* webRtcServer = this->listener->OnRouterNeedWebRtcServer(this, webRtcServerId);
 
 				if (!webRtcServer)
+				{
 					MS_THROW_ERROR("wrong webRtcServerId (no associated WebRtcServer found)");
-
-				bool enableUdp{ true };
-				auto jsonEnableUdpIt = request->data.find("enableUdp");
-
-				if (jsonEnableUdpIt != request->data.end())
-				{
-					if (!jsonEnableUdpIt->is_boolean())
-						MS_THROW_TYPE_ERROR("wrong enableUdp (not a boolean)");
-
-					enableUdp = jsonEnableUdpIt->get<bool>();
 				}
 
-				bool enableTcp{ false };
-				auto jsonEnableTcpIt = request->data.find("enableTcp");
-
-				if (jsonEnableTcpIt != request->data.end())
-				{
-					if (!jsonEnableTcpIt->is_boolean())
-						MS_THROW_TYPE_ERROR("wrong enableTcp (not a boolean)");
-
-					enableTcp = jsonEnableTcpIt->get<bool>();
-				}
-
-				bool preferUdp{ false };
-				auto jsonPreferUdpIt = request->data.find("preferUdp");
-
-				if (jsonPreferUdpIt != request->data.end())
-				{
-					if (!jsonPreferUdpIt->is_boolean())
-						MS_THROW_TYPE_ERROR("wrong preferUdp (not a boolean)");
-
-					preferUdp = jsonPreferUdpIt->get<bool>();
-				}
-
-				bool preferTcp{ false };
-				auto jsonPreferTcpIt = request->data.find("preferTcp");
-
-				if (jsonPreferTcpIt != request->data.end())
-				{
-					if (!jsonPreferTcpIt->is_boolean())
-						MS_THROW_TYPE_ERROR("wrong preferTcp (not a boolean)");
-
-					preferTcp = jsonPreferTcpIt->get<bool>();
-				}
-
-				auto iceCandidates =
-				  webRtcServer->GetIceCandidates(enableUdp, enableTcp, preferUdp, preferTcp);
+				auto iceCandidates = webRtcServer->GetIceCandidates(
+				  options->enableUdp(), options->enableTcp(), options->preferUdp(), options->preferTcp());
 
 				// This may throw.
 				auto* webRtcTransport = new RTC::WebRtcTransport(
-				  this->shared, transportId, this, webRtcServer, iceCandidates, request->data);
+				  this->shared, transportId, this, webRtcServer, iceCandidates, options);
 
 				// Insert into the map.
 				this->mapTransports[transportId] = webRtcTransport;
@@ -291,95 +265,92 @@ namespace RTC
 				MS_DEBUG_DEV(
 				  "WebRtcTransport with WebRtcServer created [transportId:%s]", transportId.c_str());
 
-				json data = json::object();
+				auto dumpOffset = webRtcTransport->FillBuffer(request->GetBufferBuilder());
 
-				webRtcTransport->FillJson(data);
-
-				request->Accept(data);
+				request->Accept(FBS::Response::Body::WebRtcTransport_DumpResponse, dumpOffset);
 
 				break;
 			}
 
-			case Channel::ChannelRequest::MethodId::ROUTER_CREATE_PLAIN_TRANSPORT:
+			case Channel::ChannelRequest::Method::ROUTER_CREATE_PLAINTRANSPORT:
 			{
-				std::string transportId;
+				const auto* body = request->data->body_as<FBS::Router::CreatePlainTransportRequest>();
+				auto transportId = body->transportId()->str();
 
-				// This may throw
-				SetNewTransportIdFromData(request->data, transportId);
+				// This may throw.
+				CheckNoTransport(transportId);
 
 				auto* plainTransport =
-				  new RTC::PlainTransport(this->shared, transportId, this, request->data);
+				  new RTC::PlainTransport(this->shared, transportId, this, body->options());
 
 				// Insert into the map.
 				this->mapTransports[transportId] = plainTransport;
 
 				MS_DEBUG_DEV("PlainTransport created [transportId:%s]", transportId.c_str());
 
-				json data = json::object();
+				auto dumpOffset = plainTransport->FillBuffer(request->GetBufferBuilder());
 
-				plainTransport->FillJson(data);
-
-				request->Accept(data);
+				request->Accept(FBS::Response::Body::PlainTransport_DumpResponse, dumpOffset);
 
 				break;
 			}
 
-			case Channel::ChannelRequest::MethodId::ROUTER_CREATE_PIPE_TRANSPORT:
+			case Channel::ChannelRequest::Method::ROUTER_CREATE_PIPETRANSPORT:
 			{
-				std::string transportId;
+				const auto* body = request->data->body_as<FBS::Router::CreatePipeTransportRequest>();
+				auto transportId = body->transportId()->str();
 
-				// This may throw
-				SetNewTransportIdFromData(request->data, transportId);
+				// This may throw.
+				CheckNoTransport(transportId);
 
-				auto* pipeTransport = new RTC::PipeTransport(this->shared, transportId, this, request->data);
+				auto* pipeTransport =
+				  new RTC::PipeTransport(this->shared, transportId, this, body->options());
 
 				// Insert into the map.
 				this->mapTransports[transportId] = pipeTransport;
 
 				MS_DEBUG_DEV("PipeTransport created [transportId:%s]", transportId.c_str());
 
-				json data = json::object();
+				auto dumpOffset = pipeTransport->FillBuffer(request->GetBufferBuilder());
 
-				pipeTransport->FillJson(data);
-
-				request->Accept(data);
+				request->Accept(FBS::Response::Body::PipeTransport_DumpResponse, dumpOffset);
 
 				break;
 			}
 
-			case Channel::ChannelRequest::MethodId::ROUTER_CREATE_DIRECT_TRANSPORT:
+			case Channel::ChannelRequest::Method::ROUTER_CREATE_DIRECTTRANSPORT:
 			{
-				std::string transportId;
+				const auto* body = request->data->body_as<FBS::Router::CreateDirectTransportRequest>();
+				auto transportId = body->transportId()->str();
 
-				// This may throw
-				SetNewTransportIdFromData(request->data, transportId);
+				// This may throw.
+				CheckNoTransport(transportId);
 
 				auto* directTransport =
-				  new RTC::DirectTransport(this->shared, transportId, this, request->data);
+				  new RTC::DirectTransport(this->shared, transportId, this, body->options());
 
 				// Insert into the map.
 				this->mapTransports[transportId] = directTransport;
 
 				MS_DEBUG_DEV("DirectTransport created [transportId:%s]", transportId.c_str());
 
-				json data = json::object();
+				auto dumpOffset = directTransport->FillBuffer(request->GetBufferBuilder());
 
-				directTransport->FillJson(data);
-
-				request->Accept(data);
+				request->Accept(FBS::Response::Body::DirectTransport_DumpResponse, dumpOffset);
 
 				break;
 			}
 
-			case Channel::ChannelRequest::MethodId::ROUTER_CREATE_ACTIVE_SPEAKER_OBSERVER:
+			case Channel::ChannelRequest::Method::ROUTER_CREATE_ACTIVESPEAKEROBSERVER:
 			{
-				std::string rtpObserverId;
+				const auto* body = request->data->body_as<FBS::Router::CreateActiveSpeakerObserverRequest>();
+				auto rtpObserverId = body->rtpObserverId()->str();
 
 				// This may throw.
-				SetNewRtpObserverIdFromData(request->data, rtpObserverId);
+				CheckNoRtpObserver(rtpObserverId);
 
 				auto* activeSpeakerObserver =
-				  new RTC::ActiveSpeakerObserver(this->shared, rtpObserverId, this, request->data);
+				  new RTC::ActiveSpeakerObserver(this->shared, rtpObserverId, this, body->options());
 
 				// Insert into the map.
 				this->mapRtpObservers[rtpObserverId] = activeSpeakerObserver;
@@ -391,15 +362,16 @@ namespace RTC
 				break;
 			}
 
-			case Channel::ChannelRequest::MethodId::ROUTER_CREATE_AUDIO_LEVEL_OBSERVER:
+			case Channel::ChannelRequest::Method::ROUTER_CREATE_AUDIOLEVELOBSERVER:
 			{
-				std::string rtpObserverId;
+				const auto* body   = request->data->body_as<FBS::Router::CreateAudioLevelObserverRequest>();
+				auto rtpObserverId = body->rtpObserverId()->str();
 
-				// This may throw
-				SetNewRtpObserverIdFromData(request->data, rtpObserverId);
+				// This may throw.
+				CheckNoRtpObserver(rtpObserverId);
 
 				auto* audioLevelObserver =
-				  new RTC::AudioLevelObserver(this->shared, rtpObserverId, this, request->data);
+				  new RTC::AudioLevelObserver(this->shared, rtpObserverId, this, body->options());
 
 				// Insert into the map.
 				this->mapRtpObservers[rtpObserverId] = audioLevelObserver;
@@ -411,10 +383,13 @@ namespace RTC
 				break;
 			}
 
-			case Channel::ChannelRequest::MethodId::ROUTER_CLOSE_TRANSPORT:
+			case Channel::ChannelRequest::Method::ROUTER_CLOSE_TRANSPORT:
 			{
+				const auto* body = request->data->body_as<FBS::Router::CloseTransportRequest>();
+				auto transportId = body->transportId()->str();
+
 				// This may throw.
-				RTC::Transport* transport = GetTransportFromData(request->data);
+				RTC::Transport* transport = GetTransportById(transportId);
 
 				// Tell the Transport to close all its Producers and Consumers so it will
 				// notify us about their closures.
@@ -433,10 +408,13 @@ namespace RTC
 				break;
 			}
 
-			case Channel::ChannelRequest::MethodId::ROUTER_CLOSE_RTP_OBSERVER:
+			case Channel::ChannelRequest::Method::ROUTER_CLOSE_RTPOBSERVER:
 			{
+				const auto* body   = request->data->body_as<FBS::Router::CloseRtpObserverRequest>();
+				auto rtpObserverId = body->rtpObserverId()->str();
+
 				// This may throw.
-				RTC::RtpObserver* rtpObserver = GetRtpObserverFromData(request->data);
+				RTC::RtpObserver* rtpObserver = GetRtpObserverById(rtpObserverId);
 
 				// Remove it from the map.
 				this->mapRtpObservers.erase(rtpObserver->id);
@@ -461,89 +439,53 @@ namespace RTC
 
 			default:
 			{
-				MS_THROW_ERROR("unknown method '%s'", request->method.c_str());
+				MS_THROW_ERROR("unknown method '%s'", Channel::ChannelRequest::method2String[request->method]);
 			}
 		}
 	}
 
-	void Router::SetNewTransportIdFromData(json& data, std::string& transportId) const
+	void Router::CheckNoTransport(const std::string& transportId) const
 	{
-		MS_TRACE();
-
-		auto jsonTransportIdIt = data.find("transportId");
-
-		if (jsonTransportIdIt == data.end() || !jsonTransportIdIt->is_string())
-		{
-			MS_THROW_TYPE_ERROR("missing transportId");
-		}
-
-		transportId.assign(jsonTransportIdIt->get<std::string>());
-
 		if (this->mapTransports.find(transportId) != this->mapTransports.end())
 		{
-			MS_THROW_ERROR("a Transport with same transportId already exists");
+			MS_THROW_ERROR("a Transport with same id already exists");
 		}
 	}
 
-	RTC::Transport* Router::GetTransportFromData(json& data) const
+	void Router::CheckNoRtpObserver(const std::string& rtpObserverId) const
 	{
-		MS_TRACE();
-
-		auto jsonTransportIdIt = data.find("transportId");
-
-		if (jsonTransportIdIt == data.end() || !jsonTransportIdIt->is_string())
-		{
-			MS_THROW_TYPE_ERROR("missing transportId");
-		}
-
-		auto it = this->mapTransports.find(jsonTransportIdIt->get<std::string>());
-
-		if (it == this->mapTransports.end())
-			MS_THROW_ERROR("Transport not found");
-
-		RTC::Transport* transport = it->second;
-
-		return transport;
-	}
-
-	void Router::SetNewRtpObserverIdFromData(json& data, std::string& rtpObserverId) const
-	{
-		MS_TRACE();
-
-		auto jsonRtpObserverIdIt = data.find("rtpObserverId");
-
-		if (jsonRtpObserverIdIt == data.end() || !jsonRtpObserverIdIt->is_string())
-		{
-			MS_THROW_TYPE_ERROR("missing rtpObserverId");
-		}
-
-		rtpObserverId.assign(jsonRtpObserverIdIt->get<std::string>());
-
 		if (this->mapRtpObservers.find(rtpObserverId) != this->mapRtpObservers.end())
 		{
-			MS_THROW_ERROR("an RtpObserver with same rtpObserverId already exists");
+			MS_THROW_ERROR("an RtpObserver with same id already exists");
 		}
 	}
 
-	RTC::RtpObserver* Router::GetRtpObserverFromData(json& data) const
+	RTC::Transport* Router::GetTransportById(const std::string& transportId) const
 	{
 		MS_TRACE();
 
-		auto jsonRtpObserverIdIt = data.find("rtpObserverId");
+		auto it = this->mapTransports.find(transportId);
 
-		if (jsonRtpObserverIdIt == data.end() || !jsonRtpObserverIdIt->is_string())
+		if (this->mapTransports.find(transportId) == this->mapTransports.end())
 		{
-			MS_THROW_TYPE_ERROR("missing rtpObserverId");
+			MS_THROW_ERROR("Transport not found");
 		}
 
-		auto it = this->mapRtpObservers.find(jsonRtpObserverIdIt->get<std::string>());
+		return it->second;
+	}
 
-		if (it == this->mapRtpObservers.end())
+	RTC::RtpObserver* Router::GetRtpObserverById(const std::string& rtpObserverId) const
+	{
+		MS_TRACE();
+
+		auto it = this->mapRtpObservers.find(rtpObserverId);
+
+		if (this->mapRtpObservers.find(rtpObserverId) == this->mapRtpObservers.end())
+		{
 			MS_THROW_ERROR("RtpObserver not found");
+		}
 
-		RTC::RtpObserver* rtpObserver = it->second;
-
-		return rtpObserver;
+		return it->second;
 	}
 
 	inline void Router::OnTransportNewProducer(RTC::Transport* /*transport*/, RTC::Producer* producer)
@@ -659,7 +601,10 @@ namespace RTC
 	}
 
 	inline void Router::OnTransportProducerNewRtpStream(
-	  RTC::Transport* /*transport*/, RTC::Producer* producer, RTC::RtpStream* rtpStream, uint32_t mappedSsrc)
+	  RTC::Transport* /*transport*/,
+	  RTC::Producer* producer,
+	  RTC::RtpStreamRecv* rtpStream,
+	  uint32_t mappedSsrc)
 	{
 		MS_TRACE();
 
@@ -674,7 +619,7 @@ namespace RTC
 	inline void Router::OnTransportProducerRtpStreamScore(
 	  RTC::Transport* /*transport*/,
 	  RTC::Producer* producer,
-	  RTC::RtpStream* rtpStream,
+	  RTC::RtpStreamRecv* rtpStream,
 	  uint8_t score,
 	  uint8_t previousScore)
 	{
@@ -689,7 +634,7 @@ namespace RTC
 	}
 
 	inline void Router::OnTransportProducerRtcpSenderReport(
-	  RTC::Transport* /*transport*/, RTC::Producer* producer, RTC::RtpStream* rtpStream, bool first)
+	  RTC::Transport* /*transport*/, RTC::Producer* producer, RTC::RtpStreamRecv* rtpStream, bool first)
 	{
 		MS_TRACE();
 
@@ -706,6 +651,10 @@ namespace RTC
 	{
 		MS_TRACE();
 
+#ifdef MS_RTC_LOGGER_RTP
+		packet->logger.routerId = this->id;
+#endif
+
 		auto& consumers = this->mapProducerConsumers.at(producer);
 
 		if (!consumers.empty())
@@ -715,16 +664,34 @@ namespace RTC
 			// Clone only happens if needed.
 			std::shared_ptr<RTC::RtpPacket> sharedPacket;
 
+#ifdef MS_LIBURING_SUPPORTED
+			if (DepLibUring::IsEnabled())
+			{
+				// Activate liburing usage.
+				DepLibUring::SetActive();
+			}
+#endif
+
 			for (auto* consumer : consumers)
 			{
 				// Update MID RTP extension value.
 				const auto& mid = consumer->GetRtpParameters().mid;
 
 				if (!mid.empty())
+				{
 					packet->UpdateMid(mid);
+				}
 
 				consumer->SendRtpPacket(packet, sharedPacket);
 			}
+
+#ifdef MS_LIBURING_SUPPORTED
+			if (DepLibUring::IsEnabled())
+			{
+				// Submit all prepared submission entries.
+				DepLibUring::Submit();
+			}
+#endif
 		}
 
 		auto it = this->mapProducerRtpObservers.find(producer);
@@ -757,14 +724,16 @@ namespace RTC
 	}
 
 	inline void Router::OnTransportNewConsumer(
-	  RTC::Transport* /*transport*/, RTC::Consumer* consumer, std::string& producerId)
+	  RTC::Transport* /*transport*/, RTC::Consumer* consumer, const std::string& producerId)
 	{
 		MS_TRACE();
 
 		auto mapProducersIt = this->mapProducers.find(producerId);
 
 		if (mapProducersIt == this->mapProducers.end())
+		{
 			MS_THROW_ERROR("Producer not found [producerId:%s]", producerId.c_str());
+		}
 
 		auto* producer              = mapProducersIt->second;
 		auto mapProducerConsumersIt = this->mapProducerConsumers.find(producer);
@@ -778,7 +747,9 @@ namespace RTC
 
 		// Update the Consumer status based on the Producer status.
 		if (producer->IsPaused())
+		{
 			consumer->ProducerPaused();
+		}
 
 		// Insert the Consumer in the maps.
 		auto& consumers = mapProducerConsumersIt->second;
@@ -789,8 +760,8 @@ namespace RTC
 		// Get all streams in the Producer and provide the Consumer with them.
 		for (const auto& kv : producer->GetRtpStreams())
 		{
-			auto* rtpStream     = kv.first;
-			uint32_t mappedSsrc = kv.second;
+			auto* rtpStream           = kv.first;
+			const uint32_t mappedSsrc = kv.second;
 
 			consumer->ProducerRtpStream(rtpStream, mappedSsrc);
 		}
@@ -918,20 +889,69 @@ namespace RTC
 		this->mapDataProducerDataConsumers.erase(mapDataProducerDataConsumersIt);
 	}
 
-	inline void Router::OnTransportDataProducerMessageReceived(
-	  RTC::Transport* /*transport*/,
-	  RTC::DataProducer* dataProducer,
-	  uint32_t ppid,
-	  const uint8_t* msg,
-	  size_t len)
+	inline void Router::OnTransportDataProducerPaused(
+	  RTC::Transport* /*transport*/, RTC::DataProducer* dataProducer)
 	{
 		MS_TRACE();
 
 		auto& dataConsumers = this->mapDataProducerDataConsumers.at(dataProducer);
 
-		for (auto* consumer : dataConsumers)
+		for (auto* dataConsumer : dataConsumers)
 		{
-			consumer->SendMessage(ppid, msg, len);
+			dataConsumer->DataProducerPaused();
+		}
+	}
+
+	inline void Router::OnTransportDataProducerResumed(
+	  RTC::Transport* /*transport*/, RTC::DataProducer* dataProducer)
+	{
+		MS_TRACE();
+
+		auto& dataConsumers = this->mapDataProducerDataConsumers.at(dataProducer);
+
+		for (auto* dataConsumer : dataConsumers)
+		{
+			dataConsumer->DataProducerResumed();
+		}
+	}
+
+	inline void Router::OnTransportDataProducerMessageReceived(
+	  RTC::Transport* /*transport*/,
+	  RTC::DataProducer* dataProducer,
+	  const uint8_t* msg,
+	  size_t len,
+	  uint32_t ppid,
+	  std::vector<uint16_t>& subchannels,
+	  std::optional<uint16_t> requiredSubchannel)
+	{
+		MS_TRACE();
+
+		auto& dataConsumers = this->mapDataProducerDataConsumers.at(dataProducer);
+
+		if (!dataConsumers.empty())
+		{
+#ifdef MS_LIBURING_SUPPORTED
+			if (DepLibUring::IsEnabled())
+			{
+				// Activate liburing usage.
+				// The effective sending could be synchronous, thus we would send those
+				// messages within a single system call.
+				DepLibUring::SetActive();
+			}
+#endif
+
+			for (auto* dataConsumer : dataConsumers)
+			{
+				dataConsumer->SendMessage(msg, len, ppid, subchannels, requiredSubchannel);
+			}
+
+#ifdef MS_LIBURING_SUPPORTED
+			if (DepLibUring::IsEnabled())
+			{
+				// Submit all prepared submission entries.
+				DepLibUring::Submit();
+			}
+#endif
 		}
 	}
 
@@ -943,7 +963,9 @@ namespace RTC
 		auto mapDataProducersIt = this->mapDataProducers.find(dataProducerId);
 
 		if (mapDataProducersIt == this->mapDataProducers.end())
+		{
 			MS_THROW_ERROR("DataProducer not found [dataProducerId:%s]", dataProducerId.c_str());
+		}
 
 		auto* dataProducer                  = mapDataProducersIt->second;
 		auto mapDataProducerDataConsumersIt = this->mapDataProducerDataConsumers.find(dataProducer);
@@ -954,6 +976,12 @@ namespace RTC
 		MS_ASSERT(
 		  this->mapDataConsumerDataProducer.find(dataConsumer) == this->mapDataConsumerDataProducer.end(),
 		  "DataConsumer already present in mapDataConsumerDataProducer");
+
+		// Update the DataConsumer status based on the DataProducer status.
+		if (dataProducer->IsPaused())
+		{
+			dataConsumer->DataProducerPaused();
+		}
 
 		// Insert the DataConsumer in the maps.
 		auto& dataConsumers = mapDataProducerDataConsumersIt->second;
@@ -1052,7 +1080,9 @@ namespace RTC
 		auto it = this->mapProducers.find(id);
 
 		if (it == this->mapProducers.end())
+		{
 			MS_THROW_ERROR("Producer not found");
+		}
 
 		RTC::Producer* producer = it->second;
 

@@ -10,7 +10,7 @@
 #[cfg(test)]
 mod tests;
 
-use crate::data_structures::{AppData, ListenIp, Protocol};
+use crate::data_structures::{AppData, ListenInfo};
 use crate::messages::{WebRtcServerCloseRequest, WebRtcServerDumpRequest};
 use crate::transport::TransportId;
 use crate::uuid_based_wrapper_type;
@@ -20,6 +20,7 @@ use async_executor::Executor;
 use event_listener_primitives::{BagOnce, HandlerId};
 use hash_hasher::HashedSet;
 use log::{debug, error};
+use mediasoup_sys::fbs::transport;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -73,41 +74,34 @@ pub struct WebRtcServerDump {
     pub tuple_hashes: Vec<WebRtcServerTupleHash>,
 }
 
-/// Listening protocol, IP and port for [`WebRtcServer`] to listen on.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WebRtcServerListenInfo {
-    /// Network protocol.
-    pub protocol: Protocol,
-    /// Listening IP address.
-    #[serde(flatten)]
-    pub listen_ip: ListenIp,
-    /// Listening port.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub port: Option<u16>,
-}
-
 /// Struct that protects an invariant of having non-empty list of listen infos.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize)]
-pub struct WebRtcServerListenInfos(Vec<WebRtcServerListenInfo>);
+pub struct WebRtcServerListenInfos(Vec<ListenInfo>);
 
 impl WebRtcServerListenInfos {
     /// Create WebRTC server listen infos with given info populated initially.
     #[must_use]
-    pub fn new(listen_info: WebRtcServerListenInfo) -> Self {
+    pub fn new(listen_info: ListenInfo) -> Self {
         Self(vec![listen_info])
     }
 
     /// Insert another listen info.
     #[must_use]
-    pub fn insert(mut self, listen_info: WebRtcServerListenInfo) -> Self {
+    pub fn insert(mut self, listen_info: ListenInfo) -> Self {
         self.0.push(listen_info);
         self
+    }
+
+    pub(crate) fn to_fbs(&self) -> Vec<transport::ListenInfo> {
+        self.0
+            .iter()
+            .map(|listen_info| listen_info.to_fbs())
+            .collect()
     }
 }
 
 impl Deref for WebRtcServerListenInfos {
-    type Target = Vec<WebRtcServerListenInfo>;
+    type Target = Vec<ListenInfo>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -119,10 +113,10 @@ impl Deref for WebRtcServerListenInfos {
 #[error("Empty list of listen infos provided, should have at least one element")]
 pub struct EmptyListError;
 
-impl TryFrom<Vec<WebRtcServerListenInfo>> for WebRtcServerListenInfos {
+impl TryFrom<Vec<ListenInfo>> for WebRtcServerListenInfos {
     type Error = EmptyListError;
 
-    fn try_from(listen_infos: Vec<WebRtcServerListenInfo>) -> Result<Self, Self::Error> {
+    fn try_from(listen_infos: Vec<ListenInfo>) -> Result<Self, Self::Error> {
         if listen_infos.is_empty() {
             Err(EmptyListError)
         } else {

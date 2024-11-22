@@ -1,0 +1,14 @@
+namespace FBS.SrtpParameters;
+
+enum SrtpCryptoSuite: uint8 {
+    AEAD_AES_256_GCM,
+    AEAD_AES_128_GCM,
+    AES_CM_128_HMAC_SHA1_80,
+    AES_CM_128_HMAC_SHA1_32,
+}
+
+table SrtpParameters {
+    crypto_suite: FBS.SrtpParameters.SrtpCryptoSuite;
+    key_base64: string (required);
+}
+

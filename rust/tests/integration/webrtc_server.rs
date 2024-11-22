@@ -1,9 +1,7 @@
 use futures_lite::future;
 use hash_hasher::HashedSet;
-use mediasoup::data_structures::{AppData, ListenIp, Protocol};
-use mediasoup::webrtc_server::{
-    WebRtcServerIpPort, WebRtcServerListenInfo, WebRtcServerListenInfos, WebRtcServerOptions,
-};
+use mediasoup::data_structures::{AppData, ListenInfo, Protocol};
+use mediasoup::webrtc_server::{WebRtcServerIpPort, WebRtcServerListenInfos, WebRtcServerOptions};
 use mediasoup::worker::{ChannelMessageHandlers, CreateWebRtcServerError, Worker, WorkerSettings};
 use mediasoup::worker_manager::WorkerManager;
 use portpicker::pick_unused_port;
@@ -11,6 +9,11 @@ use std::env;
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+
+#[derive(Debug, PartialEq)]
+struct CustomAppData {
+    foo: u32,
+}
 
 async fn init() -> (Worker, Worker) {
     {
@@ -54,28 +57,27 @@ fn create_webrtc_server_succeeds() {
             })
             .detach();
 
-        #[derive(Debug, PartialEq)]
-        struct CustomAppData {
-            foo: u32,
-        }
-
         let webrtc_server = worker1
             .create_webrtc_server({
-                let listen_infos = WebRtcServerListenInfos::new(WebRtcServerListenInfo {
+                let listen_infos = WebRtcServerListenInfos::new(ListenInfo {
                     protocol: Protocol::Udp,
-                    listen_ip: ListenIp {
-                        ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                        announced_ip: None,
-                    },
+                    ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
+                    announced_address: None,
                     port: Some(port1),
+                    port_range: None,
+                    flags: None,
+                    send_buffer_size: None,
+                    recv_buffer_size: None,
                 });
-                let listen_infos = listen_infos.insert(WebRtcServerListenInfo {
+                let listen_infos = listen_infos.insert(ListenInfo {
                     protocol: Protocol::Tcp,
-                    listen_ip: ListenIp {
-                        ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                        announced_ip: Some(IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))),
-                    },
+                    ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
+                    announced_address: Some("foo.bar.org".to_string()),
                     port: Some(port2),
+                    port_range: None,
+                    flags: None,
+                    send_buffer_size: None,
+                    recv_buffer_size: None,
                 });
                 let mut webrtc_server_options = WebRtcServerOptions::new(listen_infos);
 
@@ -101,8 +103,7 @@ fn create_webrtc_server_succeeds() {
             worker_dump.channel_message_handlers,
             ChannelMessageHandlers {
                 channel_request_handlers: vec![webrtc_server.id().into()],
-                payload_channel_request_handlers: vec![],
-                payload_channel_notification_handlers: vec![]
+                channel_notification_handlers: vec![]
             }
         );
 
@@ -149,28 +150,27 @@ fn create_webrtc_server_without_specifying_port_succeeds() {
             })
             .detach();
 
-        #[derive(Debug, PartialEq)]
-        struct CustomAppData {
-            foo: u32,
-        }
-
         let webrtc_server = worker1
             .create_webrtc_server({
-                let listen_infos = WebRtcServerListenInfos::new(WebRtcServerListenInfo {
+                let listen_infos = WebRtcServerListenInfos::new(ListenInfo {
                     protocol: Protocol::Udp,
-                    listen_ip: ListenIp {
-                        ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                        announced_ip: None,
-                    },
+                    ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
+                    announced_address: None,
                     port: None,
+                    port_range: None,
+                    flags: None,
+                    send_buffer_size: None,
+                    recv_buffer_size: None,
                 });
-                let listen_infos = listen_infos.insert(WebRtcServerListenInfo {
+                let listen_infos = listen_infos.insert(ListenInfo {
                     protocol: Protocol::Tcp,
-                    listen_ip: ListenIp {
-                        ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                        announced_ip: Some(IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))),
-                    },
+                    ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
+                    announced_address: Some("1.2.3.4".to_string()),
                     port: None,
+                    port_range: None,
+                    flags: None,
+                    send_buffer_size: None,
+                    recv_buffer_size: None,
                 });
                 let mut webrtc_server_options = WebRtcServerOptions::new(listen_infos);
 
@@ -228,30 +228,29 @@ fn unavailable_infos_fails() {
             })
             .detach();
 
-        #[derive(Debug, PartialEq)]
-        struct CustomAppData {
-            foo: u32,
-        }
-
         // Using an unavailable listen IP.
         {
             let create_result = worker1
                 .create_webrtc_server({
-                    let listen_infos = WebRtcServerListenInfos::new(WebRtcServerListenInfo {
+                    let listen_infos = WebRtcServerListenInfos::new(ListenInfo {
                         protocol: Protocol::Udp,
-                        listen_ip: ListenIp {
-                            ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                            announced_ip: None,
-                        },
+                        ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
+                        announced_address: None,
                         port: Some(port1),
+                        port_range: None,
+                        flags: None,
+                        send_buffer_size: None,
+                        recv_buffer_size: None,
                     });
-                    let listen_infos = listen_infos.insert(WebRtcServerListenInfo {
+                    let listen_infos = listen_infos.insert(ListenInfo {
                         protocol: Protocol::Udp,
-                        listen_ip: ListenIp {
-                            ip: IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4)),
-                            announced_ip: None,
-                        },
+                        ip: IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4)),
+                        announced_address: None,
                         port: Some(port2),
+                        port_range: None,
+                        flags: None,
+                        send_buffer_size: None,
+                        recv_buffer_size: None,
                     });
 
                     WebRtcServerOptions::new(listen_infos)
@@ -268,21 +267,25 @@ fn unavailable_infos_fails() {
         {
             let create_result = worker1
                 .create_webrtc_server({
-                    let listen_infos = WebRtcServerListenInfos::new(WebRtcServerListenInfo {
+                    let listen_infos = WebRtcServerListenInfos::new(ListenInfo {
                         protocol: Protocol::Udp,
-                        listen_ip: ListenIp {
-                            ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                            announced_ip: None,
-                        },
+                        ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
+                        announced_address: None,
                         port: Some(port1),
+                        port_range: None,
+                        flags: None,
+                        send_buffer_size: None,
+                        recv_buffer_size: None,
                     });
-                    let listen_infos = listen_infos.insert(WebRtcServerListenInfo {
+                    let listen_infos = listen_infos.insert(ListenInfo {
                         protocol: Protocol::Udp,
-                        listen_ip: ListenIp {
-                            ip: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-                            announced_ip: Some(IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))),
-                        },
+                        ip: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+                        announced_address: Some("1.2.3.4".to_string()),
                         port: Some(port1),
+                        port_range: None,
+                        flags: None,
+                        send_buffer_size: None,
+                        recv_buffer_size: None,
                     });
 
                     WebRtcServerOptions::new(listen_infos)
@@ -299,13 +302,15 @@ fn unavailable_infos_fails() {
         {
             let _webrtc_server = worker1
                 .create_webrtc_server(WebRtcServerOptions::new(WebRtcServerListenInfos::new(
-                    WebRtcServerListenInfo {
+                    ListenInfo {
                         protocol: Protocol::Udp,
-                        listen_ip: ListenIp {
-                            ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                            announced_ip: None,
-                        },
+                        ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
+                        announced_address: None,
                         port: Some(port1),
+                        port_range: None,
+                        flags: None,
+                        send_buffer_size: None,
+                        recv_buffer_size: None,
                     },
                 )))
                 .await
@@ -313,13 +318,15 @@ fn unavailable_infos_fails() {
 
             let create_result = worker2
                 .create_webrtc_server(WebRtcServerOptions::new(WebRtcServerListenInfos::new(
-                    WebRtcServerListenInfo {
+                    ListenInfo {
                         protocol: Protocol::Udp,
-                        listen_ip: ListenIp {
-                            ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                            announced_ip: None,
-                        },
+                        ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
+                        announced_address: None,
                         port: Some(port1),
+                        port_range: None,
+                        flags: None,
+                        send_buffer_size: None,
+                        recv_buffer_size: None,
                     },
                 )))
                 .await;
@@ -341,13 +348,15 @@ fn close_event() {
 
         let webrtc_server = worker1
             .create_webrtc_server(WebRtcServerOptions::new(WebRtcServerListenInfos::new(
-                WebRtcServerListenInfo {
+                ListenInfo {
                     protocol: Protocol::Udp,
-                    listen_ip: ListenIp {
-                        ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                        announced_ip: None,
-                    },
+                    ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
+                    announced_address: None,
                     port: Some(port),
+                    port_range: None,
+                    flags: None,
+                    send_buffer_size: None,
+                    recv_buffer_size: None,
                 },
             )))
             .await

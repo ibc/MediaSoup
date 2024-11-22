@@ -1,135 +1,42 @@
+import * as flatbuffers from 'flatbuffers';
 import { Logger } from './Logger';
+import { EnhancedEventEmitter } from './enhancedEvents';
+import type {
+	PlainTransport,
+	PlainTransportDump,
+	PlainTransportStat,
+	PlainTransportEvents,
+	PlainTransportObserver,
+	PlainTransportObserverEvents,
+} from './PlainTransportTypes';
+import type { Transport, TransportTuple, SctpState } from './TransportTypes';
 import {
-	Transport,
-	TransportListenIp,
-	TransportTuple,
-	TransportTraceEventData,
-	TransportEvents,
-	TransportObserverEvents,
+	TransportImpl,
 	TransportConstructorOptions,
-	SctpState
+	parseSctpState,
+	parseTuple,
+	parseBaseTransportDump,
+	parseBaseTransportStats,
+	parseTransportTraceEventData,
 } from './Transport';
-import { SctpParameters, NumSctpStreams } from './SctpParameters';
-import { SrtpParameters, SrtpCryptoSuite } from './SrtpParameters';
+import type { SctpParameters } from './sctpParametersTypes';
+import type { SrtpParameters } from './srtpParametersTypes';
+import {
+	parseSrtpParameters,
+	serializeSrtpParameters,
+} from './srtpParametersFbsUtils';
+import type { AppData } from './types';
+import { Event, Notification } from './fbs/notification';
+import * as FbsRequest from './fbs/request';
+import * as FbsTransport from './fbs/transport';
+import * as FbsPlainTransport from './fbs/plain-transport';
 
-export type PlainTransportOptions =
-{
-	/**
-	 * Listening IP address.
-	 */
-	listenIp: TransportListenIp | string;
+type PlainTransportConstructorOptions<PlainTransportAppData> =
+	TransportConstructorOptions<PlainTransportAppData> & {
+		data: PlainTransportData;
+	};
 
-	/**
-	 * Fixed port to listen on instead of selecting automatically from Worker's port
-	 * range.
-	 */
-	port?: number;
-
-	/**
-	 * Use RTCP-mux (RTP and RTCP in the same port). Default true.
-	 */
-	rtcpMux?: boolean;
-
-	/**
-	 * Whether remote IP:port should be auto-detected based on first RTP/RTCP
-	 * packet received. If enabled, connect() method must not be called unless
-	 * SRTP is enabled. If so, it must be called with just remote SRTP parameters.
-	 * Default false.
-	 */
-	comedia?: boolean;
-
-	/**
-	 * Create a SCTP association. Default false.
-	 */
-	enableSctp?: boolean;
-
-	/**
-	 * SCTP streams number.
-	 */
-	numSctpStreams?: NumSctpStreams;
-
-	/**
-	 * Maximum allowed size for SCTP messages sent by DataProducers.
-	 * Default 262144.
-	 */
-	maxSctpMessageSize?: number;
-
-	/**
-	 * Maximum SCTP send buffer used by DataConsumers.
-	 * Default 262144.
-	 */
-	sctpSendBufferSize?: number;
-
-	/**
-	 * Enable SRTP. For this to work, connect() must be called
-	 * with remote SRTP parameters. Default false.
-	 */
-	enableSrtp?: boolean;
-
-	/**
-	 * The SRTP crypto suite to be used if enableSrtp is set. Default
-	 * 'AES_CM_128_HMAC_SHA1_80'.
-	 */
-	srtpCryptoSuite?: SrtpCryptoSuite;
-
-	/**
-	 * Custom application data.
-	 */
-	appData?: Record<string, unknown>;
-};
-
-export type PlainTransportStat =
-{
-	// Common to all Transports.
-	type: string;
-	transportId: string;
-	timestamp: number;
-	sctpState?: SctpState;
-	bytesReceived: number;
-	recvBitrate: number;
-	bytesSent: number;
-	sendBitrate: number;
-	rtpBytesReceived: number;
-	rtpRecvBitrate: number;
-	rtpBytesSent: number;
-	rtpSendBitrate: number;
-	rtxBytesReceived: number;
-	rtxRecvBitrate: number;
-	rtxBytesSent: number;
-	rtxSendBitrate: number;
-	probationBytesSent: number;
-	probationSendBitrate: number;
-	availableOutgoingBitrate?: number;
-	availableIncomingBitrate?: number;
-	maxIncomingBitrate?: number;
-	// PlainTransport specific.
-	rtcpMux: boolean;
-	comedia: boolean;
-	tuple: TransportTuple;
-	rtcpTuple?: TransportTuple;
-};
-
-export type PlainTransportEvents = TransportEvents &
-{
-	tuple: [TransportTuple];
-	rtcptuple: [TransportTuple];
-	sctpstatechange: [SctpState];
-};
-
-export type PlainTransportObserverEvents = TransportObserverEvents &
-{
-	tuple: [TransportTuple];
-	rtcptuple: [TransportTuple];
-	sctpstatechange: [SctpState];	
-};
-
-type PlainTransportConstructorOptions = TransportConstructorOptions &
-{
-	data: PlainTransportData;
-};
-
-export type PlainTransportData =
-{
+export type PlainTransportData = {
 	rtcpMux?: boolean;
 	comedia?: boolean;
 	tuple: TransportTuple;
@@ -141,224 +48,356 @@ export type PlainTransportData =
 
 const logger = new Logger('PlainTransport');
 
-export class PlainTransport extends
-	Transport<PlainTransportEvents, PlainTransportObserverEvents>
+export class PlainTransportImpl<PlainTransportAppData extends AppData = AppData>
+	extends TransportImpl<
+		PlainTransportAppData,
+		PlainTransportEvents,
+		PlainTransportObserver
+	>
+	implements Transport, PlainTransport
 {
 	// PlainTransport data.
 	readonly #data: PlainTransportData;
 
-	/**
-	 * @private
-	 */
-	constructor(options: PlainTransportConstructorOptions)
-	{
-		super(options);
+	constructor(
+		options: PlainTransportConstructorOptions<PlainTransportAppData>
+	) {
+		const observer: PlainTransportObserver =
+			new EnhancedEventEmitter<PlainTransportObserverEvents>();
+
+		super(options, observer);
 
 		logger.debug('constructor()');
 
 		const { data } = options;
 
-		this.#data =
-		{
-			rtcpMux        : data.rtcpMux,
-			comedia        : data.comedia,
-			tuple          : data.tuple,
-			rtcpTuple      : data.rtcpTuple,
-			sctpParameters : data.sctpParameters,
-			sctpState      : data.sctpState,
-			srtpParameters : data.srtpParameters
+		this.#data = {
+			rtcpMux: data.rtcpMux,
+			comedia: data.comedia,
+			tuple: data.tuple,
+			rtcpTuple: data.rtcpTuple,
+			sctpParameters: data.sctpParameters,
+			sctpState: data.sctpState,
+			srtpParameters: data.srtpParameters,
 		};
 
 		this.handleWorkerNotifications();
+		this.handleListenerError();
 	}
 
-	/**
-	 * Transport tuple.
-	 */
-	get tuple(): TransportTuple
-	{
+	get type(): 'plain' {
+		return 'plain';
+	}
+
+	get observer(): PlainTransportObserver {
+		return super.observer;
+	}
+
+	get tuple(): TransportTuple {
 		return this.#data.tuple;
 	}
 
-	/**
-	 * Transport RTCP tuple.
-	 */
-	get rtcpTuple(): TransportTuple | undefined
-	{
+	get rtcpTuple(): TransportTuple | undefined {
 		return this.#data.rtcpTuple;
 	}
 
-	/**
-	 * SCTP parameters.
-	 */
-	get sctpParameters(): SctpParameters | undefined
-	{
+	get sctpParameters(): SctpParameters | undefined {
 		return this.#data.sctpParameters;
 	}
 
-	/**
-	 * SCTP state.
-	 */
-	get sctpState(): SctpState | undefined
-	{
+	get sctpState(): SctpState | undefined {
 		return this.#data.sctpState;
 	}
 
-	/**
-	 * SRTP parameters.
-	 */
-	get srtpParameters(): SrtpParameters | undefined
-	{
+	get srtpParameters(): SrtpParameters | undefined {
 		return this.#data.srtpParameters;
 	}
 
-	/**
-	 * Close the PlainTransport.
-	 *
-	 * @override
-	 */
-	close(): void
-	{
-		if (this.closed)
+	close(): void {
+		if (this.closed) {
 			return;
+		}
 
-		if (this.#data.sctpState)
+		if (this.#data.sctpState) {
 			this.#data.sctpState = 'closed';
+		}
 
 		super.close();
 	}
 
-	/**
-	 * Router was closed.
-	 *
-	 * @private
-	 * @override
-	 */
-	routerClosed(): void
-	{
-		if (this.closed)
+	routerClosed(): void {
+		if (this.closed) {
 			return;
+		}
 
-		if (this.#data.sctpState)
+		if (this.#data.sctpState) {
 			this.#data.sctpState = 'closed';
+		}
 
 		super.routerClosed();
 	}
 
-	/**
-	 * Get PlainTransport stats.
-	 *
-	 * @override
-	 */
-	async getStats(): Promise<PlainTransportStat[]>
-	{
-		logger.debug('getStats()');
+	async dump(): Promise<PlainTransportDump> {
+		logger.debug('dump()');
 
-		return this.channel.request('transport.getStats', this.internal.transportId);
+		const response = await this.channel.request(
+			FbsRequest.Method.TRANSPORT_DUMP,
+			undefined,
+			undefined,
+			this.internal.transportId
+		);
+
+		/* Decode Response. */
+		const data = new FbsPlainTransport.DumpResponse();
+
+		response.body(data);
+
+		return parsePlainTransportDumpResponse(data);
 	}
 
-	/**
-	 * Provide the PlainTransport remote parameters.
-	 *
-	 * @override
-	 */
-	async connect(
-		{
+	async getStats(): Promise<PlainTransportStat[]> {
+		logger.debug('getStats()');
+
+		const response = await this.channel.request(
+			FbsRequest.Method.TRANSPORT_GET_STATS,
+			undefined,
+			undefined,
+			this.internal.transportId
+		);
+
+		/* Decode Response. */
+		const data = new FbsPlainTransport.GetStatsResponse();
+
+		response.body(data);
+
+		return [parseGetStatsResponse(data)];
+	}
+
+	async connect({
+		ip,
+		port,
+		rtcpPort,
+		srtpParameters,
+	}: {
+		ip?: string;
+		port?: number;
+		rtcpPort?: number;
+		srtpParameters?: SrtpParameters;
+	}): Promise<void> {
+		logger.debug('connect()');
+
+		const requestOffset = createConnectRequest({
+			builder: this.channel.bufferBuilder,
 			ip,
 			port,
 			rtcpPort,
-			srtpParameters
-		}:
-		{
-			ip?: string;
-			port?: number;
-			rtcpPort?: number;
-			srtpParameters?: SrtpParameters;
-		}
-	): Promise<void>
-	{
-		logger.debug('connect()');
+			srtpParameters,
+		});
 
-		const reqData = { ip, port, rtcpPort, srtpParameters };
+		// Wait for response.
+		const response = await this.channel.request(
+			FbsRequest.Method.PLAINTRANSPORT_CONNECT,
+			FbsRequest.Body.PlainTransport_ConnectRequest,
+			requestOffset,
+			this.internal.transportId
+		);
 
-		const data =
-			await this.channel.request('transport.connect', this.internal.transportId, reqData);
+		/* Decode Response. */
+		const data = new FbsPlainTransport.ConnectResponse();
+
+		response.body(data);
 
 		// Update data.
-		if (data.tuple)
-			this.#data.tuple = data.tuple;
+		if (data.tuple()) {
+			this.#data.tuple = parseTuple(data.tuple()!);
+		}
 
-		if (data.rtcpTuple)
-			this.#data.rtcpTuple = data.rtcpTuple;
+		if (data.rtcpTuple()) {
+			this.#data.rtcpTuple = parseTuple(data.rtcpTuple()!);
+		}
 
-		this.#data.srtpParameters = data.srtpParameters;
+		if (data.srtpParameters()) {
+			this.#data.srtpParameters = parseSrtpParameters(data.srtpParameters()!);
+		}
 	}
 
-	private handleWorkerNotifications(): void
-	{
-		this.channel.on(this.internal.transportId, (event: string, data?: any) =>
-		{
-			switch (event)
-			{
-				case 'tuple':
-				{
-					const tuple = data.tuple as TransportTuple;
+	private handleWorkerNotifications(): void {
+		this.channel.on(
+			this.internal.transportId,
+			(event: Event, data?: Notification) => {
+				switch (event) {
+					case Event.PLAINTRANSPORT_TUPLE: {
+						const notification = new FbsPlainTransport.TupleNotification();
 
-					this.#data.tuple = tuple;
+						data!.body(notification);
 
-					this.safeEmit('tuple', tuple);
+						const tuple = parseTuple(notification.tuple()!);
 
-					// Emit observer event.
-					this.observer.safeEmit('tuple', tuple);
+						this.#data.tuple = tuple;
 
-					break;
-				}
+						this.safeEmit('tuple', tuple);
 
-				case 'rtcptuple':
-				{
-					const rtcpTuple = data.rtcpTuple as TransportTuple;
+						// Emit observer event.
+						this.observer.safeEmit('tuple', tuple);
 
-					this.#data.rtcpTuple = rtcpTuple;
+						break;
+					}
 
-					this.safeEmit('rtcptuple', rtcpTuple);
+					case Event.PLAINTRANSPORT_RTCP_TUPLE: {
+						const notification = new FbsPlainTransport.RtcpTupleNotification();
 
-					// Emit observer event.
-					this.observer.safeEmit('rtcptuple', rtcpTuple);
+						data!.body(notification);
 
-					break;
-				}
+						const rtcpTuple = parseTuple(notification.tuple()!);
 
-				case 'sctpstatechange':
-				{
-					const sctpState = data.sctpState as SctpState;
+						this.#data.rtcpTuple = rtcpTuple;
 
-					this.#data.sctpState = sctpState;
+						this.safeEmit('rtcptuple', rtcpTuple);
 
-					this.safeEmit('sctpstatechange', sctpState);
+						// Emit observer event.
+						this.observer.safeEmit('rtcptuple', rtcpTuple);
 
-					// Emit observer event.
-					this.observer.safeEmit('sctpstatechange', sctpState);
+						break;
+					}
 
-					break;
-				}
+					case Event.TRANSPORT_SCTP_STATE_CHANGE: {
+						const notification = new FbsTransport.SctpStateChangeNotification();
 
-				case 'trace':
-				{
-					const trace = data as TransportTraceEventData;
+						data!.body(notification);
 
-					this.safeEmit('trace', trace);
+						const sctpState = parseSctpState(notification.sctpState());
 
-					// Emit observer event.
-					this.observer.safeEmit('trace', trace);
+						this.#data.sctpState = sctpState;
 
-					break;
-				}
+						this.safeEmit('sctpstatechange', sctpState);
 
-				default:
-				{
-					logger.error('ignoring unknown event "%s"', event);
+						// Emit observer event.
+						this.observer.safeEmit('sctpstatechange', sctpState);
+
+						break;
+					}
+
+					case Event.TRANSPORT_TRACE: {
+						const notification = new FbsTransport.TraceNotification();
+
+						data!.body(notification);
+
+						const trace = parseTransportTraceEventData(notification);
+
+						this.safeEmit('trace', trace);
+
+						// Emit observer event.
+						this.observer.safeEmit('trace', trace);
+
+						break;
+					}
+
+					default: {
+						logger.error(`ignoring unknown event "${event}"`);
+					}
 				}
 			}
+		);
+	}
+
+	private handleListenerError(): void {
+		this.on('listenererror', (eventName, error) => {
+			logger.error(
+				`event listener threw an error [eventName:${eventName}]:`,
+				error
+			);
 		});
 	}
+}
+
+export function parsePlainTransportDumpResponse(
+	binary: FbsPlainTransport.DumpResponse
+): PlainTransportDump {
+	// Retrieve BaseTransportDump.
+	const baseTransportDump = parseBaseTransportDump(binary.base()!);
+	// Retrieve RTP Tuple.
+	const tuple = parseTuple(binary.tuple()!);
+
+	// Retrieve RTCP Tuple.
+	let rtcpTuple: TransportTuple | undefined;
+
+	if (binary.rtcpTuple()) {
+		rtcpTuple = parseTuple(binary.rtcpTuple()!);
+	}
+
+	// Retrieve SRTP Parameters.
+	let srtpParameters: SrtpParameters | undefined;
+
+	if (binary.srtpParameters()) {
+		srtpParameters = parseSrtpParameters(binary.srtpParameters()!);
+	}
+
+	return {
+		...baseTransportDump,
+		rtcpMux: binary.rtcpMux(),
+		comedia: binary.comedia(),
+		tuple: tuple,
+		rtcpTuple: rtcpTuple,
+		srtpParameters: srtpParameters,
+	};
+}
+
+function parseGetStatsResponse(
+	binary: FbsPlainTransport.GetStatsResponse
+): PlainTransportStat {
+	const base = parseBaseTransportStats(binary.base()!);
+
+	return {
+		...base,
+		type: 'plain-rtp-transport',
+		rtcpMux: binary.rtcpMux(),
+		comedia: binary.comedia(),
+		tuple: parseTuple(binary.tuple()!),
+		rtcpTuple: binary.rtcpTuple() ? parseTuple(binary.rtcpTuple()!) : undefined,
+	};
+}
+
+function createConnectRequest({
+	builder,
+	ip,
+	port,
+	rtcpPort,
+	srtpParameters,
+}: {
+	builder: flatbuffers.Builder;
+	ip?: string;
+	port?: number;
+	rtcpPort?: number;
+	srtpParameters?: SrtpParameters;
+}): number {
+	let ipOffset = 0;
+	let srtpParametersOffset = 0;
+
+	if (ip) {
+		ipOffset = builder.createString(ip);
+	}
+
+	// Serialize SrtpParameters.
+	if (srtpParameters) {
+		srtpParametersOffset = serializeSrtpParameters(builder, srtpParameters);
+	}
+
+	// Create PlainTransportConnectData.
+	FbsPlainTransport.ConnectRequest.startConnectRequest(builder);
+	FbsPlainTransport.ConnectRequest.addIp(builder, ipOffset);
+
+	if (typeof port === 'number') {
+		FbsPlainTransport.ConnectRequest.addPort(builder, port);
+	}
+	if (typeof rtcpPort === 'number') {
+		FbsPlainTransport.ConnectRequest.addRtcpPort(builder, rtcpPort);
+	}
+	if (srtpParameters) {
+		FbsPlainTransport.ConnectRequest.addSrtpParameters(
+			builder,
+			srtpParametersOffset
+		);
+	}
+
+	return FbsPlainTransport.ConnectRequest.endConnectRequest(builder);
 }

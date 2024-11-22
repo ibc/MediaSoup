@@ -1,0 +1,21 @@
+include "common.fbs";
+
+namespace FBS.RtpPacket;
+
+table Dump {
+    payload_type: uint8;
+    sequence_number: uint16;
+    timestamp: uint32;
+    marker: bool;
+    ssrc: uint32;
+    is_key_frame: bool;
+    size: uint64;
+    payload_size: uint64;
+    spatial_layer: uint8;
+    temporal_layer: uint8;
+    mid: string;
+    rid: string;
+    rrid: string;
+    wide_sequence_number: uint16 = null;
+}
+

@@ -48,14 +48,16 @@ namespace RTC
 			// Adds the given data and returns true if there is enough space to hold it,
 			// false otherwise.
 			bool Add(
-			  SenderReport* senderReport, SdesChunk* sdesChunk, DelaySinceLastRr* delaySinceLastRrReport);
+			  SenderReport* senderReport,
+			  SdesChunk* sdesChunk,
+			  DelaySinceLastRr::SsrcInfo* delaySinceLastRrSsrcInfo);
 			// RTCP additions per Consumer (pipe).
 			// Adds the given data and returns true if there is enough space to hold it,
 			// false otherwise.
 			bool Add(
 			  std::vector<SenderReport*>& senderReports,
 			  std::vector<SdesChunk*>& sdesChunks,
-			  std::vector<DelaySinceLastRr*>& delaySinceLastRrReports);
+			  std::vector<DelaySinceLastRr::SsrcInfo*>& delaySinceLastRrSsrcInfos);
 			// RTCP additions per Producer.
 			// Adds the given data and returns true if there is enough space to hold it,
 			// false otherwise.
@@ -63,8 +65,6 @@ namespace RTC
 			void AddSenderReport(SenderReport* report);
 			void AddReceiverReport(ReceiverReport* report);
 			void AddSdesChunk(SdesChunk* chunk);
-			void AddReceiverReferenceTime(ReceiverReferenceTime* report);
-			void AddDelaySinceLastRr(DelaySinceLastRr* report);
 			bool HasSenderReport()
 			{
 				return this->senderReportPacket.Begin() != this->senderReportPacket.End();
@@ -77,6 +77,14 @@ namespace RTC
 				  [](const ExtendedReportBlock* report)
 				  { return report->GetType() == ExtendedReportBlock::Type::RRT; });
 			}
+			bool HasDelaySinceLastRr()
+			{
+				return std::any_of(
+				  this->xrPacket.Begin(),
+				  this->xrPacket.End(),
+				  [](const ExtendedReportBlock* report)
+				  { return report->GetType() == ExtendedReportBlock::Type::DLRR; });
+			}
 			void Serialize(uint8_t* data);
 
 		private:
@@ -85,6 +93,7 @@ namespace RTC
 			ReceiverReportPacket receiverReportPacket;
 			SdesPacket sdesPacket;
 			ExtendedReportPacket xrPacket;
+			DelaySinceLastRr* delaySinceLastRr{ nullptr };
 		};
 	} // namespace RTCP
 } // namespace RTC

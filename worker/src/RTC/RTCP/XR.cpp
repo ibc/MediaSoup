@@ -71,7 +71,7 @@ namespace RTC
 
 			std::unique_ptr<ExtendedReportPacket> packet(new ExtendedReportPacket(header));
 
-			uint32_t ssrc =
+			const uint32_t ssrc =
 			  Utils::Byte::Get4Bytes(reinterpret_cast<uint8_t*>(header), Packet::CommonHeaderSize);
 
 			packet->SetSsrc(ssrc);

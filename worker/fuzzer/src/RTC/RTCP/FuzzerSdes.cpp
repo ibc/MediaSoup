@@ -10,8 +10,7 @@ void Fuzzer::RTC::RTCP::Sdes::Fuzz(::RTC::RTCP::SdesPacket* packet)
 	// TODO.
 	// AddChunk(SdesChunk* chunk);
 
-	auto it = packet->Begin();
-	for (; it != packet->End(); ++it)
+	for (auto it = packet->Begin(); it != packet->End(); ++it)
 	{
 		auto& chunk = (*it);
 
@@ -24,15 +23,13 @@ void Fuzzer::RTC::RTCP::Sdes::Fuzz(::RTC::RTCP::SdesPacket* packet)
 		// TODO
 		// AddItem(SdesItem* item);
 
-		auto it2 = chunk->Begin();
-		for (; it2 != chunk->End(); ++it2)
+		for (auto it2 = chunk->Begin(); it2 != chunk->End(); ++it2)
 		{
 			auto& item = (*it2);
 
 			// item->Dump();
 			item->Serialize(::RTC::RTCP::Buffer);
 			item->GetSize();
-
 			item->GetType();
 			item->GetLength();
 			item->GetValue();

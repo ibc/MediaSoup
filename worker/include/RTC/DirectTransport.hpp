@@ -10,12 +10,17 @@ namespace RTC
 	{
 	public:
 		DirectTransport(
-		  RTC::Shared* shared, const std::string& id, RTC::Transport::Listener* listener, json& data);
+		  RTC::Shared* shared,
+		  const std::string& id,
+		  RTC::Transport::Listener* listener,
+		  const FBS::DirectTransport::DirectTransportOptions* options);
 		~DirectTransport() override;
 
 	public:
-		void FillJson(json& jsonObject) const override;
-		void FillJsonStats(json& jsonArray) override;
+		flatbuffers::Offset<FBS::DirectTransport::GetStatsResponse> FillBufferStats(
+		  flatbuffers::FlatBufferBuilder& builder);
+		flatbuffers::Offset<FBS::DirectTransport::DumpResponse> FillBuffer(
+		  flatbuffers::FlatBufferBuilder& builder) const;
 
 	private:
 		bool IsConnected() const override;
@@ -27,9 +32,9 @@ namespace RTC
 		void SendRtcpCompoundPacket(RTC::RTCP::CompoundPacket* packet) override;
 		void SendMessage(
 		  RTC::DataConsumer* dataConsumer,
-		  uint32_t ppid,
 		  const uint8_t* msg,
 		  size_t len,
+		  uint32_t ppid,
 		  onQueuedCallback* cb = nullptr) override;
 		void SendSctpData(const uint8_t* data, size_t len) override;
 		void RecvStreamClosed(uint32_t ssrc) override;
@@ -39,9 +44,9 @@ namespace RTC
 	public:
 		void HandleRequest(Channel::ChannelRequest* request) override;
 
-		/* Methods inherited from PayloadChannel::PayloadChannelSocket::NotificationHandler. */
+		/* Methods inherited from Channel::ChannelSocket::NotificationHandler. */
 	public:
-		void HandleNotification(PayloadChannel::PayloadChannelNotification* notification) override;
+		void HandleNotification(Channel::ChannelNotification* notification) override;
 	};
 } // namespace RTC
 

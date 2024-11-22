@@ -4,61 +4,42 @@
 #include "RTC/AudioLevelObserver.hpp"
 #include "Logger.hpp"
 #include "MediaSoupErrors.hpp"
-#include "Utils.hpp"
 #include "RTC/RtpDictionaries.hpp"
+#include <absl/container/btree_map.h>
 #include <cmath> // std::lround()
-#include <map>
 
 namespace RTC
 {
 	/* Instance methods. */
 
 	AudioLevelObserver::AudioLevelObserver(
-	  RTC::Shared* shared, const std::string& id, RTC::RtpObserver::Listener* listener, json& data)
+	  RTC::Shared* shared,
+	  const std::string& id,
+	  RTC::RtpObserver::Listener* listener,
+	  const FBS::AudioLevelObserver::AudioLevelObserverOptions* options)
 	  : RTC::RtpObserver(shared, id, listener)
 	{
 		MS_TRACE();
 
-		auto jsonMaxEntriesIt = data.find("maxEntries");
+		this->maxEntries = options->maxEntries();
+		this->threshold  = options->threshold();
+		this->interval   = options->interval();
 
-		// clang-format off
-		if (
-			jsonMaxEntriesIt == data.end() ||
-			!Utils::Json::IsPositiveInteger(*jsonMaxEntriesIt)
-		)
-		// clang-format on
+		if (this->threshold > 0)
 		{
-			MS_THROW_TYPE_ERROR("missing maxEntries");
+			MS_THROW_TYPE_ERROR("invalid threshold value %" PRIi8, this->threshold);
 		}
 
-		this->maxEntries = jsonMaxEntriesIt->get<uint16_t>();
-
-		if (this->maxEntries < 1)
-			MS_THROW_TYPE_ERROR("invalid maxEntries value %" PRIu16, this->maxEntries);
-
-		auto jsonThresholdIt = data.find("threshold");
-
-		if (jsonThresholdIt == data.end() || !jsonThresholdIt->is_number())
-			MS_THROW_TYPE_ERROR("missing threshold");
-
-		this->threshold = jsonThresholdIt->get<int8_t>();
-
-		if (this->threshold < -127 || this->threshold > 0)
-			MS_THROW_TYPE_ERROR("invalid threshold value %" PRIi8, this->threshold);
-
-		auto jsonIntervalIt = data.find("interval");
-
-		if (jsonIntervalIt == data.end() || !jsonIntervalIt->is_number())
-			MS_THROW_TYPE_ERROR("missing interval");
-
-		this->interval = jsonIntervalIt->get<uint16_t>();
-
 		if (this->interval < 250)
+		{
 			this->interval = 250;
+		}
 		else if (this->interval > 5000)
+		{
 			this->interval = 5000;
+		}
 
-		this->periodicTimer = new Timer(this);
+		this->periodicTimer = new TimerHandle(this);
 
 		this->periodicTimer->Start(this->interval, this->interval);
 
@@ -66,8 +47,7 @@ namespace RTC
 		this->shared->channelMessageRegistrator->RegisterHandler(
 		  this->id,
 		  /*channelRequestHandler*/ this,
-		  /*payloadChannelRequestHandler*/ nullptr,
-		  /*payloadChannelNotificationHandler*/ nullptr);
+		  /*channelNotificationHandler*/ nullptr);
 	}
 
 	AudioLevelObserver::~AudioLevelObserver()
@@ -84,7 +64,9 @@ namespace RTC
 		MS_TRACE();
 
 		if (producer->GetKind() != RTC::Media::Kind::AUDIO)
+		{
 			MS_THROW_TYPE_ERROR("not an audio Producer");
+		}
 
 		// Insert into the map.
 		this->mapProducerDBovs[producer];
@@ -103,13 +85,17 @@ namespace RTC
 		MS_TRACE();
 
 		if (IsPaused())
+		{
 			return;
+		}
 
 		uint8_t volume;
 		bool voice;
 
 		if (!packet->ReadSsrcAudioLevel(volume, voice))
+		{
 			return;
+		}
 
 		auto& dBovs = this->mapProducerDBovs.at(producer);
 
@@ -141,7 +127,8 @@ namespace RTC
 		{
 			this->silence = true;
 
-			this->shared->channelNotifier->Emit(this->id, "silence");
+			this->shared->channelNotifier->Emit(
+			  this->id, FBS::Notification::Event::AUDIOLEVELOBSERVER_SILENCE);
 		}
 	}
 
@@ -156,7 +143,7 @@ namespace RTC
 	{
 		MS_TRACE();
 
-		absl::btree_map<int8_t, RTC::Producer*> mapDBovsProducer;
+		absl::btree_multimap<int8_t, RTC::Producer*> mapDBovsProducer;
 
 		for (auto& kv : this->mapProducerDBovs)
 		{
@@ -164,12 +151,16 @@ namespace RTC
 			auto& dBovs    = kv.second;
 
 			if (dBovs.count < 10)
+			{
 				continue;
+			}
 
 			auto avgDBov = -1 * static_cast<int8_t>(std::lround(dBovs.totalSum / dBovs.count));
 
 			if (avgDBov >= this->threshold)
-				mapDBovsProducer[avgDBov] = producer;
+			{
+				mapDBovsProducer.insert({ avgDBov, producer });
+			}
 		}
 
 		// Clear the map.
@@ -180,26 +171,31 @@ namespace RTC
 			this->silence = false;
 
 			uint16_t idx{ 0 };
-			auto rit  = mapDBovsProducer.crbegin();
-			json data = json::array();
+			auto rit = mapDBovsProducer.crbegin();
+
+			std::vector<flatbuffers::Offset<FBS::AudioLevelObserver::Volume>> volumes;
 
 			for (; idx < this->maxEntries && rit != mapDBovsProducer.crend(); ++idx, ++rit)
 			{
-				data.emplace_back(json::value_t::object);
-
-				auto& jsonEntry = data[idx];
-
-				jsonEntry["producerId"] = rit->second->id;
-				jsonEntry["volume"]     = rit->first;
+				volumes.emplace_back(FBS::AudioLevelObserver::CreateVolumeDirect(
+				  this->shared->channelNotifier->GetBufferBuilder(), rit->second->id.c_str(), rit->first));
 			}
 
-			this->shared->channelNotifier->Emit(this->id, "volumes", data);
+			auto notification = FBS::AudioLevelObserver::CreateVolumesNotificationDirect(
+			  this->shared->channelNotifier->GetBufferBuilder(), &volumes);
+
+			this->shared->channelNotifier->Emit(
+			  this->id,
+			  FBS::Notification::Event::AUDIOLEVELOBSERVER_VOLUMES,
+			  FBS::Notification::Body::AudioLevelObserver_VolumesNotification,
+			  notification);
 		}
 		else if (!this->silence)
 		{
 			this->silence = true;
 
-			this->shared->channelNotifier->Emit(this->id, "silence");
+			this->shared->channelNotifier->Emit(
+			  this->id, FBS::Notification::Event::AUDIOLEVELOBSERVER_SILENCE);
 		}
 	}
 
@@ -216,7 +212,7 @@ namespace RTC
 		}
 	}
 
-	inline void AudioLevelObserver::OnTimer(Timer* /*timer*/)
+	inline void AudioLevelObserver::OnTimer(TimerHandle* /*timer*/)
 	{
 		MS_TRACE();
 

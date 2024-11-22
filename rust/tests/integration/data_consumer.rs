@@ -3,13 +3,15 @@ use futures_lite::future;
 use hash_hasher::{HashedMap, HashedSet};
 use mediasoup::data_consumer::{DataConsumerOptions, DataConsumerType};
 use mediasoup::data_producer::{DataProducer, DataProducerOptions};
-use mediasoup::data_structures::{AppData, ListenIp};
+use mediasoup::data_structures::{AppData, ListenInfo, Protocol};
 use mediasoup::direct_transport::DirectTransportOptions;
 use mediasoup::plain_transport::PlainTransportOptions;
 use mediasoup::prelude::*;
 use mediasoup::router::{Router, RouterOptions};
 use mediasoup::sctp_parameters::SctpStreamParameters;
-use mediasoup::webrtc_transport::{TransportListenIps, WebRtcTransport, WebRtcTransportOptions};
+use mediasoup::webrtc_transport::{
+    WebRtcTransport, WebRtcTransportListenInfos, WebRtcTransportOptions,
+};
 use mediasoup::worker::{Worker, WorkerSettings};
 use mediasoup::worker_manager::WorkerManager;
 use std::env;
@@ -61,9 +63,15 @@ async fn init() -> (Worker, Router, WebRtcTransport, DataProducer) {
     let transport = router
         .create_webrtc_transport({
             let mut transport_options =
-                WebRtcTransportOptions::new(TransportListenIps::new(ListenIp {
+                WebRtcTransportOptions::new(WebRtcTransportListenInfos::new(ListenInfo {
+                    protocol: Protocol::Udp,
                     ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                    announced_ip: None,
+                    announced_address: None,
+                    port: None,
+                    port_range: None,
+                    flags: None,
+                    send_buffer_size: None,
+                    recv_buffer_size: None,
                 }));
 
             transport_options.enable_sctp = true;
@@ -88,9 +96,15 @@ fn consume_data_succeeds() {
 
         let transport2 = router
             .create_plain_transport({
-                let mut transport_options = PlainTransportOptions::new(ListenIp {
+                let mut transport_options = PlainTransportOptions::new(ListenInfo {
+                    protocol: Protocol::Udp,
                     ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                    announced_ip: None,
+                    announced_address: None,
+                    port: None,
+                    port_range: None,
+                    flags: None,
+                    send_buffer_size: None,
+                    recv_buffer_size: None,
                 });
 
                 transport_options.enable_sctp = true;
@@ -119,6 +133,7 @@ fn consume_data_succeeds() {
                     4000,
                 );
 
+                options.subchannels = Some(vec![0, 1, 1, 1, 2, 65535, 100]);
                 options.app_data = AppData::new(CustomAppData { baz: "LOL" });
 
                 options
@@ -142,6 +157,11 @@ fn consume_data_succeeds() {
         }
         assert_eq!(data_consumer.label().as_str(), "foo");
         assert_eq!(data_consumer.protocol().as_str(), "bar");
+
+        let mut sorted_subchannels = data_consumer.subchannels();
+        sorted_subchannels.sort();
+
+        assert_eq!(sorted_subchannels, [0, 1, 2, 100, 65535]);
         assert_eq!(
             data_consumer
                 .app_data()
@@ -187,9 +207,15 @@ fn weak() {
 
         let transport2 = router
             .create_plain_transport({
-                let mut transport_options = PlainTransportOptions::new(ListenIp {
+                let mut transport_options = PlainTransportOptions::new(ListenInfo {
+                    protocol: Protocol::Udp,
                     ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                    announced_ip: None,
+                    announced_address: None,
+                    port: None,
+                    port_range: None,
+                    flags: None,
+                    send_buffer_size: None,
+                    recv_buffer_size: None,
                 });
 
                 transport_options.enable_sctp = true;
@@ -302,6 +328,117 @@ fn get_stats_succeeds() {
 }
 
 #[test]
+fn set_subchannels() {
+    future::block_on(async move {
+        let (_worker, _router, transport1, data_producer) = init().await;
+
+        let data_consumer = transport1
+            .consume_data(DataConsumerOptions::new_sctp_unordered_with_life_time(
+                data_producer.id(),
+                4000,
+            ))
+            .await
+            .expect("Failed to consume data");
+
+        data_consumer
+            .set_subchannels([999, 999, 998, 0].to_vec())
+            .await
+            .expect("Failed to set data consumer subchannels");
+
+        let mut sorted_subchannels = data_consumer.subchannels();
+        sorted_subchannels.sort();
+
+        assert_eq!(sorted_subchannels, [0, 998, 999]);
+    });
+}
+
+#[test]
+fn add_and_remove_subchannel() {
+    future::block_on(async move {
+        let (_worker, _router, transport1, data_producer) = init().await;
+
+        let data_consumer = transport1
+            .consume_data(DataConsumerOptions::new_sctp_unordered_with_life_time(
+                data_producer.id(),
+                4000,
+            ))
+            .await
+            .expect("Failed to consume data");
+
+        data_consumer
+            .set_subchannels([].to_vec())
+            .await
+            .expect("Failed to set data consumer subchannels");
+
+        assert_eq!(data_consumer.subchannels(), []);
+
+        data_consumer
+            .add_subchannel(5)
+            .await
+            .expect("Failed to add data consumer subchannel");
+
+        assert_eq!(data_consumer.subchannels(), [5]);
+
+        data_consumer
+            .add_subchannel(10)
+            .await
+            .expect("Failed to add data consumer subchannel");
+
+        let mut sorted_subchannels = data_consumer.subchannels();
+        sorted_subchannels.sort();
+
+        assert_eq!(sorted_subchannels, [5, 10]);
+
+        data_consumer
+            .add_subchannel(5)
+            .await
+            .expect("Failed to add data consumer subchannel");
+
+        sorted_subchannels = data_consumer.subchannels();
+        sorted_subchannels.sort();
+
+        assert_eq!(sorted_subchannels, [5, 10]);
+
+        data_consumer
+            .remove_subchannel(666)
+            .await
+            .expect("Failed to remove data consumer subchannel");
+
+        sorted_subchannels = data_consumer.subchannels();
+        sorted_subchannels.sort();
+
+        assert_eq!(sorted_subchannels, [5, 10]);
+
+        data_consumer
+            .remove_subchannel(5)
+            .await
+            .expect("Failed to remove data consumer subchannel");
+
+        sorted_subchannels = data_consumer.subchannels();
+        sorted_subchannels.sort();
+
+        assert_eq!(sorted_subchannels, [10]);
+
+        data_consumer
+            .add_subchannel(5)
+            .await
+            .expect("Failed to add data consumer subchannel");
+
+        sorted_subchannels = data_consumer.subchannels();
+        sorted_subchannels.sort();
+
+        assert_eq!(sorted_subchannels, [5, 10]);
+
+        data_consumer
+            .set_subchannels([].to_vec())
+            .await
+            .expect("Failed to set data consumer subchannels");
+
+        assert_eq!(data_consumer.subchannels(), []);
+    });
+}
+
+#[test]
 fn consume_data_on_direct_transport_succeeds() {
     future::block_on(async move {
         let (_worker, router, _transport1, data_producer) = init().await;
@@ -325,7 +462,7 @@ fn consume_data_on_direct_transport_succeeds() {
 
         let data_consumer = transport3
             .consume_data({
-                let mut options = DataConsumerOptions::new_direct(data_producer.id());
+                let mut options = DataConsumerOptions::new_direct(data_producer.id(), None);
 
                 options.app_data = AppData::new(CustomAppData2 { hehe: "HEHE" });
 
@@ -372,7 +509,7 @@ fn dump_on_direct_transport_succeeds() {
 
         let data_consumer = transport3
             .consume_data({
-                let mut options = DataConsumerOptions::new_direct(data_producer.id());
+                let mut options = DataConsumerOptions::new_direct(data_producer.id(), None);
 
                 options.app_data = AppData::new(CustomAppData2 { hehe: "HEHE" });
 
@@ -407,7 +544,7 @@ fn get_stats_on_direct_transport_succeeds() {
 
         let data_consumer = transport3
             .consume_data({
-                let mut options = DataConsumerOptions::new_direct(data_producer.id());
+                let mut options = DataConsumerOptions::new_direct(data_producer.id(), None);
 
                 options.app_data = AppData::new(CustomAppData2 { hehe: "HEHE" });
 
@@ -436,9 +573,15 @@ fn close_event() {
 
         let transport2 = router
             .create_plain_transport({
-                let mut transport_options = PlainTransportOptions::new(ListenIp {
+                let mut transport_options = PlainTransportOptions::new(ListenInfo {
+                    protocol: Protocol::Udp,
                     ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                    announced_ip: None,
+                    announced_address: None,
+                    port: None,
+                    port_range: None,
+                    flags: None,
+                    send_buffer_size: None,
+                    recv_buffer_size: None,
                 });
 
                 transport_options.enable_sctp = true;

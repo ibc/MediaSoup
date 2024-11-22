@@ -1,5 +1,5 @@
 use futures_lite::future;
-use mediasoup::data_structures::ListenIp;
+use mediasoup::data_structures::{ListenInfo, Protocol};
 use mediasoup::prelude::*;
 use mediasoup::producer::ProducerOptions;
 use mediasoup::router::{Router, RouterOptions};
@@ -8,7 +8,9 @@ use mediasoup::rtp_parameters::{
     RtpHeaderExtension, RtpHeaderExtensionDirection, RtpHeaderExtensionParameters,
     RtpHeaderExtensionUri, RtpParameters,
 };
-use mediasoup::webrtc_transport::{TransportListenIps, WebRtcTransport, WebRtcTransportOptions};
+use mediasoup::webrtc_transport::{
+    WebRtcTransport, WebRtcTransportListenInfos, WebRtcTransportOptions,
+};
 use mediasoup::worker::WorkerSettings;
 use mediasoup::worker_manager::WorkerManager;
 use std::env;
@@ -127,10 +129,17 @@ async fn init() -> (Router, WebRtcTransport) {
         .await
         .expect("Failed to create router");
 
-    let transport_options = WebRtcTransportOptions::new(TransportListenIps::new(ListenIp {
-        ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-        announced_ip: None,
-    }));
+    let transport_options =
+        WebRtcTransportOptions::new(WebRtcTransportListenInfos::new(ListenInfo {
+            protocol: Protocol::Udp,
+            ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
+            announced_address: None,
+            port: None,
+            port_range: None,
+            flags: None,
+            send_buffer_size: None,
+            recv_buffer_size: None,
+        }));
 
     let transport = router
         .create_webrtc_transport(transport_options.clone())

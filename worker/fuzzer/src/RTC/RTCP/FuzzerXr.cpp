@@ -10,8 +10,7 @@ void Fuzzer::RTC::RTCP::ExtendedReport::Fuzz(::RTC::RTCP::ExtendedReportPacket* 
 	packet->GetSsrc();
 	packet->SetSsrc(1111);
 
-	auto it = packet->Begin();
-	for (; it != packet->End(); ++it)
+	for (auto it = packet->Begin(); it != packet->End(); ++it)
 	{
 		auto& report = (*it);
 

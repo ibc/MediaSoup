@@ -1,0 +1,33 @@
+namespace FBS.Common;
+
+table StringString {
+    key: string (required);
+    value: string (required);
+}
+
+table StringUint8 {
+    key: string (required);
+    value: uint8;
+}
+
+table Uint16String {
+    key: uint16;
+    value: string (required);
+}
+
+table Uint32String {
+    key: uint32;
+    value: string (required);
+}
+
+table StringStringArray {
+    key: string (required);
+    values: [string] (required);
+}
+
+// NOTE (windows): IN|OUT are macros defined in windef.h.
+enum TraceDirection: uint8 {
+    DIRECTION_IN = 0,
+    DIRECTION_OUT
+}
+

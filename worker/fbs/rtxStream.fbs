@@ -1,0 +1,16 @@
+namespace FBS.RtxStream;
+
+table Params {
+    ssrc: uint32;
+    payload_type: uint8;
+    mime_type: string (required);
+    clock_rate: uint32;
+    rrid: string;
+    cname: string (required);
+}
+
+// NOTE: Naming this Dump collides in TS generation for Producer.DumpResponse.
+table RtxDump {
+    params: Params (required);
+}
+

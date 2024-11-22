@@ -13,17 +13,25 @@ namespace Utils
 		MS_TRACE();
 
 		if (ip.size() >= INET6_ADDRSTRLEN)
+		{
 			return AF_UNSPEC;
+		}
 
-		auto ipPtr                      = ip.c_str();
+		const auto* ipPtr               = ip.c_str();
 		char ipBuffer[INET6_ADDRSTRLEN] = { 0 };
 
 		if (uv_inet_pton(AF_INET, ipPtr, ipBuffer) == 0)
+		{
 			return AF_INET;
+		}
 		else if (uv_inet_pton(AF_INET6, ipPtr, ipBuffer) == 0)
+		{
 			return AF_INET6;
+		}
 		else
+		{
 			return AF_UNSPEC;
+		}
 	}
 
 	void IP::GetAddressInfo(const struct sockaddr* addr, int& family, std::string& ip, uint16_t& port)
@@ -44,7 +52,9 @@ namespace Utils
 				  sizeof(ipBuffer));
 
 				if (err)
+				{
 					MS_ABORT("uv_inet_ntop() failed: %s", uv_strerror(err));
+				}
 
 				port =
 				  static_cast<uint16_t>(ntohs(reinterpret_cast<const struct sockaddr_in*>(addr)->sin_port));
@@ -61,7 +71,9 @@ namespace Utils
 				  sizeof(ipBuffer));
 
 				if (err)
+				{
 					MS_ABORT("uv_inet_ntop() failed: %s", uv_strerror(err));
+				}
 
 				port =
 				  static_cast<uint16_t>(ntohs(reinterpret_cast<const struct sockaddr_in6*>(addr)->sin6_port));
@@ -79,11 +91,34 @@ namespace Utils
 		ip.assign(ipBuffer);
 	}
 
+	size_t IP::GetAddressLen(const struct sockaddr* addr)
+	{
+		MS_TRACE();
+
+		switch (addr->sa_family)
+		{
+			case AF_INET:
+			{
+				return sizeof(struct sockaddr_in);
+			}
+
+			case AF_INET6:
+			{
+				return sizeof(struct sockaddr_in6);
+			}
+
+			default:
+			{
+				MS_ABORT("unknown network family: %d", static_cast<int>(addr->sa_family));
+			}
+		}
+	}
+
 	void IP::NormalizeIp(std::string& ip)
 	{
 		MS_TRACE();
 
-		sockaddr_storage addrStorage;
+		sockaddr_storage addrStorage{};
 		char ipBuffer[INET6_ADDRSTRLEN] = { 0 };
 		int err;
 

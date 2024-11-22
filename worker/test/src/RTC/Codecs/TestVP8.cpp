@@ -1,7 +1,7 @@
 #include "common.hpp"
 #include "RTC/Codecs/VP8.hpp"
-#include <catch2/catch.hpp>
-#include <cstring> // std::memcmp()
+#include <catch2/catch_test_macros.hpp>
+#include <cstring> // std::memcmp(), std::memcpy()
 
 using namespace RTC;
 
@@ -38,7 +38,8 @@ SCENARIO("parse VP8 payload descriptor", "[codecs][vp8]")
 
 		std::memcpy(buffer, originalBuffer, sizeof(buffer));
 
-		const auto* payloadDescriptor = Codecs::VP8::Parse(buffer, sizeof(buffer));
+		std::unique_ptr<Codecs::VP8::PayloadDescriptor> payloadDescriptor{ Codecs::VP8::Parse(
+			buffer, sizeof(buffer)) };
 
 		REQUIRE(payloadDescriptor);
 
@@ -77,8 +78,6 @@ SCENARIO("parse VP8 payload descriptor", "[codecs][vp8]")
 				REQUIRE(std::memcmp(buffer, originalBuffer, sizeof(buffer)) == 0);
 			}
 		}
-
-		delete payloadDescriptor;
 	}
 
 	SECTION("parse payload descriptor 2")
@@ -113,7 +112,8 @@ SCENARIO("parse VP8 payload descriptor", "[codecs][vp8]")
 		std::memcpy(buffer, originalBuffer, sizeof(buffer));
 
 		// Parse the buffer.
-		const auto* payloadDescriptor = Codecs::VP8::Parse(buffer, sizeof(buffer));
+		std::unique_ptr<Codecs::VP8::PayloadDescriptor> payloadDescriptor{ Codecs::VP8::Parse(
+			buffer, sizeof(buffer)) };
 
 		REQUIRE(payloadDescriptor);
 
@@ -152,8 +152,6 @@ SCENARIO("parse VP8 payload descriptor", "[codecs][vp8]")
 				REQUIRE(std::memcmp(buffer, originalBuffer, sizeof(buffer)) == 0);
 			}
 		}
-
-		delete payloadDescriptor;
 	};
 
 	SECTION("parse payload descriptor. I flag set but no space for pictureId")
@@ -228,7 +226,9 @@ Codecs::VP8::PayloadDescriptor* CreatePacket(
 	buffer[5] = tlIndex << 6;
 
 	if (layerSync)
+	{
 		buffer[5] |= 0x20; // y bit
+	}
 
 	auto* payloadDescriptor = Codecs::VP8::Parse(buffer, bufferLen);
 

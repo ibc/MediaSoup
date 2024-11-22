@@ -1,0 +1,7 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 🙈 Support Question
+    url: https://mediasoup.discourse.group
+    about: |
+      We primarily use GitHub as an issue tracker. Please, use the mediasoup Discourse Group if you have questions or doubts or if you need support about mediasoup and its ecosystem.
+      Before asking any questions, please check the mediasoup official documentation at https://mediasoup.org/documentation

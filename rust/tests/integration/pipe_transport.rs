@@ -2,7 +2,7 @@ use futures_lite::future;
 use mediasoup::consumer::{ConsumerOptions, ConsumerScore, ConsumerType};
 use mediasoup::data_consumer::{DataConsumerOptions, DataConsumerType};
 use mediasoup::data_producer::{DataProducerOptions, DataProducerType};
-use mediasoup::data_structures::{AppData, ListenIp};
+use mediasoup::data_structures::{AppData, ListenInfo, Protocol};
 use mediasoup::pipe_transport::{PipeTransportOptions, PipeTransportRemoteParameters};
 use mediasoup::prelude::*;
 use mediasoup::producer::ProducerOptions;
@@ -19,7 +19,9 @@ use mediasoup::rtp_parameters::{
 use mediasoup::sctp_parameters::SctpStreamParameters;
 use mediasoup::srtp_parameters::{SrtpCryptoSuite, SrtpParameters};
 use mediasoup::transport::ProduceError;
-use mediasoup::webrtc_transport::{TransportListenIps, WebRtcTransport, WebRtcTransportOptions};
+use mediasoup::webrtc_transport::{
+    WebRtcTransport, WebRtcTransportListenInfos, WebRtcTransportOptions,
+};
 use mediasoup::worker::{RequestError, Worker, WorkerSettings};
 use mediasoup::worker_manager::WorkerManager;
 use parking_lot::Mutex;
@@ -253,10 +255,17 @@ async fn init() -> (
         .await
         .expect("Failed to create router");
 
-    let mut transport_options = WebRtcTransportOptions::new(TransportListenIps::new(ListenIp {
-        ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-        announced_ip: None,
-    }));
+    let mut transport_options =
+        WebRtcTransportOptions::new(WebRtcTransportListenInfos::new(ListenInfo {
+            protocol: Protocol::Udp,
+            ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
+            announced_address: None,
+            port: None,
+            port_range: None,
+            flags: None,
+            send_buffer_size: None,
+            recv_buffer_size: None,
+        }));
     transport_options.enable_sctp = true;
 
     let transport_1 = router1
@@ -341,6 +350,11 @@ fn pipe_to_router_succeeds_with_audio() {
                     uri: RtpHeaderExtensionUri::AbsCaptureTime,
                     id: 13,
                     encrypt: false,
+                },
+                RtpHeaderExtensionParameters {
+                    uri: RtpHeaderExtensionUri::PlayoutDelay,
+                    id: 14,
+                    encrypt: false,
                 }
             ],
         );
@@ -386,7 +400,12 @@ fn pipe_to_router_succeeds_with_audio() {
                     uri: RtpHeaderExtensionUri::AbsCaptureTime,
                     id: 13,
                     encrypt: false,
-                }
+                },
+                RtpHeaderExtensionParameters {
+                    uri: RtpHeaderExtensionUri::PlayoutDelay,
+                    id: 14,
+                    encrypt: false,
+                },
             ],
         );
         assert!(!pipe_producer.paused());
@@ -490,6 +509,11 @@ fn pipe_to_router_succeeds_with_video() {
                     id: 13,
                     encrypt: false,
                 },
+                RtpHeaderExtensionParameters {
+                    uri: RtpHeaderExtensionUri::PlayoutDelay,
+                    id: 14,
+                    encrypt: false,
+                },
             ],
         );
         assert_eq!(pipe_consumer.r#type(), ConsumerType::Pipe);
@@ -547,6 +571,11 @@ fn pipe_to_router_succeeds_with_video() {
                     id: 13,
                     encrypt: false,
                 },
+                RtpHeaderExtensionParameters {
+                    uri: RtpHeaderExtensionUri::PlayoutDelay,
+                    id: 14,
+                    encrypt: false,
+                },
             ],
         );
         assert!(pipe_producer.paused());
@@ -593,9 +622,15 @@ fn weak() {
 
         let pipe_transport = router1
             .create_pipe_transport({
-                let mut options = PipeTransportOptions::new(ListenIp {
+                let mut options = PipeTransportOptions::new(ListenInfo {
+                    protocol: Protocol::Udp,
                     ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                    announced_ip: None,
+                    announced_address: None,
+                    port: None,
+                    port_range: None,
+                    flags: None,
+                    send_buffer_size: None,
+                    recv_buffer_size: None,
                 });
                 options.enable_rtx = true;
 
@@ -623,13 +658,16 @@ fn create_with_fixed_port_succeeds() {
 
         let pipe_transport = router1
             .create_pipe_transport({
-                let mut options = PipeTransportOptions::new(ListenIp {
+                PipeTransportOptions::new(ListenInfo {
+                    protocol: Protocol::Udp,
                     ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                    announced_ip: None,
-                });
-                options.port = Some(port);
-
-                options
+                    announced_address: None,
+                    port: Some(port),
+                    port_range: None,
+                    flags: None,
+                    send_buffer_size: None,
+                    recv_buffer_size: None,
+                })
             })
             .await
             .expect("Failed to create Pipe transport");
@@ -645,9 +683,15 @@ fn create_with_enable_rtx_succeeds() {
 
         let pipe_transport = router1
             .create_pipe_transport({
-                let mut options = PipeTransportOptions::new(ListenIp {
+                let mut options = PipeTransportOptions::new(ListenInfo {
+                    protocol: Protocol::Udp,
                     ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                    announced_ip: None,
+                    announced_address: None,
+                    port: None,
+                    port_range: None,
+                    flags: None,
+                    send_buffer_size: None,
+                    recv_buffer_size: None,
                 });
                 options.enable_rtx = true;
 
@@ -729,6 +773,11 @@ fn create_with_enable_rtx_succeeds() {
                     id: 13,
                     encrypt: false,
                 },
+                RtpHeaderExtensionParameters {
+                    uri: RtpHeaderExtensionUri::PlayoutDelay,
+                    id: 14,
+                    encrypt: false,
+                },
             ],
         );
         assert_eq!(pipe_consumer.r#type(), ConsumerType::Pipe);
@@ -753,9 +802,15 @@ fn create_with_enable_srtp_succeeds() {
 
         let pipe_transport = router1
             .create_pipe_transport({
-                let mut options = PipeTransportOptions::new(ListenIp {
+                let mut options = PipeTransportOptions::new(ListenInfo {
+                    protocol: Protocol::Udp,
                     ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                    announced_ip: None,
+                    announced_address: None,
+                    port: None,
+                    port_range: None,
+                    flags: None,
+                    send_buffer_size: None,
+                    recv_buffer_size: None,
                 });
                 options.enable_srtp = true;
 
@@ -804,9 +859,15 @@ fn create_with_invalid_srtp_parameters_fails() {
         let (_worker1, _worker2, router1, _router2, _transport1, _transport2) = init().await;
 
         let pipe_transport = router1
-            .create_pipe_transport(PipeTransportOptions::new(ListenIp {
+            .create_pipe_transport(PipeTransportOptions::new(ListenInfo {
+                protocol: Protocol::Udp,
                 ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                announced_ip: None,
+                announced_address: None,
+                port: None,
+                port_range: None,
+                flags: None,
+                send_buffer_size: None,
+                recv_buffer_size: None,
             }))
             .await
             .expect("Failed to create Pipe transport");
@@ -1126,9 +1187,15 @@ fn pipe_to_router_called_twice_generates_single_pair() {
             .expect("Failed to create router");
 
         let mut transport_options =
-            WebRtcTransportOptions::new(TransportListenIps::new(ListenIp {
+            WebRtcTransportOptions::new(WebRtcTransportListenInfos::new(ListenInfo {
+                protocol: Protocol::Udp,
                 ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-                announced_ip: None,
+                announced_address: None,
+                port: None,
+                port_range: None,
+                flags: None,
+                send_buffer_size: None,
+                recv_buffer_size: None,
             }));
         transport_options.enable_sctp = true;
 

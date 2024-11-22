@@ -1,20 +1,46 @@
-export * from './Worker';
-export * from './WebRtcServer';
-export * from './Router';
-export * from './Transport';
-export * from './WebRtcTransport';
-export * from './PlainTransport';
-export * from './PipeTransport';
-export * from './DirectTransport';
-export * from './Producer';
-export * from './Consumer';
-export * from './DataProducer';
-export * from './DataConsumer';
-export * from './RtpObserver';
-export * from './ActiveSpeakerObserver';
-export * from './AudioLevelObserver';
-export * from './RtpParameters';
-export * from './SctpParameters';
-export * from './SrtpParameters';
+export type { Observer, ObserverEvents } from './index';
+export type * from './WorkerTypes';
+export type * from './WebRtcServerTypes';
+export type * from './RouterTypes';
+export type * from './TransportTypes';
+export type * from './WebRtcTransportTypes';
+export type * from './PlainTransportTypes';
+export type * from './PipeTransportTypes';
+export type * from './DirectTransportTypes';
+export type * from './ProducerTypes';
+export type * from './ConsumerTypes';
+export type * from './DataProducerTypes';
+export type * from './DataConsumerTypes';
+export type * from './RtpObserverTypes';
+export type * from './ActiveSpeakerObserverTypes';
+export type * from './AudioLevelObserverTypes';
+export type * from './rtpParametersTypes';
+export type * from './rtpStreamStatsTypes';
+export type * from './sctpParametersTypes';
+export type * from './srtpParametersTypes';
+export type * from './scalabilityModesTypes';
+
+// TODO: Here we are exporting real classes rather than types. This should
+// be exported somehow else rather than in mediasoup.types namespace.
 export * from './errors';
-export { ScalabilityMode } from './scalabilityModes';
+
+type Only<T, U> = {
+	[P in keyof T]: T[P];
+} & {
+	[P in keyof U]?: never;
+};
+
+export type Either<T, U> = Only<T, U> | Only<U, T>;
+
+export type AppData = {
+	[key: string]: unknown;
+};
+
+/**
+ * Event listeners for mediasoup generated logs.
+ */
+export type LogEventListeners = {
+	ondebug?: (namespace: string, log: string) => void;
+	onwarn?: (namespace: string, log: string) => void;
+	onerror?: (namespace: string, log: string, error?: Error) => void;
+};

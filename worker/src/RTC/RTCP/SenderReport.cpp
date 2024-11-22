@@ -3,7 +3,7 @@
 
 #include "RTC/RTCP/SenderReport.hpp"
 #include "Logger.hpp"
-#include <cstring>
+#include <cstring> // std::memcpy
 
 namespace RTC
 {
@@ -36,12 +36,12 @@ namespace RTC
 			MS_TRACE();
 
 			MS_DUMP("<SenderReport>");
-			MS_DUMP("  ssrc         : %" PRIu32, GetSsrc());
-			MS_DUMP("  ntp sec      : %" PRIu32, GetNtpSec());
-			MS_DUMP("  ntp frac     : %" PRIu32, GetNtpFrac());
-			MS_DUMP("  rtp ts       : %" PRIu32, GetRtpTs());
-			MS_DUMP("  packet count : %" PRIu32, GetPacketCount());
-			MS_DUMP("  octet count  : %" PRIu32, GetOctetCount());
+			MS_DUMP("  ssrc: %" PRIu32, GetSsrc());
+			MS_DUMP("  ntp sec: %" PRIu32, GetNtpSec());
+			MS_DUMP("  ntp frac: %" PRIu32, GetNtpFrac());
+			MS_DUMP("  rtp ts: %" PRIu32, GetRtpTs());
+			MS_DUMP("  packet count: %" PRIu32, GetPacketCount());
+			MS_DUMP("  octet count: %" PRIu32, GetOctetCount());
 			MS_DUMP("</SenderReport>");
 		}
 
@@ -65,12 +65,14 @@ namespace RTC
 			auto* header = const_cast<CommonHeader*>(reinterpret_cast<const CommonHeader*>(data));
 
 			std::unique_ptr<SenderReportPacket> packet(new SenderReportPacket(header));
-			size_t offset = Packet::CommonHeaderSize;
+			const size_t offset = Packet::CommonHeaderSize;
 
 			SenderReport* report = SenderReport::Parse(data + offset, len - offset);
 
 			if (report)
+			{
 				packet->AddReport(report);
+			}
 
 			return packet.release();
 		}

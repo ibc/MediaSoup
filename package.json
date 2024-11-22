@@ -1,110 +1,132 @@
 {
-  "name": "mediasoup",
-  "version": "3.11.8",
-  "description": "Cutting Edge WebRTC Video Conferencing",
-  "contributors": [
-    "Iñaki Baz Castillo <ibc@aliax.net> (https://inakibaz.me)",
-    "José Luis Millán <jmillan@aliax.net> (https://github.com/jmillan)",
-    "Nazar Mokynskyi (https://github.com/nazar-pc)"
-  ],
-  "homepage": "https://mediasoup.org",
-  "license": "ISC",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/versatica/mediasoup.git"
-  },
-  "funding": {
-    "type": "opencollective",
-    "url": "https://opencollective.com/mediasoup"
-  },
-  "main": "node/lib/index.js",
-  "types": "node/lib/index.d.ts",
-  "files": [
-    "npm-scripts.js",
-    "node/lib",
-    "worker/Makefile",
-    "worker/meson.build",
-    "worker/meson_options.txt",
-    "worker/src",
-    "worker/include",
-    "worker/test/src",
-    "worker/test/include",
-    "worker/fuzzer/src",
-    "worker/fuzzer/include",
-    "worker/subprojects/*.wrap",
-    "worker/deps/libwebrtc",
-    "worker/scripts/*.py",
-    "worker/scripts/*.sh",
-    "worker/scripts/*.js",
-    "worker/scripts/*.json"
-  ],
-  "keywords": [
-    "webrtc",
-    "ortc",
-    "sfu",
-    "nodejs"
-  ],
-  "engines": {
-    "node": ">=16"
-  },
-  "scripts": {
-    "prepare": "node npm-scripts.js prepare",
-    "postinstall": "node npm-scripts.js postinstall",
-    "typescript:build": "node npm-scripts.js typescript:build",
-    "typescript:watch": "node npm-scripts.js typescript:watch",
-    "worker:build": "node npm-scripts.js worker:build",
-    "lint": "npm run lint:node && npm run lint:worker",
-    "lint:node": "node npm-scripts.js lint:node",
-    "lint:worker": "node npm-scripts.js lint:worker",
-    "format:worker": "node npm-scripts.js format:worker",
-    "test": "npm run test:node && npm run test:worker",
-    "test:node": "node npm-scripts.js test:node",
-    "test:worker": "node npm-scripts.js test:worker",
-    "coverage:node": "node npm-scripts.js coverage:node",
-    "install-deps:node": "node npm-scripts.js install-deps:node",
-    "install-clang-tools": "node npm-scripts.js install-clang-tools",
-    "release:check": "node npm-scripts.js release:check",
-    "release": "node npm-scripts.js release"
-  },
-  "jest": {
-    "verbose": true,
-    "testEnvironment": "node",
-    "testRegex": "node/src/tests/test-.*\\.ts",
-    "transform": {
-      "^.*\\.ts$": [
-        "ts-jest",
-        {
-          "diagnostics": {
-            "ignoreCodes": [
-              "TS151001"
-            ]
-          }
-        }
-      ]
-    },
-    "cacheDirectory": ".cache/jest"
-  },
-  "dependencies": {
-    "debug": "^4.3.4",
-    "h264-profile-level-id": "^1.0.1",
-    "supports-color": "^9.3.1",
-    "uuid": "^9.0.0"
-  },
-  "devDependencies": {
-    "@types/debug": "^4.1.7",
-    "@types/jest": "^29.4.0",
-    "@types/node": "^18.11.18",
-    "@types/uuid": "^9.0.0",
-    "@typescript-eslint/eslint-plugin": "^5.50.0",
-    "@typescript-eslint/parser": "^5.50.0",
-    "eslint": "^8.33.0",
-    "eslint-plugin-jest": "^27.2.1",
-    "jest": "^29.4.1",
-    "open-cli": "^7.1.0",
-    "pick-port": "^1.0.1",
-    "sctp": "^1.0.0",
-    "ts-jest": "^29.0.5",
-    "tsc-watch": "^6.0.0",
-    "typescript": "^4.9.5"
-  }
+	"name": "mediasoup",
+	"version": "3.15.2",
+	"description": "Cutting Edge WebRTC Video Conferencing",
+	"contributors": [
+		"Iñaki Baz Castillo <ibc@aliax.net> (https://inakibaz.me)",
+		"José Luis Millán <jmillan@aliax.net> (https://github.com/jmillan)",
+		"Nazar Mokynskyi (https://github.com/nazar-pc)"
+	],
+	"license": "ISC",
+	"homepage": "https://mediasoup.org",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/versatica/mediasoup.git"
+	},
+	"funding": {
+		"type": "opencollective",
+		"url": "https://opencollective.com/mediasoup"
+	},
+	"main": "node/lib/index.js",
+	"types": "node/lib/index.d.ts",
+	"files": [
+		"node/lib",
+		"worker/deps/libwebrtc",
+		"worker/fbs",
+		"worker/fuzzer/include",
+		"worker/fuzzer/src",
+		"worker/include",
+		"worker/src",
+		"worker/scripts/*.json",
+		"worker/scripts/*.mjs",
+		"worker/scripts/*.py",
+		"worker/scripts/*.sh",
+		"worker/subprojects/*.wrap",
+		"worker/test/include",
+		"worker/test/src",
+		"worker/meson.build",
+		"worker/meson_options.txt",
+		"worker/tasks.py",
+		"npm-scripts.mjs"
+	],
+	"engines": {
+		"node": ">=18"
+	},
+	"keywords": [
+		"webrtc",
+		"ortc",
+		"sfu",
+		"nodejs"
+	],
+	"scripts": {
+		"prepare": "node npm-scripts.mjs prepare",
+		"postinstall": "node npm-scripts.mjs postinstall",
+		"typescript:build": "node npm-scripts.mjs typescript:build",
+		"typescript:watch": "node npm-scripts.mjs typescript:watch",
+		"worker:build": "node npm-scripts.mjs worker:build",
+		"worker:prebuild": "node npm-scripts.mjs worker:prebuild",
+		"lint": "npm run lint:node && npm run lint:worker",
+		"lint:node": "node npm-scripts.mjs lint:node",
+		"lint:worker": "node npm-scripts.mjs lint:worker",
+		"format": "npm run format:node && npm run format:worker",
+		"format:node": "node npm-scripts.mjs format:node",
+		"format:worker": "node npm-scripts.mjs format:worker",
+		"flatc": "npm run flatc:node && npm run flatc:worker",
+		"flatc:node": "node npm-scripts.mjs flatc:node",
+		"flatc:worker": "node npm-scripts.mjs flatc:worker",
+		"test": "npm run test:node && npm run test:worker",
+		"test:node": "node npm-scripts.mjs test:node",
+		"test:worker": "node npm-scripts.mjs test:worker",
+		"coverage:node": "node npm-scripts.mjs coverage:node",
+		"release:check": "node npm-scripts.mjs release:check",
+		"release": "node npm-scripts.mjs release"
+	},
+	"jest": {
+		"verbose": true,
+		"testEnvironment": "node",
+		"testRegex": "node/src/test/test-.*\\.ts",
+		"transform": {
+			"^.*\\.ts$": [
+				"ts-jest",
+				{
+					"diagnostics": {
+						"ignoreCodes": [
+							"TS151001"
+						]
+					}
+				}
+			]
+		},
+		"coveragePathIgnorePatterns": [
+			"node/src/fbs",
+			"node/src/test"
+		],
+		"cacheDirectory": ".cache/jest",
+		"modulePathIgnorePatterns": [
+			"worker",
+			"rust",
+			"target"
+		]
+	},
+	"dependencies": {
+		"@types/ini": "^4.1.1",
+		"debug": "^4.3.7",
+		"flatbuffers": "^24.3.25",
+		"h264-profile-level-id": "^2.0.0",
+		"ini": "^5.0.0",
+		"node-fetch": "^3.3.2",
+		"supports-color": "^9.4.0",
+		"tar": "^7.4.3"
+	},
+	"devDependencies": {
+		"@eslint/js": "^9.15.0",
+		"@octokit/rest": "^21.0.2",
+		"@types/debug": "^4.1.12",
+		"@types/jest": "^29.5.14",
+		"@types/node": "^22.9.1",
+		"eslint": "^9.15.0",
+		"eslint-config-prettier": "^9.1.0",
+		"eslint-plugin-jest": "^28.9.0",
+		"eslint-plugin-prettier": "^5.2.1",
+		"globals": "^15.12.0",
+		"jest": "^29.7.0",
+		"marked": "^15.0.2",
+		"open-cli": "^8.0.0",
+		"pick-port": "^2.1.0",
+		"prettier": "^3.3.3",
+		"sctp": "^1.0.0",
+		"ts-jest": "^29.2.5",
+		"typescript": "^5.6.3",
+		"typescript-eslint": "^8.15.0"
+	}
 }

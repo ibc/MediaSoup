@@ -6,7 +6,6 @@
 #include "RTC/RateCalculator.hpp"
 #include "RTC/SeqManager.hpp"
 #include "RTC/TrendCalculator.hpp"
-#include <absl/container/btree_map.h>
 #include <map>
 
 namespace RTC
@@ -89,7 +88,7 @@ namespace RTC
 	public:
 		void TransportConnected();
 		void TransportDisconnected();
-		void RtpPacketSent(SentInfo& sentInfo);
+		void RtpPacketSent(const SentInfo& sentInfo);
 		void ReceiveRtcpTransportFeedback(const RTC::RTCP::FeedbackRtpTransportPacket* feedback);
 		void EstimateAvailableBitrate(CummulativeResult& cummulativeResult);
 		void UpdateRtt(float rtt);
@@ -103,7 +102,7 @@ namespace RTC
 		uint32_t initialAvailableBitrate{ 0u };
 		uint32_t availableBitrate{ 0u };
 		uint64_t lastAvailableBitrateEventAtMs{ 0u };
-		absl::btree_map<uint16_t, SentInfo, RTC::SeqManager<uint16_t>::SeqLowerThan> sentInfos;
+		std::map<uint16_t, SentInfo, RTC::SeqManager<uint16_t>::SeqLowerThan> sentInfos;
 		float rtt{ 0 }; // Round trip time in ms.
 		CummulativeResult cummulativeResult;
 		CummulativeResult probationCummulativeResult;

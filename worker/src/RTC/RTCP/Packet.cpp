@@ -54,8 +54,8 @@ namespace RTC
 					return first;
 				}
 
-				auto* header     = const_cast<CommonHeader*>(reinterpret_cast<const CommonHeader*>(data));
-				size_t packetLen = static_cast<size_t>(ntohs(header->length) + 1) * 4;
+				auto* header = const_cast<CommonHeader*>(reinterpret_cast<const CommonHeader*>(data));
+				const size_t packetLen = static_cast<size_t>(ntohs(header->length) + 1) * 4;
 
 				if (len < packetLen)
 				{
@@ -76,14 +76,18 @@ namespace RTC
 						current = SenderReportPacket::Parse(data, packetLen);
 
 						if (!current)
+						{
 							break;
+						}
 
 						if (header->count > 0)
 						{
 							Packet* rr = ReceiverReportPacket::Parse(data, packetLen, current->GetSize());
 
 							if (!rr)
+							{
 								break;
+							}
 
 							current->SetNext(rr);
 						}
@@ -172,9 +176,13 @@ namespace RTC
 				len -= packetLen;
 
 				if (!first)
+				{
 					first = current;
+				}
 				else
+				{
 					last->SetNext(current);
+				}
 
 				last = current->GetNext() != nullptr ? current->GetNext() : current;
 			}
@@ -191,7 +199,9 @@ namespace RTC
 			auto it = Packet::type2String.find(type);
 
 			if (it == Packet::type2String.end())
+			{
 				return Unknown;
+			}
 
 			return it->second;
 		}
@@ -204,7 +214,7 @@ namespace RTC
 
 			this->header = reinterpret_cast<CommonHeader*>(buffer);
 
-			size_t length = (GetSize() / 4) - 1;
+			const size_t length = (GetSize() / 4) - 1;
 
 			// Fill the common header.
 			this->header->version    = 2;

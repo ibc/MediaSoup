@@ -2,6 +2,9 @@
 // #define MS_LOG_DEV_LEVEL 3
 
 #include "DepUsrSCTP.hpp"
+#ifdef MS_LIBURING_SUPPORTED
+#include "DepLibUring.hpp"
+#endif
 #include "DepLibUV.hpp"
 #include "Logger.hpp"
 #include <usrsctp.h>
@@ -66,7 +69,7 @@ void DepUsrSCTP::ClassInit()
 
 	MS_DEBUG_TAG(info, "usrsctp");
 
-	std::lock_guard<std::mutex> lock(GlobalSyncMutex);
+	const std::lock_guard<std::mutex> lock(GlobalSyncMutex);
 
 	if (GlobalInstances == 0)
 	{
@@ -87,7 +90,7 @@ void DepUsrSCTP::ClassDestroy()
 {
 	MS_TRACE();
 
-	std::lock_guard<std::mutex> lock(GlobalSyncMutex);
+	const std::lock_guard<std::mutex> lock(GlobalSyncMutex);
 	--GlobalInstances;
 
 	if (GlobalInstances == 0)
@@ -123,11 +126,13 @@ uintptr_t DepUsrSCTP::GetNextSctpAssociationId()
 {
 	MS_TRACE();
 
-	std::lock_guard<std::mutex> lock(GlobalSyncMutex);
+	const std::lock_guard<std::mutex> lock(GlobalSyncMutex);
 
 	// NOTE: usrsctp_connect() fails with a value of 0.
 	if (DepUsrSCTP::nextSctpAssociationId == 0u)
+	{
 		++DepUsrSCTP::nextSctpAssociationId;
+	}
 
 	// In case we've wrapped around and need to find an empty spot from a removed
 	// SctpAssociation. Assumes we'll never be full.
@@ -137,7 +142,9 @@ uintptr_t DepUsrSCTP::GetNextSctpAssociationId()
 		++DepUsrSCTP::nextSctpAssociationId;
 
 		if (DepUsrSCTP::nextSctpAssociationId == 0u)
+		{
 			++DepUsrSCTP::nextSctpAssociationId;
+		}
 	}
 
 	return DepUsrSCTP::nextSctpAssociationId++;
@@ -147,7 +154,7 @@ void DepUsrSCTP::RegisterSctpAssociation(RTC::SctpAssociation* sctpAssociation)
 {
 	MS_TRACE();
 
-	std::lock_guard<std::mutex> lock(GlobalSyncMutex);
+	const std::lock_guard<std::mutex> lock(GlobalSyncMutex);
 
 	MS_ASSERT(DepUsrSCTP::checker != nullptr, "Checker not created");
 
@@ -160,14 +167,16 @@ void DepUsrSCTP::RegisterSctpAssociation(RTC::SctpAssociation* sctpAssociation)
 	DepUsrSCTP::mapIdSctpAssociation[sctpAssociation->id] = sctpAssociation;
 
 	if (++DepUsrSCTP::numSctpAssociations == 1u)
+	{
 		DepUsrSCTP::checker->Start();
+	}
 }
 
 void DepUsrSCTP::DeregisterSctpAssociation(RTC::SctpAssociation* sctpAssociation)
 {
 	MS_TRACE();
 
-	std::lock_guard<std::mutex> lock(GlobalSyncMutex);
+	const std::lock_guard<std::mutex> lock(GlobalSyncMutex);
 
 	MS_ASSERT(DepUsrSCTP::checker != nullptr, "Checker not created");
 
@@ -177,30 +186,32 @@ void DepUsrSCTP::DeregisterSctpAssociation(RTC::SctpAssociation* sctpAssociation
 	MS_ASSERT(DepUsrSCTP::numSctpAssociations > 0u, "numSctpAssociations was not higher than 0");
 
 	if (--DepUsrSCTP::numSctpAssociations == 0u)
+	{
 		DepUsrSCTP::checker->Stop();
+	}
 }
 
 RTC::SctpAssociation* DepUsrSCTP::RetrieveSctpAssociation(uintptr_t id)
 {
 	MS_TRACE();
 
-	std::lock_guard<std::mutex> lock(GlobalSyncMutex);
+	const std::lock_guard<std::mutex> lock(GlobalSyncMutex);
 
 	auto it = DepUsrSCTP::mapIdSctpAssociation.find(id);
 
 	if (it == DepUsrSCTP::mapIdSctpAssociation.end())
+	{
 		return nullptr;
+	}
 
 	return it->second;
 }
 
 /* DepUsrSCTP::Checker instance methods. */
 
-DepUsrSCTP::Checker::Checker()
+DepUsrSCTP::Checker::Checker() : timer(new TimerHandle(this))
 {
 	MS_TRACE();
-
-	this->timer = new Timer(this);
 }
 
 DepUsrSCTP::Checker::~Checker()
@@ -232,14 +243,34 @@ void DepUsrSCTP::Checker::Stop()
 	this->timer->Stop();
 }
 
-void DepUsrSCTP::Checker::OnTimer(Timer* /*timer*/)
+void DepUsrSCTP::Checker::OnTimer(TimerHandle* /*timer*/)
 {
 	MS_TRACE();
 
-	auto nowMs    = DepLibUV::GetTimeMs();
-	int elapsedMs = this->lastCalledAtMs ? static_cast<int>(nowMs - this->lastCalledAtMs) : 0;
+	auto nowMs          = DepLibUV::GetTimeMs();
+	const int elapsedMs = this->lastCalledAtMs ? static_cast<int>(nowMs - this->lastCalledAtMs) : 0;
+
+#ifdef MS_LIBURING_SUPPORTED
+	if (DepLibUring::IsEnabled())
+	{
+		// Activate liburing usage.
+		// 'usrsctp_handle_timers()' will synchronously call the send/recv
+		// callbacks for the pending data. If there are multiple messages to be
+		// sent over the network then we will send those messages within a single
+		// system call.
+		DepLibUring::SetActive();
+	}
+#endif
 
 	usrsctp_handle_timers(elapsedMs);
+
+#ifdef MS_LIBURING_SUPPORTED
+	if (DepLibUring::IsEnabled())
+	{
+		// Submit all prepared submission entries.
+		DepLibUring::Submit();
+	}
+#endif
 
 	this->lastCalledAtMs = nowMs;
 }

@@ -1,226 +1,559 @@
 use crate::active_speaker_observer::ActiveSpeakerObserverOptions;
 use crate::audio_level_observer::AudioLevelObserverOptions;
 use crate::consumer::{
-    ConsumerDump, ConsumerId, ConsumerLayers, ConsumerScore, ConsumerStats, ConsumerTraceEventType,
-    ConsumerType,
+    ConsumerId, ConsumerLayers, ConsumerScore, ConsumerTraceEventType, ConsumerType,
 };
-use crate::data_consumer::{DataConsumerDump, DataConsumerId, DataConsumerStat, DataConsumerType};
-use crate::data_producer::{DataProducerDump, DataProducerId, DataProducerStat, DataProducerType};
+use crate::data_consumer::{DataConsumerId, DataConsumerType};
+use crate::data_producer::{DataProducerId, DataProducerType};
 use crate::data_structures::{
-    DtlsParameters, DtlsRole, DtlsState, IceCandidate, IceParameters, IceRole, IceState, ListenIp,
-    SctpState, TransportTuple,
+    DtlsParameters, DtlsRole, DtlsState, IceCandidate, IceParameters, IceRole, IceState,
+    ListenInfo, SctpState, TransportTuple,
 };
 use crate::direct_transport::DirectTransportOptions;
 use crate::ortc::RtpMapping;
 use crate::pipe_transport::PipeTransportOptions;
 use crate::plain_transport::PlainTransportOptions;
-use crate::producer::{
-    ProducerDump, ProducerId, ProducerStat, ProducerTraceEventType, ProducerType,
-};
+use crate::producer::{ProducerId, ProducerTraceEventType, ProducerType};
+use crate::router::consumer::ConsumerDump;
+use crate::router::producer::ProducerDump;
 use crate::router::{RouterDump, RouterId};
 use crate::rtp_observer::RtpObserverId;
 use crate::rtp_parameters::{MediaKind, RtpEncodingParameters, RtpParameters};
 use crate::sctp_parameters::{NumSctpStreams, SctpParameters, SctpStreamParameters};
 use crate::srtp_parameters::{SrtpCryptoSuite, SrtpParameters};
 use crate::transport::{TransportId, TransportTraceEventType};
-use crate::webrtc_server::{WebRtcServerDump, WebRtcServerId, WebRtcServerListenInfos};
-use crate::webrtc_transport::{TransportListenIps, WebRtcTransportListen, WebRtcTransportOptions};
-use crate::worker::{WorkerDump, WorkerUpdateSettings};
+use crate::webrtc_server::{
+    WebRtcServerDump, WebRtcServerIceUsernameFragment, WebRtcServerId, WebRtcServerIpPort,
+    WebRtcServerListenInfos, WebRtcServerTupleHash,
+};
+use crate::webrtc_transport::{
+    WebRtcTransportListen, WebRtcTransportListenInfos, WebRtcTransportOptions,
+};
+use crate::worker::{ChannelMessageHandlers, LibUringDump, WorkerDump, WorkerUpdateSettings};
+use mediasoup_sys::fbs::{
+    active_speaker_observer, audio_level_observer, consumer, data_consumer, data_producer,
+    direct_transport, message, notification, pipe_transport, plain_transport, producer, request,
+    response, router, rtp_observer, transport, web_rtc_server, web_rtc_transport, worker,
+};
 use parking_lot::Mutex;
-use serde::de::DeserializeOwned;
+use planus::Builder;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use std::error::Error;
 use std::fmt::{Debug, Display};
 use std::net::IpAddr;
 use std::num::NonZeroU16;
 
 pub(crate) trait Request
 where
-    Self: Debug + Serialize,
+    Self: Debug,
 {
-    type HandlerId: Display;
-    type Response: DeserializeOwned;
-
     /// Request method to call on worker.
-    fn as_method(&self) -> &'static str;
+    const METHOD: request::Method;
+    type HandlerId: Display;
+    type Response;
+
+    /// Get a serialized message out of this request.
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8>;
 
     /// Default response to return in case of soft error, such as channel already closed, entity
     /// doesn't exist on worker during closing.
     fn default_for_soft_error() -> Option<Self::Response> {
         None
     }
+
+    /// Convert generic response into specific type of this request.
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>>;
 }
 
-pub(crate) trait Notification: Debug + Serialize {
+pub(crate) trait Notification: Debug {
+    /// Notification event to call on worker.
+    const EVENT: notification::Event;
     type HandlerId: Display;
 
-    /// Request event to call on worker.
-    fn as_event(&self) -> &'static str;
+    /// Get a serialized message out of this notification.
+    fn into_bytes(self, handler_id: Self::HandlerId) -> Vec<u8>;
 }
 
-macro_rules! request_response {
-    (
-        $handler_id_type: ty,
-        $method: literal,
-        $request_struct_name: ident { $( $(#[$request_field_name_attributes: meta])? $request_field_name: ident: $request_field_type: ty$(,)? )* },
-        $existing_response_type: ty,
-        $default_for_soft_error: expr $(,)?
-    ) => {
-        #[derive(Debug, Serialize)]
-        #[serde(rename_all = "camelCase")]
-        pub(crate) struct $request_struct_name {
-            $(
-                $(#[$request_field_name_attributes])*
-                pub(crate) $request_field_name: $request_field_type,
-            )*
-        }
+#[derive(Debug)]
+pub(crate) struct WorkerCloseRequest {}
 
-        impl Request for $request_struct_name {
-            type HandlerId = $handler_id_type;
-            type Response = $existing_response_type;
+impl Request for WorkerCloseRequest {
+    const METHOD: request::Method = request::Method::WorkerClose;
+    type HandlerId = &'static str;
+    type Response = ();
 
-            fn as_method(&self) -> &'static str {
-                $method
-            }
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
 
-            fn default_for_soft_error() -> Option<Self::Response> {
-                $default_for_soft_error
-            }
-        }
-    };
-    // Call above macro with no default for soft error
-    (
-        $handler_id_type: ty,
-        $method: literal,
-        $request_struct_name: ident $request_struct_impl: tt $(,)?
-        $existing_response_type: ty $(,)?
-    ) => {
-        request_response!(
-            $handler_id_type,
-            $method,
-            $request_struct_name $request_struct_impl,
-            $existing_response_type,
-            None,
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
         );
-    };
-    // Call above macro with unit type as expected response
-    (
-        $handler_id_type: ty,
-        $method: literal,
-        $request_struct_name: ident $request_struct_impl: tt $(,)?
-    ) => {
-        request_response!(
-            $handler_id_type,
-            $method,
-            $request_struct_name $request_struct_impl,
-            (),
-            None,
-        );
-    };
-    (
-        $handler_id_type: ty,
-        $method: literal,
-        $request_struct_name: ident { $( $(#[$request_field_name_attributes: meta])? $request_field_name: ident: $request_field_type: ty$(,)? )* },
-        $response_struct_name: ident { $( $response_field_name: ident: $response_field_type: ty$(,)? )* },
-    ) => {
-        #[derive(Debug, Serialize)]
-        #[serde(rename_all = "camelCase")]
-        pub(crate) struct $request_struct_name {
-            $(
-                $(#[$request_field_name_attributes])*
-                pub(crate) $request_field_name: $request_field_type,
-            )*
-        }
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
 
-        #[derive(Debug, Deserialize)]
-        #[serde(rename_all = "camelCase")]
-        pub(crate) struct $response_struct_name {
-            $( pub(crate) $response_field_name: $response_field_type, )*
-        }
+        builder.finish(message, None).to_vec()
+    }
 
-        impl Request for $request_struct_name {
-            type HandlerId = $handler_id_type;
-            type Response = $response_struct_name;
-
-            fn as_method(&self) -> &'static str {
-                $method
-            }
-        }
-    };
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
 }
 
-request_response!(&'static str, "worker.close", WorkerCloseRequest {});
+#[derive(Debug)]
+pub(crate) struct WorkerDumpRequest {}
 
-request_response!(
-    &'static str,
-    "worker.dump",
-    WorkerDumpRequest {},
-    WorkerDump
-);
+impl Request for WorkerDumpRequest {
+    const METHOD: request::Method = request::Method::WorkerDump;
+    type HandlerId = &'static str;
+    type Response = WorkerDump;
 
-request_response!(
-    &'static str,
-    "worker.updateSettings",
-    WorkerUpdateSettingsRequest {
-        #[serde(flatten)]
-        data: WorkerUpdateSettings,
-    },
-);
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
 
-request_response!(
-    &'static str,
-    "worker.createWebRtcServer",
-    WorkerCreateWebRtcServerRequest {
-        #[serde(rename = "webRtcServerId")]
-        webrtc_server_id: WebRtcServerId,
-        listen_infos: WebRtcServerListenInfos,
-    },
-);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
 
-request_response!(
-    &'static str,
-    "worker.closeWebRtcServer",
-    WebRtcServerCloseRequest {
-        #[serde(rename = "webRtcServerId")]
-        webrtc_server_id: WebRtcServerId,
-    },
-    (),
-    Some(()),
-);
+        builder.finish(message, None).to_vec()
+    }
 
-request_response!(
-    WebRtcServerId,
-    "webRtcServer.dump",
-    WebRtcServerDumpRequest {},
-    WebRtcServerDump,
-);
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        let Some(response::BodyRef::WorkerDumpResponse(data)) = response else {
+            panic!("Wrong message from worker: {response:?}");
+        };
 
-request_response!(
-    &'static str,
-    "worker.createRouter",
-    WorkerCreateRouterRequest {
-        router_id: RouterId,
-    },
-);
+        let data = worker::DumpResponse::try_from(data)?;
 
-request_response!(
-    &'static str,
-    "worker.closeRouter",
-    RouterCloseRequest {
-        router_id: RouterId,
-    },
-    (),
-    Some(()),
-);
+        Ok(WorkerDump {
+            router_ids: data
+                .router_ids
+                .into_iter()
+                .map(|id| id.parse())
+                .collect::<Result<_, _>>()?,
+            webrtc_server_ids: data
+                .web_rtc_server_ids
+                .into_iter()
+                .map(|id| id.parse())
+                .collect::<Result<_, _>>()?,
+            channel_message_handlers: ChannelMessageHandlers {
+                channel_request_handlers: data
+                    .channel_message_handlers
+                    .channel_request_handlers
+                    .into_iter()
+                    .map(|id| id.parse())
+                    .collect::<Result<_, _>>()?,
+                channel_notification_handlers: data
+                    .channel_message_handlers
+                    .channel_notification_handlers
+                    .into_iter()
+                    .map(|id| id.parse())
+                    .collect::<Result<_, _>>()?,
+            },
+            liburing: data.liburing.map(|liburing| LibUringDump {
+                sqe_process_count: liburing.sqe_process_count,
+                sqe_miss_count: liburing.sqe_miss_count,
+                user_data_miss_count: liburing.user_data_miss_count,
+            }),
+        })
+    }
+}
 
-request_response!(RouterId, "router.dump", RouterDumpRequest {}, RouterDump);
+#[derive(Debug)]
+pub(crate) struct WorkerUpdateSettingsRequest {
+    pub(crate) data: WorkerUpdateSettings,
+}
+
+impl Request for WorkerUpdateSettingsRequest {
+    const METHOD: request::Method = request::Method::WorkerUpdateSettings;
+    type HandlerId = &'static str;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+        let data = worker::UpdateSettingsRequest::create(
+            &mut builder,
+            self.data
+                .log_level
+                .as_ref()
+                .map(|log_level| log_level.as_str()),
+            self.data.log_tags.as_ref().map(|log_tags| {
+                log_tags
+                    .iter()
+                    .map(|log_tag| log_tag.as_str())
+                    .collect::<Vec<_>>()
+            }),
+        );
+        let request_body = request::Body::create_worker_update_settings_request(&mut builder, data);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct WorkerCreateWebRtcServerRequest {
+    pub(crate) webrtc_server_id: WebRtcServerId,
+    pub(crate) listen_infos: WebRtcServerListenInfos,
+}
+
+impl Request for WorkerCreateWebRtcServerRequest {
+    const METHOD: request::Method = request::Method::WorkerCreateWebrtcserver;
+    type HandlerId = &'static str;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+        let data = worker::CreateWebRtcServerRequest::create(
+            &mut builder,
+            self.webrtc_server_id.to_string(),
+            self.listen_infos.to_fbs(),
+        );
+        let request_body =
+            request::Body::create_worker_create_web_rtc_server_request(&mut builder, data);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct WebRtcServerCloseRequest {
+    pub(crate) webrtc_server_id: WebRtcServerId,
+}
+
+impl Request for WebRtcServerCloseRequest {
+    const METHOD: request::Method = request::Method::WorkerWebrtcserverClose;
+    type HandlerId = &'static str;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let data = worker::CloseWebRtcServerRequest::create(
+            &mut builder,
+            self.webrtc_server_id.to_string(),
+        );
+        let request_body =
+            request::Body::create_worker_close_web_rtc_server_request(&mut builder, data);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct WebRtcServerDumpRequest {}
+
+impl Request for WebRtcServerDumpRequest {
+    const METHOD: request::Method = request::Method::WebrtcserverDump;
+    type HandlerId = WebRtcServerId;
+    type Response = WebRtcServerDump;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        let Some(response::BodyRef::WebRtcServerDumpResponse(data)) = response else {
+            panic!("Wrong message from worker: {response:?}");
+        };
+
+        let data = web_rtc_server::DumpResponse::try_from(data)?;
+
+        Ok(WebRtcServerDump {
+            id: data.id.parse()?,
+            udp_sockets: data
+                .udp_sockets
+                .into_iter()
+                .map(|ip_port| WebRtcServerIpPort {
+                    ip: ip_port.ip.parse().unwrap(),
+                    port: ip_port.port,
+                })
+                .collect(),
+            tcp_servers: data
+                .tcp_servers
+                .into_iter()
+                .map(|ip_port| WebRtcServerIpPort {
+                    ip: ip_port.ip.parse().unwrap(),
+                    port: ip_port.port,
+                })
+                .collect(),
+            webrtc_transport_ids: data
+                .web_rtc_transport_ids
+                .into_iter()
+                .map(|id| id.parse())
+                .collect::<Result<_, _>>()?,
+            local_ice_username_fragments: data
+                .local_ice_username_fragments
+                .into_iter()
+                .map(|username_fragment| WebRtcServerIceUsernameFragment {
+                    local_ice_username_fragment: username_fragment
+                        .local_ice_username_fragment
+                        .parse()
+                        .unwrap(),
+                    webrtc_transport_id: username_fragment.web_rtc_transport_id.parse().unwrap(),
+                })
+                .collect(),
+            tuple_hashes: data
+                .tuple_hashes
+                .into_iter()
+                .map(|tuple_hash| WebRtcServerTupleHash {
+                    tuple_hash: tuple_hash.tuple_hash,
+                    webrtc_transport_id: tuple_hash.web_rtc_transport_id.parse().unwrap(),
+                })
+                .collect(),
+        })
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct WorkerCreateRouterRequest {
+    pub(crate) router_id: RouterId,
+}
+
+impl Request for WorkerCreateRouterRequest {
+    const METHOD: request::Method = request::Method::WorkerCreateRouter;
+    type HandlerId = &'static str;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+        let data = worker::CreateRouterRequest::create(&mut builder, self.router_id.to_string());
+        let request_body = request::Body::create_worker_create_router_request(&mut builder, data);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct RouterCloseRequest {
+    pub(crate) router_id: RouterId,
+}
+
+impl Request for RouterCloseRequest {
+    const METHOD: request::Method = request::Method::WorkerCloseRouter;
+    type HandlerId = &'static str;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let data = worker::CloseRouterRequest::create(&mut builder, self.router_id.to_string());
+        let request_body = request::Body::create_worker_close_router_request(&mut builder, data);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct RouterDumpRequest {}
+
+impl Request for RouterDumpRequest {
+    const METHOD: request::Method = request::Method::RouterDump;
+    type HandlerId = RouterId;
+    type Response = RouterDump;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        let Some(response::BodyRef::RouterDumpResponse(data)) = response else {
+            panic!("Wrong message from worker: {response:?}");
+        };
+
+        let data = router::DumpResponse::try_from(data)?;
+
+        Ok(RouterDump {
+            id: data.id.parse()?,
+            map_consumer_id_producer_id: data
+                .map_consumer_id_producer_id
+                .into_iter()
+                .map(|key_value| Ok((key_value.key.parse()?, key_value.value.parse()?)))
+                .collect::<Result<_, Box<dyn Error + Send + Sync>>>()?,
+            map_data_consumer_id_data_producer_id: data
+                .map_data_consumer_id_data_producer_id
+                .into_iter()
+                .map(|key_value| Ok((key_value.key.parse()?, key_value.value.parse()?)))
+                .collect::<Result<_, Box<dyn Error + Send + Sync>>>()?,
+            map_data_producer_id_data_consumer_ids: data
+                .map_data_producer_id_data_consumer_ids
+                .into_iter()
+                .map(|key_values| {
+                    Ok((
+                        key_values.key.parse()?,
+                        key_values
+                            .values
+                            .into_iter()
+                            .map(|value| value.parse())
+                            .collect::<Result<_, _>>()?,
+                    ))
+                })
+                .collect::<Result<_, Box<dyn Error + Send + Sync>>>()?,
+            map_producer_id_consumer_ids: data
+                .map_producer_id_consumer_ids
+                .into_iter()
+                .map(|key_values| {
+                    Ok((
+                        key_values.key.parse()?,
+                        key_values
+                            .values
+                            .into_iter()
+                            .map(|value| value.parse())
+                            .collect::<Result<_, _>>()?,
+                    ))
+                })
+                .collect::<Result<_, Box<dyn Error + Send + Sync>>>()?,
+            map_producer_id_observer_ids: data
+                .map_producer_id_observer_ids
+                .into_iter()
+                .map(|key_values| {
+                    Ok((
+                        key_values.key.parse()?,
+                        key_values
+                            .values
+                            .into_iter()
+                            .map(|value| value.parse())
+                            .collect::<Result<_, _>>()?,
+                    ))
+                })
+                .collect::<Result<_, Box<dyn Error + Send + Sync>>>()?,
+            rtp_observer_ids: data
+                .rtp_observer_ids
+                .into_iter()
+                .map(|id| id.parse())
+                .collect::<Result<_, _>>()?,
+            transport_ids: data
+                .transport_ids
+                .into_iter()
+                .map(|id| id.parse())
+                .collect::<Result<_, _>>()?,
+        })
+    }
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RouterCreateDirectTransportData {
     transport_id: TransportId,
     direct: bool,
-    max_message_size: usize,
+    max_message_size: u32,
 }
 
 impl RouterCreateDirectTransportData {
@@ -234,26 +567,68 @@ impl RouterCreateDirectTransportData {
             max_message_size: direct_transport_options.max_message_size,
         }
     }
+
+    pub(crate) fn to_fbs(&self) -> direct_transport::DirectTransportOptions {
+        direct_transport::DirectTransportOptions {
+            base: Box::new(transport::Options {
+                direct: true,
+                max_message_size: Some(self.max_message_size),
+                initial_available_outgoing_bitrate: None,
+                enable_sctp: false,
+                num_sctp_streams: None,
+                max_sctp_message_size: 0,
+                sctp_send_buffer_size: 0,
+                is_data_channel: false,
+            }),
+        }
+    }
 }
 
-request_response!(
-    RouterId,
-    "router.createDirectTransport",
-    RouterCreateDirectTransportRequest {
-        #[serde(flatten)]
-        data: RouterCreateDirectTransportData,
-    },
-    RouterCreateDirectTransportResponse {},
-);
+#[derive(Debug)]
+pub(crate) struct RouterCreateDirectTransportRequest {
+    pub(crate) data: RouterCreateDirectTransportData,
+}
+
+impl Request for RouterCreateDirectTransportRequest {
+    const METHOD: request::Method = request::Method::RouterCreateDirecttransport;
+    type HandlerId = RouterId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+        let data = router::CreateDirectTransportRequest::create(
+            &mut builder,
+            self.data.transport_id.to_string(),
+            self.data.to_fbs(),
+        );
+        let request_body =
+            request::Body::create_router_create_direct_transport_request(&mut builder, data);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
 
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 enum RouterCreateWebrtcTransportListen {
     #[serde(rename_all = "camelCase")]
     Individual {
-        listen_ips: TransportListenIps,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        port: Option<u16>,
+        listen_infos: WebRtcTransportListenInfos,
     },
     Server {
         #[serde(rename = "webRtcServerId")]
@@ -261,17 +636,40 @@ enum RouterCreateWebrtcTransportListen {
     },
 }
 
+impl RouterCreateWebrtcTransportListen {
+    pub(crate) fn to_fbs(&self) -> web_rtc_transport::Listen {
+        match self {
+            RouterCreateWebrtcTransportListen::Individual { listen_infos } => {
+                web_rtc_transport::Listen::ListenIndividual(Box::new(
+                    web_rtc_transport::ListenIndividual {
+                        listen_infos: listen_infos
+                            .iter()
+                            .map(|listen_info| listen_info.to_fbs())
+                            .collect(),
+                    },
+                ))
+            }
+            RouterCreateWebrtcTransportListen::Server { webrtc_server_id } => {
+                web_rtc_transport::Listen::ListenServer(Box::new(web_rtc_transport::ListenServer {
+                    web_rtc_server_id: webrtc_server_id.to_string(),
+                }))
+            }
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct RouterCreateWebrtcTransportRequest {
+pub(crate) struct RouterCreateWebrtcTransportData {
     transport_id: TransportId,
     #[serde(flatten)]
     listen: RouterCreateWebrtcTransportListen,
+    initial_available_outgoing_bitrate: u32,
     enable_udp: bool,
     enable_tcp: bool,
     prefer_udp: bool,
     prefer_tcp: bool,
-    initial_available_outgoing_bitrate: u32,
+    ice_consent_timeout: u8,
     enable_sctp: bool,
     num_sctp_streams: NumSctpStreams,
     max_sctp_message_size: u32,
@@ -279,7 +677,7 @@ pub(crate) struct RouterCreateWebrtcTransportRequest {
     is_data_channel: bool,
 }
 
-impl RouterCreateWebrtcTransportRequest {
+impl RouterCreateWebrtcTransportData {
     pub(crate) fn from_options(
         transport_id: TransportId,
         webrtc_transport_options: &WebRtcTransportOptions,
@@ -287,10 +685,9 @@ impl RouterCreateWebrtcTransportRequest {
         Self {
             transport_id,
             listen: match &webrtc_transport_options.listen {
-                WebRtcTransportListen::Individual { listen_ips, port } => {
+                WebRtcTransportListen::Individual { listen_infos } => {
                     RouterCreateWebrtcTransportListen::Individual {
-                        listen_ips: listen_ips.clone(),
-                        port: *port,
+                        listen_infos: listen_infos.clone(),
                     }
                 }
                 WebRtcTransportListen::Server { webrtc_server } => {
@@ -299,17 +696,39 @@ impl RouterCreateWebrtcTransportRequest {
                     }
                 }
             },
+            initial_available_outgoing_bitrate: webrtc_transport_options
+                .initial_available_outgoing_bitrate,
             enable_udp: webrtc_transport_options.enable_udp,
             enable_tcp: webrtc_transport_options.enable_tcp,
             prefer_udp: webrtc_transport_options.prefer_udp,
             prefer_tcp: webrtc_transport_options.prefer_tcp,
-            initial_available_outgoing_bitrate: webrtc_transport_options
-                .initial_available_outgoing_bitrate,
+            ice_consent_timeout: webrtc_transport_options.ice_consent_timeout,
             enable_sctp: webrtc_transport_options.enable_sctp,
             num_sctp_streams: webrtc_transport_options.num_sctp_streams,
             max_sctp_message_size: webrtc_transport_options.max_sctp_message_size,
             sctp_send_buffer_size: webrtc_transport_options.sctp_send_buffer_size,
             is_data_channel: true,
+        }
+    }
+
+    pub(crate) fn to_fbs(&self) -> web_rtc_transport::WebRtcTransportOptions {
+        web_rtc_transport::WebRtcTransportOptions {
+            base: Box::new(transport::Options {
+                direct: false,
+                max_message_size: None,
+                initial_available_outgoing_bitrate: Some(self.initial_available_outgoing_bitrate),
+                enable_sctp: self.enable_sctp,
+                num_sctp_streams: Some(Box::new(self.num_sctp_streams.to_fbs())),
+                max_sctp_message_size: self.max_sctp_message_size,
+                sctp_send_buffer_size: self.sctp_send_buffer_size,
+                is_data_channel: true,
+            }),
+            listen: self.listen.to_fbs(),
+            enable_udp: self.enable_udp,
+            enable_tcp: self.enable_tcp,
+            prefer_udp: self.prefer_udp,
+            prefer_tcp: self.prefer_tcp,
+            ice_consent_timeout: self.ice_consent_timeout,
         }
     }
 }
@@ -329,17 +748,155 @@ pub(crate) struct WebRtcTransportData {
     pub(crate) sctp_state: Mutex<Option<SctpState>>,
 }
 
-impl Request for RouterCreateWebrtcTransportRequest {
+#[derive(Debug)]
+pub(crate) struct RouterCreateWebRtcTransportRequest {
+    pub(crate) data: RouterCreateWebrtcTransportData,
+}
+
+impl Request for RouterCreateWebRtcTransportRequest {
+    const METHOD: request::Method = request::Method::RouterCreateWebrtctransport;
     type HandlerId = RouterId;
     type Response = WebRtcTransportData;
 
-    fn as_method(&self) -> &'static str {
-        match &self.listen {
-            RouterCreateWebrtcTransportListen::Individual { .. } => "router.createWebRtcTransport",
-            RouterCreateWebrtcTransportListen::Server { .. } => {
-                "router.createWebRtcTransportWithServer"
-            }
-        }
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let RouterCreateWebrtcTransportListen::Individual { listen_infos: _ } = self.data.listen
+        else {
+            panic!("RouterCreateWebrtcTransportListen variant must be Individual");
+        };
+
+        let mut builder = Builder::new();
+        let data = router::CreateWebRtcTransportRequest::create(
+            &mut builder,
+            self.data.transport_id.to_string(),
+            self.data.to_fbs(),
+        );
+        let request_body =
+            request::Body::create_router_create_web_rtc_transport_request(&mut builder, data);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        let Some(response::BodyRef::WebRtcTransportDumpResponse(data)) = response else {
+            panic!("Wrong message from worker: {response:?}");
+        };
+
+        let data = web_rtc_transport::DumpResponse::try_from(data)?;
+
+        Ok(WebRtcTransportData {
+            ice_role: IceRole::from_fbs(data.ice_role),
+            ice_parameters: IceParameters::from_fbs(*data.ice_parameters),
+            ice_candidates: data
+                .ice_candidates
+                .iter()
+                .map(IceCandidate::from_fbs)
+                .collect(),
+            ice_state: Mutex::new(IceState::from_fbs(data.ice_state)),
+            ice_selected_tuple: Mutex::new(
+                data.ice_selected_tuple
+                    .map(|tuple| TransportTuple::from_fbs(tuple.as_ref())),
+            ),
+            dtls_parameters: Mutex::new(DtlsParameters::from_fbs(*data.dtls_parameters)),
+            dtls_state: Mutex::new(DtlsState::from_fbs(data.dtls_state)),
+            dtls_remote_cert: Mutex::new(None),
+            sctp_parameters: data
+                .base
+                .sctp_parameters
+                .map(|parameters| SctpParameters::from_fbs(parameters.as_ref())),
+            sctp_state: Mutex::new(
+                data.base
+                    .sctp_state
+                    .map(|state| SctpState::from_fbs(&state)),
+            ),
+        })
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct RouterCreateWebRtcTransportWithServerRequest {
+    pub(crate) data: RouterCreateWebrtcTransportData,
+}
+
+impl Request for RouterCreateWebRtcTransportWithServerRequest {
+    const METHOD: request::Method = request::Method::RouterCreateWebrtctransportWithServer;
+    type HandlerId = RouterId;
+    type Response = WebRtcTransportData;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let RouterCreateWebrtcTransportListen::Server {
+            webrtc_server_id: _,
+        } = self.data.listen
+        else {
+            panic!("RouterCreateWebrtcTransportListen variant must be Server");
+        };
+
+        let mut builder = Builder::new();
+        let data = router::CreateWebRtcTransportRequest::create(
+            &mut builder,
+            self.data.transport_id.to_string(),
+            self.data.to_fbs(),
+        );
+        let request_body =
+            request::Body::create_router_create_web_rtc_transport_request(&mut builder, data);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        let Some(response::BodyRef::WebRtcTransportDumpResponse(data)) = response else {
+            panic!("Wrong message from worker: {response:?}");
+        };
+
+        let data = web_rtc_transport::DumpResponse::try_from(data)?;
+
+        Ok(WebRtcTransportData {
+            ice_role: IceRole::from_fbs(data.ice_role),
+            ice_parameters: IceParameters::from_fbs(*data.ice_parameters),
+            ice_candidates: data
+                .ice_candidates
+                .iter()
+                .map(IceCandidate::from_fbs)
+                .collect(),
+            ice_state: Mutex::new(IceState::from_fbs(data.ice_state)),
+            ice_selected_tuple: Mutex::new(
+                data.ice_selected_tuple
+                    .map(|tuple| TransportTuple::from_fbs(tuple.as_ref())),
+            ),
+            dtls_parameters: Mutex::new(DtlsParameters::from_fbs(*data.dtls_parameters)),
+            dtls_state: Mutex::new(DtlsState::from_fbs(data.dtls_state)),
+            dtls_remote_cert: Mutex::new(None),
+            sctp_parameters: data
+                .base
+                .sctp_parameters
+                .map(|parameters| SctpParameters::from_fbs(parameters.as_ref())),
+            sctp_state: Mutex::new(
+                data.base
+                    .sctp_state
+                    .map(|state| SctpState::from_fbs(&state)),
+            ),
+        })
     }
 }
 
@@ -347,9 +904,8 @@ impl Request for RouterCreateWebrtcTransportRequest {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RouterCreatePlainTransportData {
     transport_id: TransportId,
-    listen_ip: ListenIp,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    port: Option<u16>,
+    listen_info: ListenInfo,
+    rtcp_listen_info: Option<ListenInfo>,
     rtcp_mux: bool,
     comedia: bool,
     enable_sctp: bool,
@@ -368,8 +924,8 @@ impl RouterCreatePlainTransportData {
     ) -> Self {
         Self {
             transport_id,
-            listen_ip: plain_transport_options.listen_ip,
-            port: plain_transport_options.port,
+            listen_info: plain_transport_options.listen_info.clone(),
+            rtcp_listen_info: plain_transport_options.rtcp_listen_info.clone(),
             rtcp_mux: plain_transport_options.rtcp_mux,
             comedia: plain_transport_options.comedia,
             enable_sctp: plain_transport_options.enable_sctp,
@@ -381,34 +937,112 @@ impl RouterCreatePlainTransportData {
             is_data_channel: false,
         }
     }
+
+    pub(crate) fn to_fbs(&self) -> plain_transport::PlainTransportOptions {
+        plain_transport::PlainTransportOptions {
+            base: Box::new(transport::Options {
+                direct: false,
+                max_message_size: None,
+                initial_available_outgoing_bitrate: None,
+                enable_sctp: self.enable_sctp,
+                num_sctp_streams: Some(Box::new(self.num_sctp_streams.to_fbs())),
+                max_sctp_message_size: self.max_sctp_message_size,
+                sctp_send_buffer_size: self.sctp_send_buffer_size,
+                is_data_channel: self.is_data_channel,
+            }),
+            listen_info: Box::new(self.listen_info.clone().to_fbs()),
+            rtcp_listen_info: self
+                .rtcp_listen_info
+                .clone()
+                .map(|listen_info| Box::new(listen_info.to_fbs())),
+            rtcp_mux: self.rtcp_mux,
+            comedia: self.comedia,
+            enable_srtp: self.enable_srtp,
+            srtp_crypto_suite: Some(SrtpCryptoSuite::to_fbs(self.srtp_crypto_suite)),
+        }
+    }
 }
 
-request_response!(
-    RouterId,
-    "router.createPlainTransport",
-    RouterCreatePlainTransportRequest {
-        #[serde(flatten)]
-        data: RouterCreatePlainTransportData,
-    },
-    PlainTransportData {
-        // The following fields are present, but unused
-        // rtcp_mux: bool,
-        // comedia: bool,
-        tuple: Mutex<TransportTuple>,
-        rtcp_tuple: Mutex<Option<TransportTuple>>,
-        sctp_parameters: Option<SctpParameters>,
-        sctp_state: Mutex<Option<SctpState>>,
-        srtp_parameters: Mutex<Option<SrtpParameters>>,
-    },
-);
+#[derive(Debug)]
+pub(crate) struct RouterCreatePlainTransportRequest {
+    pub(crate) data: RouterCreatePlainTransportData,
+}
+
+impl Request for RouterCreatePlainTransportRequest {
+    const METHOD: request::Method = request::Method::RouterCreatePlaintransport;
+    type HandlerId = RouterId;
+    type Response = PlainTransportData;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+        let data = router::CreatePlainTransportRequest::create(
+            &mut builder,
+            self.data.transport_id.to_string(),
+            self.data.to_fbs(),
+        );
+        let request_body =
+            request::Body::create_router_create_plain_transport_request(&mut builder, data);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        let Some(response::BodyRef::PlainTransportDumpResponse(data)) = response else {
+            panic!("Wrong message from worker: {response:?}");
+        };
+
+        let data = plain_transport::DumpResponse::try_from(data)?;
+
+        Ok(PlainTransportData {
+            tuple: Mutex::new(TransportTuple::from_fbs(data.tuple.as_ref())),
+            rtcp_tuple: Mutex::new(
+                data.rtcp_tuple
+                    .map(|tuple| TransportTuple::from_fbs(tuple.as_ref())),
+            ),
+            sctp_parameters: data
+                .base
+                .sctp_parameters
+                .map(|parameters| SctpParameters::from_fbs(parameters.as_ref())),
+            sctp_state: Mutex::new(
+                data.base
+                    .sctp_state
+                    .map(|state| SctpState::from_fbs(&state)),
+            ),
+            srtp_parameters: Mutex::new(
+                data.srtp_parameters
+                    .map(|parameters| SrtpParameters::from_fbs(parameters.as_ref())),
+            ),
+        })
+    }
+}
+
+pub(crate) struct PlainTransportData {
+    // The following fields are present, but unused
+    // rtcp_mux: bool,
+    // comedia: bool,
+    pub(crate) tuple: Mutex<TransportTuple>,
+    pub(crate) rtcp_tuple: Mutex<Option<TransportTuple>>,
+    pub(crate) sctp_parameters: Option<SctpParameters>,
+    pub(crate) sctp_state: Mutex<Option<SctpState>>,
+    pub(crate) srtp_parameters: Mutex<Option<SrtpParameters>>,
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RouterCreatePipeTransportData {
     transport_id: TransportId,
-    listen_ip: ListenIp,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    port: Option<u16>,
+    listen_info: ListenInfo,
     enable_sctp: bool,
     num_sctp_streams: NumSctpStreams,
     max_sctp_message_size: u32,
@@ -425,8 +1059,7 @@ impl RouterCreatePipeTransportData {
     ) -> Self {
         Self {
             transport_id,
-            listen_ip: pipe_transport_options.listen_ip,
-            port: pipe_transport_options.port,
+            listen_info: pipe_transport_options.listen_info.clone(),
             enable_sctp: pipe_transport_options.enable_sctp,
             num_sctp_streams: pipe_transport_options.num_sctp_streams,
             max_sctp_message_size: pipe_transport_options.max_sctp_message_size,
@@ -436,23 +1069,100 @@ impl RouterCreatePipeTransportData {
             is_data_channel: false,
         }
     }
+
+    pub(crate) fn to_fbs(&self) -> pipe_transport::PipeTransportOptions {
+        pipe_transport::PipeTransportOptions {
+            base: Box::new(transport::Options {
+                direct: false,
+                max_message_size: None,
+                initial_available_outgoing_bitrate: None,
+                enable_sctp: self.enable_sctp,
+                num_sctp_streams: Some(Box::new(self.num_sctp_streams.to_fbs())),
+                max_sctp_message_size: self.max_sctp_message_size,
+                sctp_send_buffer_size: self.sctp_send_buffer_size,
+                is_data_channel: self.is_data_channel,
+            }),
+            listen_info: Box::new(self.listen_info.clone().to_fbs()),
+            enable_rtx: self.enable_rtx,
+            enable_srtp: self.enable_srtp,
+        }
+    }
 }
 
-request_response!(
-    RouterId,
-    "router.createPipeTransport",
-    RouterCreatePipeTransportRequest {
-        #[serde(flatten)]
-        data: RouterCreatePipeTransportData,
-    },
-    PipeTransportData {
-        tuple: Mutex<TransportTuple>,
-        sctp_parameters: Option<SctpParameters>,
-        sctp_state: Mutex<Option<SctpState>>,
-        rtx: bool,
-        srtp_parameters: Mutex<Option<SrtpParameters>>,
-    },
-);
+#[derive(Debug)]
+pub(crate) struct RouterCreatePipeTransportRequest {
+    pub(crate) data: RouterCreatePipeTransportData,
+}
+
+impl Request for RouterCreatePipeTransportRequest {
+    const METHOD: request::Method = request::Method::RouterCreatePipetransport;
+    type HandlerId = RouterId;
+    type Response = PipeTransportData;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+        let data = router::CreatePipeTransportRequest::create(
+            &mut builder,
+            self.data.transport_id.to_string(),
+            self.data.to_fbs(),
+        );
+        let request_body =
+            request::Body::create_router_create_pipe_transport_request(&mut builder, data);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        let Some(response::BodyRef::PipeTransportDumpResponse(data)) = response else {
+            panic!("Wrong message from worker: {response:?}");
+        };
+
+        let data = pipe_transport::DumpResponse::try_from(data)?;
+
+        Ok(PipeTransportData {
+            tuple: Mutex::new(TransportTuple::from_fbs(data.tuple.as_ref())),
+            sctp_parameters: data
+                .base
+                .sctp_parameters
+                .map(|parameters| SctpParameters::from_fbs(parameters.as_ref())),
+            sctp_state: Mutex::new(
+                data.base
+                    .sctp_state
+                    .map(|state| SctpState::from_fbs(&state)),
+            ),
+            rtx: data.rtx,
+            srtp_parameters: Mutex::new(
+                data.srtp_parameters
+                    .map(|parameters| SrtpParameters::from_fbs(parameters.as_ref())),
+            ),
+        })
+    }
+}
+
+pub(crate) struct PipeTransportData {
+    pub(crate) tuple: Mutex<TransportTuple>,
+    pub(crate) sctp_parameters: Option<SctpParameters>,
+    pub(crate) sctp_state: Mutex<Option<SctpState>>,
+    pub(crate) rtx: bool,
+    pub(crate) srtp_parameters: Mutex<Option<SrtpParameters>>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RouterCreateAudioLevelObserverRequest {
+    pub(crate) data: RouterCreateAudioLevelObserverData,
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -477,14 +1187,53 @@ impl RouterCreateAudioLevelObserverData {
     }
 }
 
-request_response!(
-    RouterId,
-    "router.createAudioLevelObserver",
-    RouterCreateAudioLevelObserverRequest {
-        #[serde(flatten)]
-        data: RouterCreateAudioLevelObserverData,
-    },
-);
+impl Request for RouterCreateAudioLevelObserverRequest {
+    const METHOD: request::Method = request::Method::RouterCreateAudiolevelobserver;
+    type HandlerId = RouterId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let options = audio_level_observer::AudioLevelObserverOptions::create(
+            &mut builder,
+            u16::from(self.data.max_entries),
+            self.data.threshold,
+            self.data.interval,
+        );
+        let data = router::CreateAudioLevelObserverRequest::create(
+            &mut builder,
+            self.data.rtp_observer_id.to_string(),
+            options,
+        );
+        let request_body =
+            request::Body::create_router_create_audio_level_observer_request(&mut builder, data);
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RouterCreateActiveSpeakerObserverRequest {
+    pub(crate) data: RouterCreateActiveSpeakerObserverData,
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -505,405 +1254,1957 @@ impl RouterCreateActiveSpeakerObserverData {
     }
 }
 
-request_response!(
-    RouterId,
-    "router.createActiveSpeakerObserver",
-    RouterCreateActiveSpeakerObserverRequest {
-        #[serde(flatten)]
-        data: RouterCreateActiveSpeakerObserverData,
-    },
-);
+impl Request for RouterCreateActiveSpeakerObserverRequest {
+    const METHOD: request::Method = request::Method::RouterCreateActivespeakerobserver;
+    type HandlerId = RouterId;
+    type Response = ();
 
-request_response!(
-    RouterId,
-    "router.closeTransport",
-    TransportCloseRequest {
-        transport_id: TransportId,
-    },
-    (),
-    Some(()),
-);
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
 
-request_response!(
-    TransportId,
-    "transport.dump",
-    TransportDumpRequest {},
-    Value,
-);
+        let options = active_speaker_observer::ActiveSpeakerObserverOptions::create(
+            &mut builder,
+            self.data.interval,
+        );
+        let data = router::CreateActiveSpeakerObserverRequest::create(
+            &mut builder,
+            self.data.rtp_observer_id.to_string(),
+            options,
+        );
+        let request_body =
+            request::Body::create_router_create_active_speaker_observer_request(&mut builder, data);
 
-request_response!(
-    TransportId,
-    "transport.getStats",
-    TransportGetStatsRequest {},
-    Value,
-);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
 
-request_response!(
-    TransportId,
-    "transport.connect",
-    TransportConnectWebRtcRequest {
-        dtls_parameters: DtlsParameters,
-    },
-    TransportConnectResponseWebRtc {
-        dtls_local_role: DtlsRole,
-    },
-);
+        builder.finish(message, None).to_vec()
+    }
 
-request_response!(
-    TransportId,
-    "transport.connect",
-    TransportConnectPipeRequest {
-        ip: IpAddr,
-        port: u16,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        srtp_parameters: Option<SrtpParameters>,
-    },
-    TransportConnectResponsePipe {
-        tuple: TransportTuple,
-    },
-);
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
 
-request_response!(
-    TransportId,
-    "transport.connect",
-    TransportConnectPlainRequest {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        ip: Option<IpAddr>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        port: Option<u16>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        rtcp_port: Option<u16>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        srtp_parameters: Option<SrtpParameters>,
-    },
-    TransportConnectResponsePlain {
-        tuple: Option<TransportTuple>,
-        rtcp_tuple: Option<TransportTuple>,
-        srtp_parameters: Option<SrtpParameters>,
-    },
-);
+#[derive(Debug)]
+pub(crate) struct TransportDumpRequest {}
 
-request_response!(
-    TransportId,
-    "transport.setMaxIncomingBitrate",
-    TransportSetMaxIncomingBitrateRequest { bitrate: u32 },
-);
+impl Request for TransportDumpRequest {
+    const METHOD: request::Method = request::Method::TransportDump;
+    type HandlerId = TransportId;
+    type Response = response::Body;
 
-request_response!(
-    TransportId,
-    "transport.setMaxOutgoingBitrate",
-    TransportSetMaxOutgoingBitrateRequest { bitrate: u32 },
-);
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
 
-request_response!(
-    TransportId,
-    "transport.restartIce",
-    TransportRestartIceRequest {},
-    TransportRestartIceResponse {
-        ice_parameters: IceParameters,
-    },
-);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
 
-request_response!(
-    TransportId,
-    "transport.produce",
-    TransportProduceRequest {
-        producer_id: ProducerId,
-        kind: MediaKind,
-        rtp_parameters: RtpParameters,
-        rtp_mapping: RtpMapping,
-        key_frame_request_delay: u32,
-        paused: bool,
-    },
-    TransportProduceResponse {
-        r#type: ProducerType,
-    },
-);
+        builder.finish(message, None).to_vec()
+    }
 
-request_response!(
-    TransportId,
-    "transport.consume",
-    TransportConsumeRequest {
-        consumer_id: ConsumerId,
-        producer_id: ProducerId,
-        kind: MediaKind,
-        rtp_parameters: RtpParameters,
-        r#type: ConsumerType,
-        consumable_rtp_encodings: Vec<RtpEncodingParameters>,
-        paused: bool,
-        preferred_layers: Option<ConsumerLayers>,
-        ignore_dtx: bool,
-    },
-    TransportConsumeResponse {
-        paused: bool,
-        producer_paused: bool,
-        score: ConsumerScore,
-        preferred_layers: Option<ConsumerLayers>,
-    },
-);
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        match response {
+            Some(data) => Ok(data.try_into().unwrap()),
+            _ => {
+                panic!("Wrong message from worker: {response:?}");
+            }
+        }
+    }
+}
+#[derive(Debug)]
+pub(crate) struct TransportGetStatsRequest {}
 
-request_response!(
-    TransportId,
-    "transport.produceData",
-    TransportProduceDataRequest {
-        data_producer_id: DataProducerId,
-        r#type: DataProducerType,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        sctp_stream_parameters: Option<SctpStreamParameters>,
-        label: String,
-        protocol: String,
-    },
-    TransportProduceDataResponse {
-        r#type: DataProducerType,
-        sctp_stream_parameters: Option<SctpStreamParameters>,
-        label: String,
-        protocol: String,
-    },
-);
+impl Request for TransportGetStatsRequest {
+    const METHOD: request::Method = request::Method::TransportGetStats;
+    type HandlerId = TransportId;
+    type Response = response::Body;
 
-request_response!(
-    TransportId,
-    "transport.consumeData",
-    TransportConsumeDataRequest {
-        data_consumer_id: DataConsumerId,
-        data_producer_id: DataProducerId,
-        r#type: DataConsumerType,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        sctp_stream_parameters: Option<SctpStreamParameters>,
-        label: String,
-        protocol: String,
-    },
-    TransportConsumeDataResponse {
-        r#type: DataConsumerType,
-        sctp_stream_parameters: Option<SctpStreamParameters>,
-        label: String,
-        protocol: String,
-    },
-);
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
 
-request_response!(
-    TransportId,
-    "transport.enableTraceEvent",
-    TransportEnableTraceEventRequest {
-        types: Vec<TransportTraceEventType>,
-    },
-);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        match response {
+            Some(data) => Ok(data.try_into().unwrap()),
+            _ => {
+                panic!("Wrong message from worker: {response:?}");
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct TransportCloseRequest {
+    pub(crate) transport_id: TransportId,
+}
+
+impl Request for TransportCloseRequest {
+    const METHOD: request::Method = request::Method::RouterCloseTransport;
+    type HandlerId = RouterId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+        let data =
+            router::CloseTransportRequest::create(&mut builder, self.transport_id.to_string());
+        let request_body = request::Body::create_router_close_transport_request(&mut builder, data);
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct WebRtcTransportConnectResponse {
+    pub(crate) dtls_local_role: DtlsRole,
+}
+
+#[derive(Debug)]
+pub(crate) struct WebRtcTransportConnectRequest {
+    pub(crate) dtls_parameters: DtlsParameters,
+}
+
+impl Request for WebRtcTransportConnectRequest {
+    const METHOD: request::Method = request::Method::WebrtctransportConnect;
+    type HandlerId = TransportId;
+    type Response = WebRtcTransportConnectResponse;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+        let data =
+            web_rtc_transport::ConnectRequest::create(&mut builder, self.dtls_parameters.to_fbs());
+        let request_body =
+            request::Body::create_web_rtc_transport_connect_request(&mut builder, data);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        let Some(response::BodyRef::WebRtcTransportConnectResponse(data)) = response else {
+            panic!("Wrong message from worker: {response:?}");
+        };
+
+        let data = web_rtc_transport::ConnectResponse::try_from(data)?;
+
+        Ok(WebRtcTransportConnectResponse {
+            dtls_local_role: DtlsRole::from_fbs(data.dtls_local_role),
+        })
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct PipeTransportConnectResponse {
+    pub(crate) tuple: TransportTuple,
+}
+
+#[derive(Debug)]
+pub(crate) struct PipeTransportConnectRequest {
+    pub(crate) ip: IpAddr,
+    pub(crate) port: u16,
+    pub(crate) srtp_parameters: Option<SrtpParameters>,
+}
+
+impl Request for PipeTransportConnectRequest {
+    const METHOD: request::Method = request::Method::PipetransportConnect;
+    type HandlerId = TransportId;
+    type Response = PipeTransportConnectResponse;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+        let data = pipe_transport::ConnectRequest::create(
+            &mut builder,
+            self.ip.to_string(),
+            self.port,
+            self.srtp_parameters.map(|parameters| parameters.to_fbs()),
+        );
+        let request_body = request::Body::create_pipe_transport_connect_request(&mut builder, data);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        let Some(response::BodyRef::PipeTransportConnectResponse(data)) = response else {
+            panic!("Wrong message from worker: {response:?}");
+        };
+
+        let data = pipe_transport::ConnectResponse::try_from(data)?;
+
+        Ok(PipeTransportConnectResponse {
+            tuple: TransportTuple::from_fbs(data.tuple.as_ref()),
+        })
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct PlainTransportConnectResponse {
+    pub(crate) tuple: TransportTuple,
+    pub(crate) rtcp_tuple: Option<TransportTuple>,
+    pub(crate) srtp_parameters: Option<SrtpParameters>,
+}
+
+#[derive(Debug)]
+pub(crate) struct TransportConnectPlainRequest {
+    pub(crate) ip: Option<IpAddr>,
+    pub(crate) port: Option<u16>,
+    pub(crate) rtcp_port: Option<u16>,
+    pub(crate) srtp_parameters: Option<SrtpParameters>,
+}
+
+impl Request for TransportConnectPlainRequest {
+    const METHOD: request::Method = request::Method::PlaintransportConnect;
+    type HandlerId = TransportId;
+    type Response = PlainTransportConnectResponse;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+        let data = plain_transport::ConnectRequest::create(
+            &mut builder,
+            self.ip.map(|ip| ip.to_string()),
+            self.port,
+            self.rtcp_port,
+            self.srtp_parameters.map(|parameters| parameters.to_fbs()),
+        );
+        let request_body =
+            request::Body::create_plain_transport_connect_request(&mut builder, data);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        let Some(response::BodyRef::PlainTransportConnectResponse(data)) = response else {
+            panic!("Wrong message from worker: {response:?}");
+        };
+
+        let data = plain_transport::ConnectResponse::try_from(data)?;
+
+        Ok(PlainTransportConnectResponse {
+            tuple: TransportTuple::from_fbs(data.tuple.as_ref()),
+            rtcp_tuple: data
+                .rtcp_tuple
+                .map(|tuple| TransportTuple::from_fbs(tuple.as_ref())),
+            srtp_parameters: data
+                .srtp_parameters
+                .map(|parameters| SrtpParameters::from_fbs(parameters.as_ref())),
+        })
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct TransportSetMaxIncomingBitrateRequest {
+    pub(crate) bitrate: u32,
+}
+
+impl Request for TransportSetMaxIncomingBitrateRequest {
+    const METHOD: request::Method = request::Method::TransportSetMaxIncomingBitrate;
+    type HandlerId = TransportId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let data = transport::SetMaxIncomingBitrateRequest::create(&mut builder, self.bitrate);
+        let request_body =
+            request::Body::create_transport_set_max_incoming_bitrate_request(&mut builder, data);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct TransportSetMaxOutgoingBitrateRequest {
+    pub(crate) bitrate: u32,
+}
+
+impl Request for TransportSetMaxOutgoingBitrateRequest {
+    const METHOD: request::Method = request::Method::TransportSetMaxOutgoingBitrate;
+    type HandlerId = TransportId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let data = transport::SetMaxOutgoingBitrateRequest::create(&mut builder, self.bitrate);
+        let request_body =
+            request::Body::create_transport_set_max_outgoing_bitrate_request(&mut builder, data);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct TransportSetMinOutgoingBitrateRequest {
+    pub(crate) bitrate: u32,
+}
+
+impl Request for TransportSetMinOutgoingBitrateRequest {
+    const METHOD: request::Method = request::Method::TransportSetMinOutgoingBitrate;
+    type HandlerId = TransportId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let data = transport::SetMinOutgoingBitrateRequest::create(&mut builder, self.bitrate);
+        let request_body =
+            request::Body::create_transport_set_min_outgoing_bitrate_request(&mut builder, data);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct TransportRestartIceRequest {}
+
+impl Request for TransportRestartIceRequest {
+    const METHOD: request::Method = request::Method::TransportRestartIce;
+    type HandlerId = TransportId;
+    type Response = IceParameters;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        let Some(response::BodyRef::TransportRestartIceResponse(data)) = response else {
+            panic!("Wrong message from worker: {response:?}");
+        };
+
+        let data = transport::RestartIceResponse::try_from(data)?;
+
+        Ok(IceParameters::from_fbs(web_rtc_transport::IceParameters {
+            username_fragment: data.username_fragment,
+            password: data.password,
+            ice_lite: data.ice_lite,
+        }))
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct TransportProduceRequest {
+    pub(crate) producer_id: ProducerId,
+    pub(crate) kind: MediaKind,
+    pub(crate) rtp_parameters: RtpParameters,
+    pub(crate) rtp_mapping: RtpMapping,
+    pub(crate) key_frame_request_delay: u32,
+    pub(crate) paused: bool,
+}
+
+#[derive(Debug)]
+pub(crate) struct TransportProduceResponse {
+    pub(crate) r#type: ProducerType,
+}
+
+impl Request for TransportProduceRequest {
+    const METHOD: request::Method = request::Method::TransportProduce;
+    type HandlerId = TransportId;
+    type Response = TransportProduceResponse;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+        let data = transport::ProduceRequest::create(
+            &mut builder,
+            self.producer_id.to_string(),
+            self.kind.to_fbs(),
+            Box::new(self.rtp_parameters.into_fbs()),
+            Box::new(self.rtp_mapping.to_fbs()),
+            self.key_frame_request_delay,
+            self.paused,
+        );
+        let request_body = request::Body::create_transport_produce_request(&mut builder, data);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        let Some(response::BodyRef::TransportProduceResponse(data)) = response else {
+            panic!("Wrong message from worker: {response:?}");
+        };
+
+        let data = transport::ProduceResponse::try_from(data)?;
+
+        Ok(TransportProduceResponse {
+            r#type: ProducerType::from_fbs(data.type_),
+        })
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct TransportConsumeRequest {
+    pub(crate) consumer_id: ConsumerId,
+    pub(crate) producer_id: ProducerId,
+    pub(crate) kind: MediaKind,
+    pub(crate) rtp_parameters: RtpParameters,
+    pub(crate) r#type: ConsumerType,
+    pub(crate) consumable_rtp_encodings: Vec<RtpEncodingParameters>,
+    pub(crate) paused: bool,
+    pub(crate) preferred_layers: Option<ConsumerLayers>,
+    pub(crate) ignore_dtx: bool,
+}
+
+#[derive(Debug)]
+pub(crate) struct TransportConsumeResponse {
+    pub(crate) paused: bool,
+    pub(crate) producer_paused: bool,
+    pub(crate) score: ConsumerScore,
+    pub(crate) preferred_layers: Option<ConsumerLayers>,
+}
+
+impl Request for TransportConsumeRequest {
+    const METHOD: request::Method = request::Method::TransportConsume;
+    type HandlerId = TransportId;
+    type Response = TransportConsumeResponse;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+        let data = transport::ConsumeRequest::create(
+            &mut builder,
+            self.consumer_id.to_string(),
+            self.producer_id.to_string(),
+            self.kind.to_fbs(),
+            Box::new(self.rtp_parameters.into_fbs()),
+            self.r#type.to_fbs(),
+            self.consumable_rtp_encodings
+                .iter()
+                .map(RtpEncodingParameters::to_fbs)
+                .collect::<Vec<_>>(),
+            self.paused,
+            self.preferred_layers.map(ConsumerLayers::to_fbs),
+            self.ignore_dtx,
+        );
+        let request_body = request::Body::create_transport_consume_request(&mut builder, data);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        let Some(response::BodyRef::TransportConsumeResponse(data)) = response else {
+            panic!("Wrong message from worker: {response:?}");
+        };
+
+        let data = transport::ConsumeResponse::try_from(data)?;
+
+        Ok(TransportConsumeResponse {
+            paused: data.paused,
+            producer_paused: data.producer_paused,
+            score: ConsumerScore::from_fbs(*data.score),
+            preferred_layers: data
+                .preferred_layers
+                .map(|preferred_layers| ConsumerLayers::from_fbs(*preferred_layers)),
+        })
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct TransportProduceDataRequest {
+    pub(crate) data_producer_id: DataProducerId,
+    pub(crate) r#type: DataProducerType,
+    // #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) sctp_stream_parameters: Option<SctpStreamParameters>,
+    pub(crate) label: String,
+    pub(crate) protocol: String,
+    pub(crate) paused: bool,
+}
+
+#[derive(Debug)]
+pub(crate) struct TransportProduceDataResponse {
+    pub(crate) r#type: DataProducerType,
+    pub(crate) sctp_stream_parameters: Option<SctpStreamParameters>,
+    pub(crate) label: String,
+    pub(crate) protocol: String,
+    pub(crate) paused: bool,
+}
+
+impl Request for TransportProduceDataRequest {
+    const METHOD: request::Method = request::Method::TransportProduceData;
+    type HandlerId = TransportId;
+    type Response = TransportProduceDataResponse;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+        let data = transport::ProduceDataRequest::create(
+            &mut builder,
+            self.data_producer_id.to_string(),
+            match self.r#type {
+                DataProducerType::Sctp => data_producer::Type::Sctp,
+                DataProducerType::Direct => data_producer::Type::Direct,
+            },
+            self.sctp_stream_parameters
+                .map(SctpStreamParameters::to_fbs),
+            if self.label.is_empty() {
+                None
+            } else {
+                Some(self.label)
+            },
+            if self.protocol.is_empty() {
+                None
+            } else {
+                Some(self.protocol)
+            },
+            self.paused,
+        );
+        let request_body = request::Body::create_transport_produce_data_request(&mut builder, data);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        let Some(response::BodyRef::DataProducerDumpResponse(data)) = response else {
+            panic!("Wrong message from worker: {response:?}");
+        };
+
+        let data = data_producer::DumpResponse::try_from(data)?;
+
+        Ok(TransportProduceDataResponse {
+            r#type: match data.type_ {
+                data_producer::Type::Sctp => DataProducerType::Sctp,
+                data_producer::Type::Direct => DataProducerType::Direct,
+            },
+            sctp_stream_parameters: data
+                .sctp_stream_parameters
+                .map(|stream_parameters| SctpStreamParameters::from_fbs(*stream_parameters)),
+            label: data.label.to_string(),
+            protocol: data.protocol.to_string(),
+            paused: data.paused,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct TransportConsumeDataRequest {
+    pub(crate) data_consumer_id: DataConsumerId,
+    pub(crate) data_producer_id: DataProducerId,
+    pub(crate) r#type: DataConsumerType,
+    pub(crate) sctp_stream_parameters: Option<SctpStreamParameters>,
+    pub(crate) label: String,
+    pub(crate) protocol: String,
+    pub(crate) paused: bool,
+    pub(crate) subchannels: Option<Vec<u16>>,
+}
+
+#[derive(Debug)]
+pub(crate) struct TransportConsumeDataResponse {
+    pub(crate) r#type: DataConsumerType,
+    pub(crate) sctp_stream_parameters: Option<SctpStreamParameters>,
+    pub(crate) label: String,
+    pub(crate) protocol: String,
+    pub(crate) paused: bool,
+    pub(crate) data_producer_paused: bool,
+    pub(crate) subchannels: Vec<u16>,
+}
+
+impl Request for TransportConsumeDataRequest {
+    const METHOD: request::Method = request::Method::TransportConsumeData;
+    type HandlerId = TransportId;
+    type Response = TransportConsumeDataResponse;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+        let data = transport::ConsumeDataRequest::create(
+            &mut builder,
+            self.data_consumer_id.to_string(),
+            self.data_producer_id.to_string(),
+            match self.r#type {
+                DataConsumerType::Sctp => data_producer::Type::Sctp,
+                DataConsumerType::Direct => data_producer::Type::Direct,
+            },
+            self.sctp_stream_parameters
+                .map(SctpStreamParameters::to_fbs),
+            if self.label.is_empty() {
+                None
+            } else {
+                Some(self.label)
+            },
+            if self.protocol.is_empty() {
+                None
+            } else {
+                Some(self.protocol)
+            },
+            self.paused,
+            self.subchannels,
+        );
+        let request_body = request::Body::create_transport_consume_data_request(&mut builder, data);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        let Some(response::BodyRef::DataConsumerDumpResponse(data)) = response else {
+            panic!("Wrong message from worker: {response:?}");
+        };
+
+        let data = data_consumer::DumpResponse::try_from(data)?;
+
+        Ok(TransportConsumeDataResponse {
+            r#type: match data.type_ {
+                data_producer::Type::Sctp => DataConsumerType::Sctp,
+                data_producer::Type::Direct => DataConsumerType::Direct,
+            },
+            sctp_stream_parameters: data
+                .sctp_stream_parameters
+                .map(|stream_parameters| SctpStreamParameters::from_fbs(*stream_parameters)),
+            label: data.label.to_string(),
+            protocol: data.protocol.to_string(),
+            paused: data.paused,
+            data_producer_paused: data.data_producer_paused,
+            subchannels: data.subchannels,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct TransportEnableTraceEventRequest {
+    pub(crate) types: Vec<TransportTraceEventType>,
+}
+
+impl Request for TransportEnableTraceEventRequest {
+    const METHOD: request::Method = request::Method::TransportEnableTraceEvent;
+    type HandlerId = TransportId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let data = transport::EnableTraceEventRequest {
+            events: self
+                .types
+                .into_iter()
+                .map(TransportTraceEventType::to_fbs)
+                .collect(),
+        };
+
+        let request_body = request::Body::TransportEnableTraceEventRequest(Box::new(data));
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+
+    fn default_for_soft_error() -> Option<Self::Response> {
+        None
+    }
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct TransportSendRtcpNotification {}
+pub(crate) struct TransportSendRtcpNotification {
+    pub(crate) rtcp_packet: Vec<u8>,
+}
 
 impl Notification for TransportSendRtcpNotification {
+    const EVENT: notification::Event = notification::Event::TransportSendRtcp;
     type HandlerId = TransportId;
 
-    fn as_event(&self) -> &'static str {
-        "transport.sendRtcp"
+    fn into_bytes(self, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let data = transport::SendRtcpNotification::create(&mut builder, self.rtcp_packet);
+        let notification_body =
+            notification::Body::create_transport_send_rtcp_notification(&mut builder, data);
+
+        let notification = notification::Notification::create(
+            &mut builder,
+            handler_id.to_string(),
+            Self::EVENT,
+            Some(notification_body),
+        );
+        let message_body = message::Body::create_notification(&mut builder, notification);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
     }
 }
 
-request_response!(
-    TransportId,
-    "transport.closeProducer",
-    ProducerCloseRequest {
-        producer_id: ProducerId,
-    },
-    (),
-    Some(()),
-);
+#[derive(Debug)]
+pub(crate) struct ProducerCloseRequest {
+    pub(crate) producer_id: ProducerId,
+}
 
-request_response!(
-    ProducerId,
-    "producer.dump",
-    ProducerDumpRequest {},
-    ProducerDump
-);
+impl Request for ProducerCloseRequest {
+    const METHOD: request::Method = request::Method::TransportCloseProducer;
+    type HandlerId = TransportId;
+    type Response = ();
 
-request_response!(
-    ProducerId,
-    "producer.getStats",
-    ProducerGetStatsRequest {},
-    Vec<ProducerStat>,
-);
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+        let data =
+            transport::CloseProducerRequest::create(&mut builder, self.producer_id.to_string());
+        let request_body =
+            request::Body::create_transport_close_producer_request(&mut builder, data);
 
-request_response!(ProducerId, "producer.pause", ProducerPauseRequest {});
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
 
-request_response!(ProducerId, "producer.resume", ProducerResumeRequest {});
+        builder.finish(message, None).to_vec()
+    }
 
-request_response!(
-    ProducerId,
-    "producer.enableTraceEvent",
-    ProducerEnableTraceEventRequest {
-        types: Vec<ProducerTraceEventType>,
-    },
-);
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct ProducerDumpRequest {}
+
+impl Request for ProducerDumpRequest {
+    const METHOD: request::Method = request::Method::ProducerDump;
+    type HandlerId = ProducerId;
+    type Response = ProducerDump;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        let Some(response::BodyRef::ProducerDumpResponse(data)) = response else {
+            panic!("Wrong message from worker: {response:?}");
+        };
+
+        ProducerDump::from_fbs_ref(data)
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct ProducerGetStatsRequest {}
+
+impl Request for ProducerGetStatsRequest {
+    const METHOD: request::Method = request::Method::ProducerGetStats;
+    type HandlerId = ProducerId;
+    type Response = response::Body;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        match response {
+            Some(data) => Ok(data.try_into().unwrap()),
+            _ => {
+                panic!("Wrong message from worker: {response:?}");
+            }
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct ProducerPauseRequest {}
+
+impl Request for ProducerPauseRequest {
+    const METHOD: request::Method = request::Method::ProducerPause;
+    type HandlerId = ProducerId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct ProducerResumeRequest {}
+
+impl Request for ProducerResumeRequest {
+    const METHOD: request::Method = request::Method::ProducerResume;
+    type HandlerId = ProducerId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct ProducerEnableTraceEventRequest {
+    pub(crate) types: Vec<ProducerTraceEventType>,
+}
+
+impl Request for ProducerEnableTraceEventRequest {
+    const METHOD: request::Method = request::Method::ProducerEnableTraceEvent;
+    type HandlerId = ProducerId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let data = producer::EnableTraceEventRequest {
+            events: self
+                .types
+                .into_iter()
+                .map(ProducerTraceEventType::to_fbs)
+                .collect(),
+        };
+
+        let request_body = request::Body::ProducerEnableTraceEventRequest(Box::new(data));
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+
+    fn default_for_soft_error() -> Option<Self::Response> {
+        None
+    }
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct ProducerSendNotification {}
+pub(crate) struct ProducerSendNotification {
+    pub(crate) rtp_packet: Vec<u8>,
+}
 
 impl Notification for ProducerSendNotification {
+    const EVENT: notification::Event = notification::Event::ProducerSend;
     type HandlerId = ProducerId;
 
-    fn as_event(&self) -> &'static str {
-        "producer.send"
+    fn into_bytes(self, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let data = producer::SendNotification::create(&mut builder, self.rtp_packet);
+        let notification_body =
+            notification::Body::create_producer_send_notification(&mut builder, data);
+
+        let notification = notification::Notification::create(
+            &mut builder,
+            handler_id.to_string(),
+            Self::EVENT,
+            Some(notification_body),
+        );
+        let message_body = message::Body::create_notification(&mut builder, notification);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
     }
 }
 
-request_response!(
-    TransportId,
-    "transport.closeConsumer",
-    ConsumerCloseRequest {
-        consumer_id: ConsumerId,
-    },
-    (),
-    Some(()),
-);
+#[derive(Debug)]
+pub(crate) struct ConsumerCloseRequest {
+    pub(crate) consumer_id: ConsumerId,
+}
 
-request_response!(
-    ConsumerId,
-    "consumer.dump",
-    ConsumerDumpRequest {},
-    ConsumerDump,
-);
+impl Request for ConsumerCloseRequest {
+    const METHOD: request::Method = request::Method::TransportCloseConsumer;
+    type HandlerId = TransportId;
+    type Response = ();
 
-request_response!(
-    ConsumerId,
-    "consumer.getStats",
-    ConsumerGetStatsRequest {},
-    ConsumerStats,
-);
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+        let data =
+            transport::CloseConsumerRequest::create(&mut builder, self.consumer_id.to_string());
+        let request_body =
+            request::Body::create_transport_close_consumer_request(&mut builder, data);
 
-request_response!(ConsumerId, "consumer.pause", ConsumerPauseRequest {},);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
 
-request_response!(ConsumerId, "consumer.resume", ConsumerResumeRequest {},);
+        builder.finish(message, None).to_vec()
+    }
 
-request_response!(
-    ConsumerId,
-    "consumer.setPreferredLayers",
-    ConsumerSetPreferredLayersRequest {
-        #[serde(flatten)]
-        data: ConsumerLayers,
-    },
-    Option<ConsumerLayers>,
-);
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
 
-request_response!(
-    ConsumerId,
-    "consumer.setPriority",
-    ConsumerSetPriorityRequest { priority: u8 },
-    ConsumerSetPriorityResponse { priority: u8 },
-);
+#[derive(Debug)]
+pub(crate) struct ConsumerDumpRequest {}
 
-request_response!(
-    ConsumerId,
-    "consumer.requestKeyFrame",
-    ConsumerRequestKeyFrameRequest {},
-);
+impl Request for ConsumerDumpRequest {
+    const METHOD: request::Method = request::Method::ConsumerDump;
+    type HandlerId = ConsumerId;
+    type Response = ConsumerDump;
 
-request_response!(
-    ConsumerId,
-    "consumer.enableTraceEvent",
-    ConsumerEnableTraceEventRequest {
-        types: Vec<ConsumerTraceEventType>,
-    },
-);
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
 
-request_response!(
-    TransportId,
-    "transport.closeDataProducer",
-    DataProducerCloseRequest {
-        data_producer_id: DataProducerId,
-    },
-    (),
-    Some(()),
-);
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
 
-request_response!(
-    DataProducerId,
-    "dataProducer.dump",
-    DataProducerDumpRequest {},
-    DataProducerDump,
-);
+        builder.finish(message, None).to_vec()
+    }
 
-request_response!(
-    DataProducerId,
-    "dataProducer.getStats",
-    DataProducerGetStatsRequest {},
-    Vec<DataProducerStat>,
-);
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        let Some(response::BodyRef::ConsumerDumpResponse(data)) = response else {
+            panic!("Wrong message from worker: {response:?}");
+        };
 
-#[derive(Debug, Copy, Clone, Serialize)]
-#[serde(into = "u32")]
+        ConsumerDump::from_fbs_ref(data)
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct ConsumerGetStatsRequest {}
+
+impl Request for ConsumerGetStatsRequest {
+    const METHOD: request::Method = request::Method::ConsumerGetStats;
+    type HandlerId = ConsumerId;
+    type Response = response::Body;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        match response {
+            Some(data) => Ok(data.try_into().unwrap()),
+            _ => {
+                panic!("Wrong message from worker: {response:?}");
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct ConsumerPauseRequest {}
+
+impl Request for ConsumerPauseRequest {
+    const METHOD: request::Method = request::Method::ConsumerPause;
+    type HandlerId = ConsumerId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct ConsumerResumeRequest {}
+
+impl Request for ConsumerResumeRequest {
+    const METHOD: request::Method = request::Method::ConsumerResume;
+    type HandlerId = ConsumerId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct ConsumerSetPreferredLayersRequest {
+    pub(crate) data: ConsumerLayers,
+}
+
+impl Request for ConsumerSetPreferredLayersRequest {
+    const METHOD: request::Method = request::Method::ConsumerSetPreferredLayers;
+    type HandlerId = ConsumerId;
+    type Response = Option<ConsumerLayers>;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let data = consumer::SetPreferredLayersRequest::create(
+            &mut builder,
+            ConsumerLayers::to_fbs(self.data),
+        );
+        let request_body =
+            request::Body::create_consumer_set_preferred_layers_request(&mut builder, data);
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        let Some(response::BodyRef::ConsumerSetPreferredLayersResponse(data)) = response else {
+            panic!("Wrong message from worker: {response:?}");
+        };
+
+        let data = consumer::SetPreferredLayersResponse::try_from(data)?;
+
+        match data.preferred_layers {
+            Some(preferred_layers) => Ok(Some(ConsumerLayers::from_fbs(*preferred_layers))),
+            None => Ok(None),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct ConsumerSetPriorityRequest {
+    pub(crate) priority: u8,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct ConsumerSetPriorityResponse {
+    pub(crate) priority: u8,
+}
+
+impl Request for ConsumerSetPriorityRequest {
+    const METHOD: request::Method = request::Method::ConsumerSetPriority;
+    type HandlerId = ConsumerId;
+    type Response = ConsumerSetPriorityResponse;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let data = consumer::SetPriorityRequest::create(&mut builder, self.priority);
+        let request_body = request::Body::create_consumer_set_priority_request(&mut builder, data);
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        let Some(response::BodyRef::ConsumerSetPriorityResponse(data)) = response else {
+            panic!("Wrong message from worker: {response:?}");
+        };
+
+        let data = consumer::SetPriorityResponse::try_from(data)?;
+
+        Ok(ConsumerSetPriorityResponse {
+            priority: data.priority,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct ConsumerRequestKeyFrameRequest {}
+
+impl Request for ConsumerRequestKeyFrameRequest {
+    const METHOD: request::Method = request::Method::ConsumerRequestKeyFrame;
+    type HandlerId = ConsumerId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct ConsumerEnableTraceEventRequest {
+    pub(crate) types: Vec<ConsumerTraceEventType>,
+}
+
+impl Request for ConsumerEnableTraceEventRequest {
+    const METHOD: request::Method = request::Method::ConsumerEnableTraceEvent;
+    type HandlerId = ConsumerId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let data = consumer::EnableTraceEventRequest {
+            events: self
+                .types
+                .into_iter()
+                .map(ConsumerTraceEventType::to_fbs)
+                .collect(),
+        };
+
+        let request_body = request::Body::ConsumerEnableTraceEventRequest(Box::new(data));
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+
+    fn default_for_soft_error() -> Option<Self::Response> {
+        None
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct DataProducerCloseRequest {
+    pub(crate) data_producer_id: DataProducerId,
+}
+
+impl Request for DataProducerCloseRequest {
+    const METHOD: request::Method = request::Method::TransportCloseDataproducer;
+    type HandlerId = TransportId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+        let data = transport::CloseDataProducerRequest::create(
+            &mut builder,
+            self.data_producer_id.to_string(),
+        );
+        let request_body =
+            request::Body::create_transport_close_data_producer_request(&mut builder, data);
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct DataProducerDumpRequest {}
+
+impl Request for DataProducerDumpRequest {
+    const METHOD: request::Method = request::Method::DataproducerDump;
+    type HandlerId = DataProducerId;
+    type Response = response::Body;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        match response {
+            Some(data) => Ok(data.try_into().unwrap()),
+            _ => {
+                panic!("Wrong message from worker: {response:?}");
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct DataProducerGetStatsRequest {}
+
+impl Request for DataProducerGetStatsRequest {
+    const METHOD: request::Method = request::Method::DataproducerGetStats;
+    type HandlerId = DataProducerId;
+    type Response = response::Body;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        match response {
+            Some(data) => Ok(data.try_into().unwrap()),
+            _ => {
+                panic!("Wrong message from worker: {response:?}");
+            }
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct DataProducerPauseRequest {}
+
+impl Request for DataProducerPauseRequest {
+    const METHOD: request::Method = request::Method::DataproducerPause;
+    type HandlerId = DataProducerId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct DataProducerResumeRequest {}
+
+impl Request for DataProducerResumeRequest {
+    const METHOD: request::Method = request::Method::DataproducerResume;
+    type HandlerId = DataProducerId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
 pub(crate) struct DataProducerSendNotification {
-    #[serde(flatten)]
     pub(crate) ppid: u32,
-}
-
-impl From<DataProducerSendNotification> for u32 {
-    fn from(notification: DataProducerSendNotification) -> Self {
-        notification.ppid
-    }
+    pub(crate) payload: Vec<u8>,
+    pub(crate) subchannels: Option<Vec<u16>>,
+    pub(crate) required_subchannel: Option<u16>,
 }
 
 impl Notification for DataProducerSendNotification {
+    const EVENT: notification::Event = notification::Event::DataproducerSend;
     type HandlerId = DataProducerId;
 
-    fn as_event(&self) -> &'static str {
-        "dataProducer.send"
+    fn into_bytes(self, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let data = data_producer::SendNotification::create(
+            &mut builder,
+            self.ppid,
+            self.payload,
+            self.subchannels,
+            self.required_subchannel,
+        );
+        let notification_body =
+            notification::Body::create_data_producer_send_notification(&mut builder, data);
+
+        let notification = notification::Notification::create(
+            &mut builder,
+            handler_id.to_string(),
+            Self::EVENT,
+            Some(notification_body),
+        );
+        let message_body = message::Body::create_notification(&mut builder, notification);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
     }
 }
 
-request_response!(
-    TransportId,
-    "transport.closeDataConsumer",
-    DataConsumerCloseRequest {
-        data_consumer_id: DataConsumerId,
-    },
-    (),
-    Some(()),
-);
-
-request_response!(
-    DataConsumerId,
-    "dataConsumer.dump",
-    DataConsumerDumpRequest {},
-    DataConsumerDump,
-);
-
-request_response!(
-    DataConsumerId,
-    "dataConsumer.getStats",
-    DataConsumerGetStatsRequest {},
-    Vec<DataConsumerStat>,
-);
-
-request_response!(
-    DataConsumerId,
-    "dataConsumer.getBufferedAmount",
-    DataConsumerGetBufferedAmountRequest {},
-    DataConsumerGetBufferedAmountResponse {
-        buffered_amount: u32,
-    },
-);
-
-request_response!(
-    DataConsumerId,
-    "dataConsumer.setBufferedAmountLowThreshold",
-    DataConsumerSetBufferedAmountLowThresholdRequest { threshold: u32 },
-);
-
-#[derive(Debug, Copy, Clone, Serialize)]
-#[serde(into = "u32")]
-pub(crate) struct DataConsumerSendRequest {
-    pub(crate) ppid: u32,
+#[derive(Debug)]
+pub(crate) struct DataConsumerCloseRequest {
+    pub(crate) data_consumer_id: DataConsumerId,
 }
 
-impl Request for DataConsumerSendRequest {
+impl Request for DataConsumerCloseRequest {
+    const METHOD: request::Method = request::Method::TransportCloseDataconsumer;
+    type HandlerId = TransportId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+        let data = transport::CloseDataConsumerRequest::create(
+            &mut builder,
+            self.data_consumer_id.to_string(),
+        );
+        let request_body =
+            request::Body::create_transport_close_data_consumer_request(&mut builder, data);
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct DataConsumerDumpRequest {}
+
+impl Request for DataConsumerDumpRequest {
+    const METHOD: request::Method = request::Method::DataconsumerDump;
+    type HandlerId = DataConsumerId;
+    type Response = response::Body;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        match response {
+            Some(data) => Ok(data.try_into().unwrap()),
+            _ => {
+                panic!("Wrong message from worker: {response:?}");
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct DataConsumerGetStatsRequest {}
+
+impl Request for DataConsumerGetStatsRequest {
+    const METHOD: request::Method = request::Method::DataconsumerGetStats;
+    type HandlerId = DataConsumerId;
+    type Response = response::Body;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        match response {
+            Some(data) => Ok(data.try_into().unwrap()),
+            _ => {
+                panic!("Wrong message from worker: {response:?}");
+            }
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct DataConsumerPauseRequest {}
+
+impl Request for DataConsumerPauseRequest {
+    const METHOD: request::Method = request::Method::DataconsumerPause;
     type HandlerId = DataConsumerId;
     type Response = ();
 
-    fn as_method(&self) -> &'static str {
-        "dataConsumer.send"
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct DataConsumerResumeRequest {}
+
+impl Request for DataConsumerResumeRequest {
+    const METHOD: request::Method = request::Method::DataconsumerResume;
+    type HandlerId = DataConsumerId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct DataConsumerGetBufferedAmountRequest {}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct DataConsumerGetBufferedAmountResponse {
+    pub(crate) buffered_amount: u32,
+}
+
+impl Request for DataConsumerGetBufferedAmountRequest {
+    const METHOD: request::Method = request::Method::DataconsumerGetBufferedAmount;
+    type HandlerId = DataConsumerId;
+    type Response = DataConsumerGetBufferedAmountResponse;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        let Some(response::BodyRef::DataConsumerGetBufferedAmountResponse(data)) = response else {
+            panic!("Wrong message from worker: {response:?}");
+        };
+
+        let data = data_consumer::GetBufferedAmountResponse::try_from(data)?;
+
+        Ok(DataConsumerGetBufferedAmountResponse {
+            buffered_amount: data.buffered_amount,
+        })
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct DataConsumerSetBufferedAmountLowThresholdRequest {
+    pub(crate) threshold: u32,
+}
+
+impl Request for DataConsumerSetBufferedAmountLowThresholdRequest {
+    const METHOD: request::Method = request::Method::DataconsumerSetBufferedAmountLowThreshold;
+    type HandlerId = DataConsumerId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let data = data_consumer::SetBufferedAmountLowThresholdRequest::create(
+            &mut builder,
+            self.threshold,
+        );
+        let request_body =
+            request::Body::create_data_consumer_set_buffered_amount_low_threshold_request(
+                &mut builder,
+                data,
+            );
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(into = "u32")]
+pub(crate) struct DataConsumerSendRequest {
+    pub(crate) ppid: u32,
+    pub(crate) payload: Vec<u8>,
+}
+
+impl Request for DataConsumerSendRequest {
+    const METHOD: request::Method = request::Method::DataconsumerSend;
+    type HandlerId = DataConsumerId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let data = data_consumer::SendRequest::create(&mut builder, self.ppid, self.payload);
+        let request_body = request::Body::create_data_consumer_send_request(&mut builder, data);
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
     }
 }
 
@@ -913,40 +3214,327 @@ impl From<DataConsumerSendRequest> for u32 {
     }
 }
 
-request_response!(
-    RouterId,
-    "router.closeRtpObserver",
-    RtpObserverCloseRequest {
-        rtp_observer_id: RtpObserverId,
-    },
-    (),
-    Some(()),
-);
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct DataConsumerSetSubchannelsRequest {
+    pub(crate) subchannels: Vec<u16>,
+}
 
-request_response!(
-    RtpObserverId,
-    "rtpObserver.pause",
-    RtpObserverPauseRequest {},
-);
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct DataConsumerSetSubchannelsResponse {
+    pub(crate) subchannels: Vec<u16>,
+}
 
-request_response!(
-    RtpObserverId,
-    "rtpObserver.resume",
-    RtpObserverResumeRequest {},
-);
+impl Request for DataConsumerSetSubchannelsRequest {
+    const METHOD: request::Method = request::Method::DataconsumerSetSubchannels;
+    type HandlerId = DataConsumerId;
+    type Response = DataConsumerSetSubchannelsResponse;
 
-request_response!(
-    RtpObserverId,
-    "rtpObserver.addProducer",
-    RtpObserverAddProducerRequest {
-        producer_id: ProducerId,
-    },
-);
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
 
-request_response!(
-    RtpObserverId,
-    "rtpObserver.removeProducer",
-    RtpObserverRemoveProducerRequest {
-        producer_id: ProducerId,
-    },
-);
+        let data = data_consumer::SetSubchannelsRequest::create(&mut builder, self.subchannels);
+        let request_body =
+            request::Body::create_data_consumer_set_subchannels_request(&mut builder, data);
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        let Some(response::BodyRef::DataConsumerSetSubchannelsResponse(data)) = response else {
+            panic!("Wrong message from worker: {response:?}");
+        };
+
+        let data = data_consumer::SetSubchannelsResponse::try_from(data)?;
+
+        Ok(DataConsumerSetSubchannelsResponse {
+            subchannels: data.subchannels,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct DataConsumerAddSubchannelRequest {
+    pub(crate) subchannel: u16,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct DataConsumerAddSubchannelResponse {
+    pub(crate) subchannels: Vec<u16>,
+}
+
+impl Request for DataConsumerAddSubchannelRequest {
+    const METHOD: request::Method = request::Method::DataconsumerAddSubchannel;
+    type HandlerId = DataConsumerId;
+    type Response = DataConsumerAddSubchannelResponse;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let data = data_consumer::AddSubchannelRequest::create(&mut builder, self.subchannel);
+        let request_body =
+            request::Body::create_data_consumer_add_subchannel_request(&mut builder, data);
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        let Some(response::BodyRef::DataConsumerAddSubchannelResponse(data)) = response else {
+            panic!("Wrong message from worker: {response:?}");
+        };
+
+        let data = data_consumer::AddSubchannelResponse::try_from(data)?;
+
+        Ok(DataConsumerAddSubchannelResponse {
+            subchannels: data.subchannels,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct DataConsumerRemoveSubchannelRequest {
+    pub(crate) subchannel: u16,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct DataConsumerRemoveSubchannelResponse {
+    pub(crate) subchannels: Vec<u16>,
+}
+
+impl Request for DataConsumerRemoveSubchannelRequest {
+    const METHOD: request::Method = request::Method::DataconsumerRemoveSubchannel;
+    type HandlerId = DataConsumerId;
+    type Response = DataConsumerRemoveSubchannelResponse;
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let data = data_consumer::RemoveSubchannelRequest::create(&mut builder, self.subchannel);
+        let request_body =
+            request::Body::create_data_consumer_remove_subchannel_request(&mut builder, data);
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        let Some(response::BodyRef::DataConsumerRemoveSubchannelResponse(data)) = response else {
+            panic!("Wrong message from worker: {response:?}");
+        };
+
+        let data = data_consumer::RemoveSubchannelResponse::try_from(data)?;
+
+        Ok(DataConsumerRemoveSubchannelResponse {
+            subchannels: data.subchannels,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct RtpObserverCloseRequest {
+    pub(crate) rtp_observer_id: RtpObserverId,
+}
+
+impl Request for RtpObserverCloseRequest {
+    const METHOD: request::Method = request::Method::RouterCloseRtpobserver;
+    type HandlerId = RouterId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+        let data =
+            router::CloseRtpObserverRequest::create(&mut builder, self.rtp_observer_id.to_string());
+        let request_body =
+            request::Body::create_router_close_rtp_observer_request(&mut builder, data);
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct RtpObserverPauseRequest {}
+
+impl Request for RtpObserverPauseRequest {
+    const METHOD: request::Method = request::Method::RtpobserverPause;
+    type HandlerId = RtpObserverId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct RtpObserverResumeRequest {}
+
+impl Request for RtpObserverResumeRequest {
+    const METHOD: request::Method = request::Method::RtpobserverResume;
+    type HandlerId = RtpObserverId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            None::<request::Body>,
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RtpObserverAddProducerRequest {
+    pub(crate) producer_id: ProducerId,
+}
+
+impl Request for RtpObserverAddProducerRequest {
+    const METHOD: request::Method = request::Method::RtpobserverAddProducer;
+    type HandlerId = RtpObserverId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let data =
+            rtp_observer::AddProducerRequest::create(&mut builder, self.producer_id.to_string());
+        let request_body =
+            request::Body::create_rtp_observer_add_producer_request(&mut builder, data);
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RtpObserverRemoveProducerRequest {
+    pub(crate) producer_id: ProducerId,
+}
+
+impl Request for RtpObserverRemoveProducerRequest {
+    const METHOD: request::Method = request::Method::RtpobserverRemoveProducer;
+    type HandlerId = RtpObserverId;
+    type Response = ();
+
+    fn into_bytes(self, id: u32, handler_id: Self::HandlerId) -> Vec<u8> {
+        let mut builder = Builder::new();
+
+        let data =
+            rtp_observer::RemoveProducerRequest::create(&mut builder, self.producer_id.to_string());
+        let request_body =
+            request::Body::create_rtp_observer_remove_producer_request(&mut builder, data);
+
+        let request = request::Request::create(
+            &mut builder,
+            id,
+            Self::METHOD,
+            handler_id.to_string(),
+            Some(request_body),
+        );
+        let message_body = message::Body::create_request(&mut builder, request);
+        let message = message::Message::create(&mut builder, message_body);
+
+        builder.finish(message, None).to_vec()
+    }
+
+    fn convert_response(
+        _response: Option<response::BodyRef<'_>>,
+    ) -> Result<Self::Response, Box<dyn Error + Send + Sync>> {
+        Ok(())
+    }
+}

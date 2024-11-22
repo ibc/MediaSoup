@@ -50,7 +50,7 @@ namespace RTC
 		{
 			OK           = 0,
 			UNAUTHORIZED = 1,
-			BAD_REQUEST  = 2
+			BAD_MESSAGE  = 2
 		};
 
 	public:
@@ -63,15 +63,15 @@ namespace RTC
 				// DOC: https://tools.ietf.org/html/draft-ietf-avtcore-rfc5764-mux-fixes
 				(data[0] < 3) &&
 				// Magic cookie must match.
-				(data[4] == StunPacket::magicCookie[0]) && (data[5] == StunPacket::magicCookie[1]) &&
-				(data[6] == StunPacket::magicCookie[2]) && (data[7] == StunPacket::magicCookie[3])
+				(data[4] == StunPacket::MagicCookie[0]) && (data[5] == StunPacket::MagicCookie[1]) &&
+				(data[6] == StunPacket::MagicCookie[2]) && (data[7] == StunPacket::MagicCookie[3])
 			);
 			// clang-format on
 		}
 		static StunPacket* Parse(const uint8_t* data, size_t len);
 
 	private:
-		static const uint8_t magicCookie[];
+		static const uint8_t MagicCookie[];
 
 	public:
 		StunPacket(
@@ -94,6 +94,10 @@ namespace RTC
 		size_t GetSize() const
 		{
 			return this->size;
+		}
+		const uint8_t* GetTransactionId() const
+		{
+			return this->transactionId;
 		}
 		void SetUsername(const char* username, size_t len)
 		{
@@ -127,6 +131,10 @@ namespace RTC
 		{
 			this->errorCode = errorCode;
 		}
+		void SetSoftware(const char* software, size_t len)
+		{
+			this->software.assign(software, len);
+		}
 		void SetMessageIntegrity(const uint8_t* messageIntegrity)
 		{
 			this->messageIntegrity = messageIntegrity;
@@ -139,6 +147,7 @@ namespace RTC
 		{
 			return this->username;
 		}
+		void SetPassword(const std::string& password);
 		uint32_t GetPriority() const
 		{
 			return this->priority;
@@ -171,19 +180,24 @@ namespace RTC
 		{
 			return this->errorCode;
 		}
+		std::string GetSoftware() const
+		{
+			return this->software;
+		}
 		bool HasMessageIntegrity() const
 		{
-			return (this->messageIntegrity ? true : false);
+			return (this->messageIntegrity != nullptr);
 		}
 		bool HasFingerprint() const
 		{
 			return this->hasFingerprint;
 		}
 		Authentication CheckAuthentication(
-		  const std::string& localUsername, const std::string& localPassword);
+		  // The first username fragment in the USERNAME attribute.
+		  const std::string& usernameFragment1,
+		  const std::string& password);
 		StunPacket* CreateSuccessResponse();
 		StunPacket* CreateErrorResponse(uint16_t errorCode);
-		void Authenticate(const std::string& password);
 		void Serialize(uint8_t* buffer);
 
 	private:
@@ -194,7 +208,8 @@ namespace RTC
 		uint8_t* data{ nullptr };                // Pointer to binary data.
 		size_t size{ 0u };                       // The full message size (including header).
 		// STUN attributes.
-		std::string username;          // Less than 513 bytes.
+		std::string username; // Less than 513 bytes.
+		std::string password;
 		uint32_t priority{ 0u };       // 4 bytes unsigned integer.
 		uint64_t iceControlling{ 0u }; // 8 bytes unsigned integer.
 		uint64_t iceControlled{ 0u };  // 8 bytes unsigned integer.
@@ -205,7 +220,7 @@ namespace RTC
 		bool hasFingerprint{ false };                       // 4 bytes.
 		const struct sockaddr* xorMappedAddress{ nullptr }; // 8 or 20 bytes.
 		uint16_t errorCode{ 0u };                           // 4 bytes (no reason phrase).
-		std::string password;
+		std::string software;                               // Less than 763 bytes.
 	};
 } // namespace RTC
 

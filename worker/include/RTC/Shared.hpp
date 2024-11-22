@@ -3,7 +3,6 @@
 
 #include "ChannelMessageRegistrator.hpp"
 #include "Channel/ChannelNotifier.hpp"
-#include "PayloadChannel/PayloadChannelNotifier.hpp"
 
 namespace RTC
 {
@@ -12,14 +11,12 @@ namespace RTC
 	public:
 		explicit Shared(
 		  ChannelMessageRegistrator* channelMessageRegistrator,
-		  Channel::ChannelNotifier* channelNotifier,
-		  PayloadChannel::PayloadChannelNotifier* payloadChannelNotifier);
+		  Channel::ChannelNotifier* channelNotifier);
 		~Shared();
 
 	public:
 		ChannelMessageRegistrator* channelMessageRegistrator{ nullptr };
 		Channel::ChannelNotifier* channelNotifier{ nullptr };
-		PayloadChannel::PayloadChannelNotifier* payloadChannelNotifier{ nullptr };
 	};
 } // namespace RTC
 

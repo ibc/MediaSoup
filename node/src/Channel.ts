@@ -1,14 +1,25 @@
-import * as os from 'os';
-import { Duplex } from 'stream';
+import * as os from 'node:os';
+import { Duplex } from 'node:stream';
+import { info, warn } from 'node:console';
+import * as flatbuffers from 'flatbuffers';
 import { Logger } from './Logger';
-import { EnhancedEventEmitter } from './EnhancedEventEmitter';
+import { EnhancedEventEmitter } from './enhancedEvents';
 import { InvalidStateError } from './errors';
+import { Body as RequestBody, Method, Request } from './fbs/request';
+import { Response } from './fbs/response';
+import { Message, Body as MessageBody } from './fbs/message';
+import {
+	Notification,
+	Body as NotificationBody,
+	Event,
+} from './fbs/notification';
+import { Log } from './fbs/log';
 
-const littleEndian = os.endianness() == 'LE';
+const IS_LITTLE_ENDIAN = os.endianness() === 'LE';
+
 const logger = new Logger('Channel');
 
-type Sent =
-{
+type Sent = {
 	id: number;
 	method: string;
 	resolve: (data?: any) => void;
@@ -20,8 +31,7 @@ type Sent =
 const MESSAGE_MAX_LEN = 4194308;
 const PAYLOAD_MAX_LEN = 4194304;
 
-export class Channel extends EnhancedEventEmitter
-{
+export class Channel extends EnhancedEventEmitter {
 	// Closed flag.
 	#closed = false;
 
@@ -40,21 +50,18 @@ export class Channel extends EnhancedEventEmitter
 	// Buffer for reading messages from the worker.
 	#recvBuffer = Buffer.alloc(0);
 
-	/**
-	 * @private
-	 */
-	constructor(
-		{
-			producerSocket,
-			consumerSocket,
-			pid
-		}:
-		{
-			producerSocket: any;
-			consumerSocket: any;
-			pid: number;
-		})
-	{
+	// flatbuffers builder.
+	#bufferBuilder: flatbuffers.Builder = new flatbuffers.Builder(1024);
+
+	constructor({
+		producerSocket,
+		consumerSocket,
+		pid,
+	}: {
+		producerSocket: any;
+		consumerSocket: any;
+		pid: number;
+	}) {
 		super();
 
 		logger.debug('constructor()');
@@ -63,21 +70,17 @@ export class Channel extends EnhancedEventEmitter
 		this.#consumerSocket = consumerSocket as Duplex;
 
 		// Read Channel responses/notifications from the worker.
-		this.#consumerSocket.on('data', (buffer: Buffer) =>
-		{
-			if (!this.#recvBuffer.length)
-			{
+		this.#consumerSocket.on('data', (buffer: Buffer) => {
+			if (!this.#recvBuffer.length) {
 				this.#recvBuffer = buffer;
-			}
-			else
-			{
+			} else {
 				this.#recvBuffer = Buffer.concat(
-					[ this.#recvBuffer, buffer ],
-					this.#recvBuffer.length + buffer.length);
+					[this.#recvBuffer, buffer],
+					this.#recvBuffer.length + buffer.length
+				);
 			}
 
-			if (this.#recvBuffer.length > PAYLOAD_MAX_LEN)
-			{
+			if (this.#recvBuffer.length > PAYLOAD_MAX_LEN) {
 				logger.error('receiving buffer is full, discarding all data in it');
 
 				// Reset the buffer and exit.
@@ -88,115 +91,123 @@ export class Channel extends EnhancedEventEmitter
 
 			let msgStart = 0;
 
-			while (true) // eslint-disable-line no-constant-condition
-			{
+			while (true) {
 				const readLen = this.#recvBuffer.length - msgStart;
 
-				if (readLen < 4)
-				{
+				if (readLen < 4) {
 					// Incomplete data.
 					break;
 				}
 
 				const dataView = new DataView(
 					this.#recvBuffer.buffer,
-					this.#recvBuffer.byteOffset + msgStart);
-				const msgLen = dataView.getUint32(0, littleEndian);
+					this.#recvBuffer.byteOffset + msgStart
+				);
+				const msgLen = dataView.getUint32(0, IS_LITTLE_ENDIAN);
 
-				if (readLen < 4 + msgLen)
-				{
+				if (readLen < 4 + msgLen) {
 					// Incomplete data.
 					break;
 				}
 
-				const payload = this.#recvBuffer.subarray(msgStart + 4, msgStart + 4 + msgLen);
+				const payload = this.#recvBuffer.subarray(
+					msgStart + 4,
+					msgStart + 4 + msgLen
+				);
 
 				msgStart += 4 + msgLen;
 
-				try
-				{
-					// We can receive JSON messages (Channel messages) or log strings.
-					switch (payload[0])
-					{
-						// 123 = '{' (a Channel JSON message).
-						case 123:
-							this.processMessage(JSON.parse(payload.toString('utf8')));
-							break;
+				const buf = new flatbuffers.ByteBuffer(new Uint8Array(payload));
+				const message = Message.getRootAsMessage(buf);
 
-						// 68 = 'D' (a debug log).
-						case 68:
-							logger.debug(`[pid:${pid}] ${payload.toString('utf8', 1)}`);
-							break;
+				try {
+					switch (message.dataType()) {
+						case MessageBody.Response: {
+							const response = new Response();
 
-						// 87 = 'W' (a warn log).
-						case 87:
-							logger.warn(`[pid:${pid}] ${payload.toString('utf8', 1)}`);
-							break;
+							message.data(response);
 
-						// 69 = 'E' (an error log).
-						case 69:
-							logger.error(`[pid:${pid} ${payload.toString('utf8', 1)}`);
-							break;
+							this.processResponse(response);
 
-						// 88 = 'X' (a dump log).
-						case 88:
-							// eslint-disable-next-line no-console
-							console.log(payload.toString('utf8', 1));
 							break;
+						}
 
-						default:
-							// eslint-disable-next-line no-console
-							console.warn(
-								`worker[pid:${pid}] unexpected data: %s`,
-								payload.toString('utf8', 1));
+						case MessageBody.Notification: {
+							const notification = new Notification();
+
+							message.data(notification);
+
+							this.processNotification(notification);
+
+							break;
+						}
+
+						case MessageBody.Log: {
+							const log = new Log();
+
+							message.data(log);
+
+							this.processLog(pid, log);
+
+							break;
+						}
+
+						default: {
+							warn(
+								`worker[pid:${pid}] unexpected data: ${payload.toString(
+									'utf8',
+									1
+								)}`
+							);
+						}
 					}
-				}
-				catch (error)
-				{
+				} catch (error) {
 					logger.error(
-						'received invalid message from the worker process: %s',
-						String(error));
+						`received invalid message from the worker process: ${error}`
+					);
 				}
 			}
 
-			if (msgStart != 0)
-			{
+			if (msgStart != 0) {
 				this.#recvBuffer = this.#recvBuffer.slice(msgStart);
 			}
 		});
 
-		this.#consumerSocket.on('end', () => (
+		this.#consumerSocket.on('end', () =>
 			logger.debug('Consumer Channel ended by the worker process')
-		));
+		);
 
-		this.#consumerSocket.on('error', (error) => (
-			logger.error('Consumer Channel error: %s', String(error))
-		));
+		this.#consumerSocket.on('error', error =>
+			logger.error(`Consumer Channel error: ${error}`)
+		);
 
-		this.#producerSocket.on('end', () => (
+		this.#producerSocket.on('end', () =>
 			logger.debug('Producer Channel ended by the worker process')
-		));
+		);
 
-		this.#producerSocket.on('error', (error) => (
-			logger.error('Producer Channel error: %s', String(error))
-		));
+		this.#producerSocket.on('error', error =>
+			logger.error(`Producer Channel error: ${error}`)
+		);
 	}
 
 	/**
-	 * @private
+	 * flatbuffer builder.
 	 */
-	close(): void
-	{
-		if (this.#closed)
+	get bufferBuilder(): flatbuffers.Builder {
+		return this.#bufferBuilder;
+	}
+
+	close(): void {
+		if (this.#closed) {
 			return;
+		}
 
 		logger.debug('close()');
 
 		this.#closed = true;
 
 		// Close every pending sent.
-		for (const sent of this.#sents.values())
-		{
+		for (const sent of this.#sents.values()) {
 			sent.close();
 		}
 
@@ -210,64 +221,175 @@ export class Channel extends EnhancedEventEmitter
 		this.#producerSocket.removeAllListeners('error');
 		this.#producerSocket.on('error', () => {});
 
-		// Destroy the socket after a while to allow pending incoming messages.
-		setTimeout(() =>
-		{
-			try { this.#producerSocket.destroy(); }
-			catch (error) {}
-			try { this.#consumerSocket.destroy(); }
-			catch (error) {}
-		}, 200);
+		// Destroy the sockets.
+		try {
+			this.#producerSocket.destroy();
+		} catch (error) {}
+		try {
+			this.#consumerSocket.destroy();
+		} catch (error) {}
 	}
 
-	/**
-	 * @private
-	 */
-	async request(method: string, handlerId?: string, data?: any): Promise<any>
-	{
-		this.#nextId < 4294967295 ? ++this.#nextId : (this.#nextId = 1);
+	notify(
+		event: Event,
+		bodyType?: NotificationBody,
+		bodyOffset?: number,
+		handlerId?: string
+	): void {
+		logger.debug(`notify() [event:${Event[event]}]`);
+
+		if (this.#closed) {
+			throw new InvalidStateError(
+				`Channel closed, cannot send notification [event:${Event[event]}]`
+			);
+		}
+
+		const handlerIdOffset = this.#bufferBuilder.createString(handlerId);
+
+		let notificationOffset: number;
+
+		if (bodyType && bodyOffset) {
+			notificationOffset = Notification.createNotification(
+				this.#bufferBuilder,
+				handlerIdOffset,
+				event,
+				bodyType,
+				bodyOffset
+			);
+		} else {
+			notificationOffset = Notification.createNotification(
+				this.#bufferBuilder,
+				handlerIdOffset,
+				event,
+				NotificationBody.NONE,
+				0
+			);
+		}
+
+		const messageOffset = Message.createMessage(
+			this.#bufferBuilder,
+			MessageBody.Notification,
+			notificationOffset
+		);
+
+		// Finalizes the buffer and adds a 4 byte prefix with the size of the buffer.
+		this.#bufferBuilder.finishSizePrefixed(messageOffset);
+
+		// Create a new buffer with this data so multiple contiguous flatbuffers
+		// do not point to the builder buffer overriding others info.
+		const buffer = new Uint8Array(this.#bufferBuilder.asUint8Array());
+
+		// Clear the buffer builder so it's reused for the next request.
+		this.#bufferBuilder.clear();
+
+		if (buffer.byteLength > MESSAGE_MAX_LEN) {
+			throw new Error(`notification too big [event:${Event[event]}]`);
+		}
+
+		try {
+			// This may throw if closed or remote side ended.
+			this.#producerSocket.write(buffer, 'binary');
+		} catch (error) {
+			logger.warn(`notify() | sending notification failed: ${error}`);
+
+			return;
+		}
+	}
+
+	async request(
+		method: Method,
+		bodyType?: RequestBody,
+		bodyOffset?: number,
+		handlerId?: string
+	): Promise<Response> {
+		logger.debug(`request() [method:${Method[method]}]`);
+
+		if (this.#closed) {
+			throw new InvalidStateError(
+				`Channel closed, cannot send request [method:${Method[method]}]`
+			);
+		}
+
+		if (this.#nextId < 4294967295) {
+			++this.#nextId;
+		} else {
+			this.#nextId = 1;
+		}
 
 		const id = this.#nextId;
 
-		logger.debug('request() [method:%s, id:%s]', method, id);
+		const handlerIdOffset = this.#bufferBuilder.createString(handlerId ?? '');
 
-		if (this.#closed)
-			throw new InvalidStateError('Channel closed');
+		let requestOffset: number;
 
-		const request = `${id}:${method}:${handlerId}:${JSON.stringify(data)}`;
+		if (bodyType && bodyOffset) {
+			requestOffset = Request.createRequest(
+				this.#bufferBuilder,
+				id,
+				method,
+				handlerIdOffset,
+				bodyType,
+				bodyOffset
+			);
+		} else {
+			requestOffset = Request.createRequest(
+				this.#bufferBuilder,
+				id,
+				method,
+				handlerIdOffset,
+				RequestBody.NONE,
+				0
+			);
+		}
 
-		if (Buffer.byteLength(request) > MESSAGE_MAX_LEN)
-			throw new Error('Channel request too big');
+		const messageOffset = Message.createMessage(
+			this.#bufferBuilder,
+			MessageBody.Request,
+			requestOffset
+		);
+
+		// Finalizes the buffer and adds a 4 byte prefix with the size of the buffer.
+		this.#bufferBuilder.finishSizePrefixed(messageOffset);
+
+		// Create a new buffer with this data so multiple contiguous flatbuffers
+		// do not point to the builder buffer overriding others info.
+		const buffer = new Uint8Array(this.#bufferBuilder.asUint8Array());
+
+		// Clear the buffer builder so it's reused for the next request.
+		this.#bufferBuilder.clear();
+
+		if (buffer.byteLength > MESSAGE_MAX_LEN) {
+			throw new Error(`request too big [method:${Method[method]}]`);
+		}
 
 		// This may throw if closed or remote side ended.
-		this.#producerSocket.write(
-			Buffer.from(Uint32Array.of(Buffer.byteLength(request)).buffer));
-		this.#producerSocket.write(request);
+		this.#producerSocket.write(buffer, 'binary');
 
-		return new Promise((pResolve, pReject) =>
-		{
-			const sent: Sent =
-			{
-				id      : id,
-				method  : method,
-				resolve : (data2) =>
-				{
-					if (!this.#sents.delete(id))
+		return new Promise((pResolve, pReject) => {
+			const sent: Sent = {
+				id: id,
+				method: Method[method],
+				resolve: data2 => {
+					if (!this.#sents.delete(id)) {
 						return;
+					}
 
 					pResolve(data2);
 				},
-				reject : (error) =>
-				{
-					if (!this.#sents.delete(id))
+				reject: error => {
+					if (!this.#sents.delete(id)) {
 						return;
+					}
 
 					pReject(error);
 				},
-				close : () =>
-				{
-					pReject(new InvalidStateError('Channel closed'));
-				}
+				close: () => {
+					pReject(
+						new InvalidStateError(
+							`Channel closed, pending request aborted [method:${Method[method]}, id:${id}]`
+						)
+					);
+				},
 			};
 
 			// Add sent stuff to the map.
@@ -275,67 +397,89 @@ export class Channel extends EnhancedEventEmitter
 		});
 	}
 
-	private processMessage(msg: any): void
-	{
-		// If a response, retrieve its associated request.
-		if (msg.id)
-		{
-			const sent = this.#sents.get(msg.id);
+	private processResponse(response: Response): void {
+		const sent = this.#sents.get(response.id());
 
-			if (!sent)
-			{
-				logger.error(
-					'received response does not match any sent request [id:%s]', msg.id);
+		if (!sent) {
+			logger.error(
+				`received response does not match any sent request [id:${response.id()}]`
+			);
 
-				return;
-			}
+			return;
+		}
 
-			if (msg.accepted)
-			{
-				logger.debug(
-					'request succeeded [method:%s, id:%s]', sent.method, sent.id);
+		if (response.accepted()) {
+			logger.debug(`request succeeded [method:${sent.method}, id:${sent.id}]`);
 
-				sent.resolve(msg.data);
-			}
-			else if (msg.error)
-			{
-				logger.warn(
-					'request failed [method:%s, id:%s]: %s',
-					sent.method, sent.id, msg.reason);
+			sent.resolve(response);
+		} else if (response.error()) {
+			logger.warn(
+				`request failed [method:${sent.method}, id:${
+					sent.id
+				}]: ${response.reason()}`
+			);
 
-				switch (msg.error)
-				{
-					case 'TypeError':
-						sent.reject(new TypeError(msg.reason));
-						break;
+			switch (response.error()!) {
+				case 'TypeError': {
+					sent.reject(new TypeError(response.reason()!));
 
-					default:
-						sent.reject(new Error(msg.reason));
+					break;
+				}
+
+				default: {
+					sent.reject(new Error(response.reason()!));
 				}
 			}
-			else
-			{
-				logger.error(
-					'received response is not accepted nor rejected [method:%s, id:%s]',
-					sent.method, sent.id);
-			}
-		}
-		// If a notification emit it to the corresponding entity.
-		else if (msg.targetId && msg.event)
-		{
-			// Due to how Promises work, it may happen that we receive a response
-			// from the worker followed by a notification from the worker. If we
-			// emit the notification immediately it may reach its target **before**
-			// the response, destroying the ordered delivery. So we must wait a bit
-			// here.
-			// See https://github.com/versatica/mediasoup/issues/510
-			setImmediate(() => this.emit(String(msg.targetId), msg.event, msg.data));
-		}
-		// Otherwise unexpected message.
-		else
-		{
+		} else {
 			logger.error(
-				'received message is not a response nor a notification');
+				`received response is not accepted nor rejected [method:${sent.method}, id:${sent.id}]`
+			);
+		}
+	}
+
+	private processNotification(notification: Notification): void {
+		// Due to how Promises work, it may happen that we receive a response
+		// from the worker followed by a notification from the worker. If we
+		// emit the notification immediately it may reach its target **before**
+		// the response, destroying the ordered delivery. So we must wait a bit
+		// here.
+		// See https://github.com/versatica/mediasoup/issues/510
+		setImmediate(() =>
+			this.emit(notification.handlerId()!, notification.event(), notification)
+		);
+	}
+
+	private processLog(pid: number, log: Log): void {
+		const logData = log.data()!;
+
+		switch (logData[0]) {
+			// 'D' (a debug log).
+			case 'D': {
+				logger.debug(`[pid:${pid}] ${logData.slice(1)}`);
+
+				break;
+			}
+
+			// 'W' (a warn log).
+			case 'W': {
+				logger.warn(`[pid:${pid}] ${logData.slice(1)}`);
+
+				break;
+			}
+
+			// 'E' (a error log).
+			case 'E': {
+				logger.error(`[pid:${pid}] ${logData.slice(1)}`);
+
+				break;
+			}
+
+			// 'X' (a dump log).
+			case 'X': {
+				info(logData.slice(1));
+
+				break;
+			}
 		}
 	}
 }

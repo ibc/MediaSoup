@@ -3,9 +3,8 @@
 
 #include "RTC/RtpObserver.hpp"
 #include "RTC/Shared.hpp"
-#include "handles/Timer.hpp"
+#include "handles/TimerHandle.hpp"
 #include <absl/container/flat_hash_map.h>
-#include <nlohmann/json.hpp>
 #include <utility>
 #include <vector>
 
@@ -16,7 +15,7 @@
 // https://github.com/jitsi/jitsi-utils/blob/master/src/main/java/org/jitsi/utils/dsi/DominantSpeakerIdentification.java
 namespace RTC
 {
-	class ActiveSpeakerObserver : public RTC::RtpObserver, public Timer::Listener
+	class ActiveSpeakerObserver : public RTC::RtpObserver, public TimerHandle::Listener
 	{
 	private:
 		class Speaker
@@ -24,7 +23,7 @@ namespace RTC
 		public:
 			Speaker();
 			void EvalActivityScores();
-			double GetActivityScore(uint8_t interval);
+			double GetActivityScore(uint8_t interval) const;
 			void LevelChanged(uint32_t level, uint64_t now);
 			void LevelTimedOut(uint64_t now);
 
@@ -71,7 +70,10 @@ namespace RTC
 
 	public:
 		ActiveSpeakerObserver(
-		  RTC::Shared* shared, const std::string& id, RTC::RtpObserver::Listener* listener, json& data);
+		  RTC::Shared* shared,
+		  const std::string& id,
+		  RTC::RtpObserver::Listener* listener,
+		  const FBS::ActiveSpeakerObserver::ActiveSpeakerObserverOptions* options);
 		~ActiveSpeakerObserver() override;
 
 	public:
@@ -88,14 +90,14 @@ namespace RTC
 		bool CalculateActiveSpeaker();
 		void TimeoutIdleLevels(uint64_t now);
 
-		/* Pure virtual methods inherited from Timer. */
+		/* Pure virtual methods inherited from TimerHandle. */
 	protected:
-		void OnTimer(Timer* timer) override;
+		void OnTimer(TimerHandle* timer) override;
 
 	private:
-		double relativeSpeachActivities[RelativeSpeachActivitiesLen];
+		double relativeSpeachActivities[RelativeSpeachActivitiesLen]{};
 		std::string dominantId;
-		Timer* periodicTimer{ nullptr };
+		TimerHandle* periodicTimer{ nullptr };
 		uint16_t interval{ 300u };
 		// Map of ProducerSpeakers indexed by Producer id.
 		absl::flat_hash_map<std::string, ProducerSpeaker*> mapProducerSpeakers;

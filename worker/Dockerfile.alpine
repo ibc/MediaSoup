@@ -1,0 +1,17 @@
+FROM alpine
+
+# Install dependencies.
+RUN set -x \
+	&& apk add gcc g++ nodejs-current npm python3 py3-pip linux-headers
+
+# Make CC and CXX point to gcc/g++.
+ENV LANG="C.UTF-8"
+ENV CC="gcc"
+ENV CXX="g++"
+
+ENV MEDIASOUP_LOCAL_DEV="true"
+ENV KEEP_BUILD_ARTIFACTS="1"
+
+WORKDIR /mediasoup
+
+CMD ["ash"]

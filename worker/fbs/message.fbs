@@ -1,0 +1,20 @@
+include "log.fbs";
+include "notification.fbs";
+include "request.fbs";
+include "response.fbs";
+
+namespace FBS.Message;
+
+union Body {
+    Request: FBS.Request.Request,
+    Response: FBS.Response.Response,
+    Notification: FBS.Notification.Notification,
+    Log: FBS.Log.Log,
+}
+
+table Message {
+    data: Body (required);
+}
+
+root_type Message;
+

@@ -3,7 +3,7 @@
 #include "RTC/Codecs/PayloadDescriptorHandler.hpp"
 #include "RTC/NackGenerator.hpp"
 #include "RTC/RtpPacket.hpp"
-#include <catch2/catch.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include <vector>
 
 using namespace RTC;
@@ -118,7 +118,7 @@ uint8_t rtpBuffer[] =
 // clang-format on
 
 // [pt:123, seq:21006, timestamp:1533790901]
-RtpPacket* packet = RtpPacket::Parse(rtpBuffer, sizeof(rtpBuffer));
+std::unique_ptr<RtpPacket> packet(RtpPacket::Parse(rtpBuffer, sizeof(rtpBuffer)));
 
 void validate(std::vector<TestNackGeneratorInput>& inputs)
 {
@@ -133,7 +133,7 @@ void validate(std::vector<TestNackGeneratorInput>& inputs)
 
 		packet->SetPayloadDescriptorHandler(tpdh);
 		packet->SetSequenceNumber(input.seq);
-		nackGenerator.ReceivePacket(packet, /*isRecovered*/ false);
+		nackGenerator.ReceivePacket(packet.get(), /*isRecovered*/ false);
 
 		listener.Check(nackGenerator);
 	}

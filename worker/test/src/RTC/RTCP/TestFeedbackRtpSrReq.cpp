@@ -1,6 +1,6 @@
 #include "common.hpp"
 #include "RTC/RTCP/FeedbackRtpSrReq.hpp"
-#include <catch2/catch.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include <cstring> // std::memcmp()
 
 using namespace RTC::RTCP;
@@ -35,11 +35,12 @@ SCENARIO("RTCP Feeback RTP SR-REQ parsing", "[parser][rtcp][feedback-rtp][sr-req
 
 	SECTION("parse FeedbackRtpSrReqPacket")
 	{
-		FeedbackRtpSrReqPacket* packet = FeedbackRtpSrReqPacket::Parse(buffer, sizeof(buffer));
+		std::unique_ptr<FeedbackRtpSrReqPacket> packet{ FeedbackRtpSrReqPacket::Parse(
+			buffer, sizeof(buffer)) };
 
 		REQUIRE(packet);
 
-		verify(packet);
+		verify(packet.get());
 
 		SECTION("serialize packet instance")
 		{
@@ -52,8 +53,6 @@ SCENARIO("RTCP Feeback RTP SR-REQ parsing", "[parser][rtcp][feedback-rtp][sr-req
 				REQUIRE(std::memcmp(buffer, serialized, sizeof(buffer)) == 0);
 			}
 		}
-
-		delete packet;
 	}
 
 	SECTION("create FeedbackRtpSrReqPacket")

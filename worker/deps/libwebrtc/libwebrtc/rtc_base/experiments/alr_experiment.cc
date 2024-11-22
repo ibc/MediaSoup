@@ -26,7 +26,7 @@ const char AlrExperimentSettings::kScreenshareProbingBweExperimentName[] =
     "WebRTC-ProbingScreenshareBwe";
 const char AlrExperimentSettings::kStrictPacingAndProbingExperimentName[] =
     "WebRTC-StrictPacingAndProbing";
-const char kDefaultProbingScreenshareBweSettings[] = "1.0,2875,80,40,-60,3";
+const char kDefaultProbingScreenshareBweSettings[] = "1.0,2875,80,40,-60,3,3000";
 
 bool AlrExperimentSettings::MaxOneFieldTrialEnabled() {
   return AlrExperimentSettings::MaxOneFieldTrialEnabled(
@@ -71,12 +71,13 @@ AlrExperimentSettings::CreateFromFieldTrial(
   }
 
   AlrExperimentSettings settings;
-  if (sscanf(group_name.c_str(), "%f,%" PRId64 ",%d,%d,%d,%d",
+  if (sscanf(group_name.c_str(), "%f,%" PRId64 ",%d,%d,%d,%d,%d",
              &settings.pacing_factor, &settings.max_paced_queue_time,
              &settings.alr_bandwidth_usage_percent,
              &settings.alr_start_budget_level_percent,
              &settings.alr_stop_budget_level_percent,
-             &settings.group_id) == 6) {
+             &settings.group_id,
+             &settings.alr_timeout) == 7) {
     ret.emplace(settings);
     MS_DEBUG_TAG(bwe, "Using ALR experiment settings: "
                       "pacing factor: %f"
@@ -84,13 +85,15 @@ AlrExperimentSettings::CreateFromFieldTrial(
                      ", ALR bandwidth usage percent: %d"
                      ", ALR start budget level percent: %d"
                      ", ALR end budget level percent: %d"
-                     ", ALR experiment group ID: %d",
+                     ", ALR experiment group ID: %d"
+                     ", ALR timeout: %d",
                      settings.pacing_factor,
                      settings.max_paced_queue_time,
                      settings.alr_bandwidth_usage_percent,
                      settings.alr_start_budget_level_percent,
                      settings.alr_stop_budget_level_percent,
-                     settings.group_id);
+                     settings.group_id,
+                     settings.alr_timeout);
   } else {
     MS_DEBUG_TAG(bwe, "Failed to parse ALR experiment: %s", experiment_name);
   }

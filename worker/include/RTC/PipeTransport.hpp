@@ -1,6 +1,7 @@
 #ifndef MS_RTC_PIPE_TRANSPORT_HPP
 #define MS_RTC_PIPE_TRANSPORT_HPP
 
+#include "FBS/pipeTransport.h"
 #include "RTC/Shared.hpp"
 #include "RTC/SrtpSession.hpp"
 #include "RTC/Transport.hpp"
@@ -12,33 +13,31 @@ namespace RTC
 	class PipeTransport : public RTC::Transport, public RTC::UdpSocket::Listener
 	{
 	private:
-		struct ListenIp
-		{
-			std::string ip;
-			std::string announcedIp;
-		};
-
-	private:
 		static RTC::SrtpSession::CryptoSuite srtpCryptoSuite;
 		static std::string srtpCryptoSuiteString;
 		static size_t srtpMasterLength;
 
 	public:
 		PipeTransport(
-		  RTC::Shared* shared, const std::string& id, RTC::Transport::Listener* listener, json& data);
+		  RTC::Shared* shared,
+		  const std::string& id,
+		  RTC::Transport::Listener* listener,
+		  const FBS::PipeTransport::PipeTransportOptions* options);
 		~PipeTransport() override;
 
 	public:
-		void FillJson(json& jsonObject) const override;
-		void FillJsonStats(json& jsonArray) override;
+		flatbuffers::Offset<FBS::PipeTransport::GetStatsResponse> FillBufferStats(
+		  flatbuffers::FlatBufferBuilder& builder);
+		flatbuffers::Offset<FBS::PipeTransport::DumpResponse> FillBuffer(
+		  flatbuffers::FlatBufferBuilder& builder) const;
 
 		/* Methods inherited from Channel::ChannelSocket::RequestHandler. */
 	public:
 		void HandleRequest(Channel::ChannelRequest* request) override;
 
-		/* Methods inherited from PayloadChannel::PayloadChannelSocket::NotificationHandler. */
+		/* Methods inherited from Channel::ChannelSocket::NotificationHandler. */
 	public:
-		void HandleNotification(PayloadChannel::PayloadChannelNotification* notification) override;
+		void HandleNotification(Channel::ChannelNotification* notification) override;
 
 	private:
 		bool IsConnected() const override;
@@ -51,9 +50,9 @@ namespace RTC
 		void SendRtcpCompoundPacket(RTC::RTCP::CompoundPacket* packet) override;
 		void SendMessage(
 		  RTC::DataConsumer* dataConsumer,
-		  uint32_t ppid,
 		  const uint8_t* msg,
 		  size_t len,
+		  uint32_t ppid,
 		  onQueuedCallback* cb = nullptr) override;
 		void SendSctpData(const uint8_t* data, size_t len) override;
 		void RecvStreamClosed(uint32_t ssrc) override;
@@ -75,8 +74,10 @@ namespace RTC
 		RTC::SrtpSession* srtpRecvSession{ nullptr };
 		RTC::SrtpSession* srtpSendSession{ nullptr };
 		// Others.
-		ListenIp listenIp;
-		struct sockaddr_storage remoteAddrStorage;
+		ListenInfo listenInfo;
+		struct sockaddr_storage remoteAddrStorage
+		{
+		};
 		bool rtx{ false };
 		std::string srtpKey;
 		std::string srtpKeyBase64;

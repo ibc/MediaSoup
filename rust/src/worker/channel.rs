@@ -1,4 +1,4 @@
-use crate::messages::{Request, WorkerCloseRequest};
+use crate::messages::{Notification, Request};
 use crate::worker::common::{EventHandlers, SubscriptionTarget, WeakEventHandlers};
 use crate::worker::utils;
 use crate::worker::utils::{PreparedChannelRead, PreparedChannelWrite};
@@ -7,16 +7,18 @@ use atomic_take::AtomicTake;
 use hash_hasher::HashedMap;
 use log::{debug, error, trace, warn};
 use lru::LruCache;
+use mediasoup_sys::fbs::{message, notification, request, response};
 use mediasoup_sys::UvAsyncT;
 use parking_lot::Mutex;
+use planus::ReadAsRoot;
 use serde::Deserialize;
-use serde_json::Value;
-use std::any::TypeId;
 use std::collections::VecDeque;
 use std::fmt::{Debug, Display};
 use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
+use thiserror::Error;
+use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
@@ -38,11 +40,26 @@ pub(super) enum InternalMessage {
     Unexpected(Vec<u8>),
 }
 
+#[derive(Debug, Error, Eq, PartialEq)]
+pub enum NotificationError {
+    #[error("Channel already closed")]
+    ChannelClosed,
+}
+
+/// Flabtuffers notification parse error.
+#[derive(Debug, Error, Eq, PartialEq)]
+pub enum NotificationParseError {
+    /// Invalid event
+    #[error("Invalid event")]
+    InvalidEvent,
+}
+
 #[allow(clippy::type_complexity)]
 pub(crate) struct BufferMessagesGuard {
     target_id: SubscriptionTarget,
     buffered_notifications_for: Arc<Mutex<HashedMap<SubscriptionTarget, Vec<Vec<u8>>>>>,
-    event_handlers_weak: WeakEventHandlers<Arc<dyn Fn(&[u8]) + Send + Sync + 'static>>,
+    event_handlers_weak:
+        WeakEventHandlers<Arc<dyn Fn(notification::NotificationRef<'_>) + Send + Sync + 'static>>,
 }
 
 impl Drop for BufferMessagesGuard {
@@ -50,59 +67,63 @@ impl Drop for BufferMessagesGuard {
         let mut buffered_notifications_for = self.buffered_notifications_for.lock();
         if let Some(notifications) = buffered_notifications_for.remove(&self.target_id) {
             if let Some(event_handlers) = self.event_handlers_weak.upgrade() {
-                for notification in notifications {
-                    event_handlers.call_callbacks_with_single_value(&self.target_id, &notification);
+                for bytes in notifications {
+                    let message_ref = message::MessageRef::read_as_root(&bytes).unwrap();
+
+                    let message::BodyRef::Notification(notification_ref) =
+                        message_ref.data().unwrap()
+                    else {
+                        panic!("Wrong notification stored: {message_ref:?}");
+                    };
+
+                    event_handlers
+                        .call_callbacks_with_single_value(&self.target_id, notification_ref);
                 }
             }
         }
     }
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(untagged)]
-enum ChannelReceiveMessage {
-    #[serde(rename_all = "camelCase")]
-    Notification {
-        target_id: SubscriptionTarget,
-    },
-    ResponseSuccess {
-        id: u32,
-        // The following field is present, unused, but needed for differentiating successful
-        // response from error case
-        #[allow(dead_code)]
-        accepted: bool,
-        data: Option<Value>,
-    },
-    ResponseError {
-        id: u32,
-        // The following field is present, but unused
-        // error: Value,
-        reason: String,
-    },
+#[derive(Debug)]
+enum ChannelReceiveMessage<'a> {
+    Notification(notification::NotificationRef<'a>),
+    Response(response::ResponseRef<'a>),
     Event(InternalMessage),
 }
 
-fn deserialize_message(bytes: &[u8]) -> ChannelReceiveMessage {
-    match bytes[0] {
-        // JSON message
-        b'{' => serde_json::from_slice(bytes).unwrap(),
-        // Debug log
-        b'D' => ChannelReceiveMessage::Event(InternalMessage::Debug(
-            String::from_utf8(Vec::from(&bytes[1..])).unwrap(),
-        )),
-        // Warn log
-        b'W' => ChannelReceiveMessage::Event(InternalMessage::Warn(
-            String::from_utf8(Vec::from(&bytes[1..])).unwrap(),
-        )),
-        // Error log
-        b'E' => ChannelReceiveMessage::Event(InternalMessage::Error(
-            String::from_utf8(Vec::from(&bytes[1..])).unwrap(),
-        )),
-        // Dump log
-        b'X' => ChannelReceiveMessage::Event(InternalMessage::Dump(
-            String::from_utf8(Vec::from(&bytes[1..])).unwrap(),
-        )),
-        // Unknown
+// Remove the first 4 bytes which represent the buffer size.
+// NOTE: The prefix is only needed for NodeJS.
+fn unprefix_message(bytes: &[u8]) -> &[u8] {
+    &bytes[4..]
+}
+
+fn deserialize_message(bytes: &[u8]) -> ChannelReceiveMessage<'_> {
+    let message_ref = message::MessageRef::read_as_root(bytes).unwrap();
+
+    match message_ref.data().unwrap() {
+        message::BodyRef::Log(data) => match data.data().unwrap().chars().next() {
+            // Debug log
+            Some('D') => ChannelReceiveMessage::Event(InternalMessage::Debug(
+                String::from_utf8(Vec::from(&data.data().unwrap().as_bytes()[1..])).unwrap(),
+            )),
+            // Warn log
+            Some('W') => ChannelReceiveMessage::Event(InternalMessage::Warn(
+                String::from_utf8(Vec::from(&data.data().unwrap().as_bytes()[1..])).unwrap(),
+            )),
+            // Error log
+            Some('E') => ChannelReceiveMessage::Event(InternalMessage::Error(
+                String::from_utf8(Vec::from(&data.data().unwrap().as_bytes()[1..])).unwrap(),
+            )),
+            // Dump log
+            Some('X') => ChannelReceiveMessage::Event(InternalMessage::Dump(
+                String::from_utf8(Vec::from(&data.data().unwrap().as_bytes()[1..])).unwrap(),
+            )),
+            // This should never happen.
+            _ => ChannelReceiveMessage::Event(InternalMessage::Unexpected(Vec::from(bytes))),
+        },
+        message::BodyRef::Notification(data) => ChannelReceiveMessage::Notification(data),
+        message::BodyRef::Response(data) => ChannelReceiveMessage::Response(data),
+
         _ => ChannelReceiveMessage::Event(InternalMessage::Unexpected(Vec::from(bytes))),
     }
 }
@@ -111,7 +132,7 @@ struct ResponseError {
     reason: String,
 }
 
-type ResponseResult<T> = Result<Option<T>, ResponseError>;
+type FBSResponseResult = Result<Option<Vec<u8>>, ResponseError>;
 
 struct RequestDropGuard<'a> {
     id: u32,
@@ -142,9 +163,9 @@ impl<'a> RequestDropGuard<'a> {
 }
 
 #[derive(Default)]
-struct RequestsContainer {
+struct FBSRequestsContainer {
     next_id: u32,
-    handlers: HashedMap<u32, async_oneshot::Sender<ResponseResult<Value>>>,
+    handlers: HashedMap<u32, async_oneshot::Sender<FBSResponseResult>>,
 }
 
 struct OutgoingMessageBuffer {
@@ -152,13 +173,15 @@ struct OutgoingMessageBuffer {
     messages: VecDeque<Arc<AtomicTake<Vec<u8>>>>,
 }
 
-#[allow(clippy::type_complexity)]
+// TODO: use 'close' in 'request' method.
+#[allow(clippy::type_complexity, dead_code)]
 struct Inner {
     outgoing_message_buffer: Arc<Mutex<OutgoingMessageBuffer>>,
     internal_message_receiver: async_channel::Receiver<InternalMessage>,
-    requests_container_weak: Weak<Mutex<RequestsContainer>>,
+    requests_container_weak: Weak<Mutex<FBSRequestsContainer>>,
     buffered_notifications_for: Arc<Mutex<HashedMap<SubscriptionTarget, Vec<Vec<u8>>>>>,
-    event_handlers_weak: WeakEventHandlers<Arc<dyn Fn(&[u8]) + Send + Sync + 'static>>,
+    event_handlers_weak:
+        WeakEventHandlers<Arc<dyn Fn(notification::NotificationRef<'_>) + Send + Sync + 'static>>,
     worker_closed: Arc<AtomicBool>,
     closed: AtomicBool,
 }
@@ -182,7 +205,7 @@ impl Channel {
             handle: None,
             messages: VecDeque::with_capacity(10),
         }));
-        let requests_container = Arc::<Mutex<RequestsContainer>>::default();
+        let requests_container = Arc::<Mutex<FBSRequestsContainer>>::default();
         let requests_container_weak = Arc::downgrade(&requests_container);
         let buffered_notifications_for =
             Arc::<Mutex<HashedMap<SubscriptionTarget, Vec<Vec<u8>>>>>::default();
@@ -222,41 +245,61 @@ impl Channel {
             move |message| {
                 trace!("received raw message: {}", String::from_utf8_lossy(message));
 
+                let message = unprefix_message(message);
+
                 match deserialize_message(message) {
-                    ChannelReceiveMessage::Notification { target_id } => {
+                    ChannelReceiveMessage::Notification(notification) => {
+                        let target_id = notification.handler_id().unwrap();
+                        // Target id can be either the worker PID or a UUID.
+                        let target_id = match target_id.parse::<u64>() {
+                            Ok(_) => SubscriptionTarget::String(target_id.to_string()),
+                            Err(_) => SubscriptionTarget::Uuid(Uuid::parse_str(target_id).unwrap()),
+                        };
+
                         if !non_buffered_notifications.contains(&target_id) {
                             let mut buffer_notifications_for = buffered_notifications_for.lock();
                             // Check if we need to buffer notifications for this
                             // target_id
                             if let Some(list) = buffer_notifications_for.get_mut(&target_id) {
+                                // Store the whole message removing the size prefix.
                                 list.push(Vec::from(message));
                                 return;
                             }
 
                             // Remember we don't need to buffer these
-                            non_buffered_notifications.put(target_id, ());
+                            non_buffered_notifications.put(target_id.clone(), ());
                         }
-                        event_handlers.call_callbacks_with_single_value(&target_id, message);
+                        event_handlers.call_callbacks_with_single_value(&target_id, notification);
                     }
-                    ChannelReceiveMessage::ResponseSuccess { id, data, .. } => {
-                        let sender = requests_container.lock().handlers.remove(&id);
+                    ChannelReceiveMessage::Response(response) => {
+                        let sender = requests_container
+                            .lock()
+                            .handlers
+                            .remove(&response.id().unwrap());
                         if let Some(mut sender) = sender {
-                            let _ = sender.send(Ok(data));
+                            // Request did not succeed.
+                            if let Ok(Some(reason)) = response.reason() {
+                                let _ = sender.send(Err(ResponseError {
+                                    reason: reason.to_string(),
+                                }));
+                            }
+                            // Request succeeded.
+                            else {
+                                match response.body().expect("failed accessing response body") {
+                                    // Response has body.
+                                    Some(_) => {
+                                        let _ = sender.send(Ok(Some(Vec::from(message))));
+                                    }
+                                    // Response does not have body.
+                                    None => {
+                                        let _ = sender.send(Ok(None));
+                                    }
+                                }
+                            }
                         } else {
                             warn!(
                                 "received success response does not match any sent request [id:{}]",
-                                id,
-                            );
-                        }
-                    }
-                    ChannelReceiveMessage::ResponseError { id, reason } => {
-                        let sender = requests_container.lock().handlers.remove(&id);
-                        if let Some(mut sender) = sender {
-                            let _ = sender.send(Err(ResponseError { reason }));
-                        } else {
-                            warn!(
-                                "received error response does not match any sent request [id:{}]",
-                                id,
+                                response.id().unwrap(),
                             );
                         }
                     }
@@ -295,7 +338,7 @@ impl Channel {
         let event_handlers_weak = self.inner.event_handlers_weak.clone();
         buffered_notifications_for
             .lock()
-            .entry(target_id)
+            .entry(target_id.clone())
             .or_default();
         BufferMessagesGuard {
             target_id,
@@ -313,8 +356,6 @@ impl Channel {
         R: Request<HandlerId = HandlerId> + 'static,
         HandlerId: Display,
     {
-        let method = request.as_method();
-
         let id;
         let (result_sender, result_receiver) = async_oneshot::oneshot();
 
@@ -322,10 +363,6 @@ impl Channel {
             let requests_container = match self.inner.requests_container_weak.upgrade() {
                 Some(requests_container_lock) => requests_container_lock,
                 None => {
-                    if let Some(default_response) = R::default_for_soft_error() {
-                        return Ok(default_response);
-                    }
-
                     return Err(RequestError::ChannelClosed);
                 }
             };
@@ -337,35 +374,22 @@ impl Channel {
             requests_container_lock.handlers.insert(id, result_sender);
         }
 
-        debug!("request() [method:{}, id:{}]: {:?}", method, id, request);
+        debug!("request() [method:{:?}, id:{}]", R::METHOD, id);
 
-        // TODO: Todo pre-allocate fixed size string sufficient for most cases by default
-        // TODO: Refactor to avoid extra allocation during JSON serialization if possible
-        let message = Arc::new(AtomicTake::new(
-            format!(
-                "{id}:{method}:{handler_id}:{}",
-                serde_json::to_string(&request).unwrap()
-            )
-            .into_bytes(),
-        ));
+        let data = request.into_bytes(id, handler_id);
+
+        let buffer = Arc::new(AtomicTake::new(data));
 
         {
             let mut outgoing_message_buffer = self.inner.outgoing_message_buffer.lock();
             outgoing_message_buffer
                 .messages
-                .push_back(Arc::clone(&message));
+                .push_back(Arc::clone(&buffer));
             if let Some(handle) = outgoing_message_buffer.handle {
                 if self.inner.worker_closed.load(Ordering::Acquire) {
                     // Forbid all requests after worker closing except one worker closing request
-                    let first_worker_closing = TypeId::of::<R>()
-                        == TypeId::of::<WorkerCloseRequest>()
-                        && !self.inner.closed.swap(true, Ordering::Relaxed);
-
-                    if !first_worker_closing {
-                        if let Some(default_response) = R::default_for_soft_error() {
-                            return Ok(default_response);
-                        }
-
+                    // TODO: We were checking before that inner.closed.
+                    if R::METHOD != request::Method::WorkerClose {
                         return Err(RequestError::ChannelClosed);
                     }
                 }
@@ -374,9 +398,6 @@ impl Channel {
                     let ret = mediasoup_sys::uv_async_send(handle);
                     if ret != 0 {
                         error!("uv_async_send call failed with code {}", ret);
-                        if let Some(default_response) = R::default_for_soft_error() {
-                            return Ok(default_response);
-                        }
 
                         return Err(RequestError::ChannelClosed);
                     }
@@ -387,7 +408,7 @@ impl Channel {
         // Drop guard to make sure to drop pending request when future is cancelled
         let request_drop_guard = RequestDropGuard {
             id,
-            message,
+            message: buffer,
             channel: self,
             removed: false,
         };
@@ -398,28 +419,39 @@ impl Channel {
 
         let response_result = match response_result_fut {
             Ok(response_result) => response_result,
-            Err(_closed) => {
-                return if let Some(default_response) = R::default_for_soft_error() {
-                    Ok(default_response)
-                } else {
-                    Err(RequestError::ChannelClosed)
-                };
-            }
+            Err(_closed) => Err(ResponseError {
+                reason: String::from("ChannelClosed"),
+            }),
         };
 
         match response_result {
-            Ok(data) => {
-                debug!("request succeeded [method:{}, id:{}]", method, id);
+            Ok(bytes) => {
+                debug!("request succeeded [method:{:?}, id:{}]", R::METHOD, id);
 
-                // Default will work for `()` response
-                serde_json::from_value(data.unwrap_or_default()).map_err(|error| {
-                    RequestError::FailedToParse {
-                        error: error.to_string(),
+                match bytes {
+                    Some(bytes) => {
+                        let message_ref = message::MessageRef::read_as_root(&bytes).unwrap();
+
+                        let message::BodyRef::Response(response_ref) = message_ref.data().unwrap()
+                        else {
+                            panic!("Wrong response stored: {message_ref:?}");
+                        };
+
+                        Ok(R::convert_response(response_ref.body().unwrap())
+                            .map_err(RequestError::ResponseConversion)?)
                     }
-                })
+                    None => {
+                        Ok(R::convert_response(None).map_err(RequestError::ResponseConversion)?)
+                    }
+                }
             }
             Err(ResponseError { reason }) => {
-                debug!("request failed [method:{}, id:{}]: {}", method, id, reason);
+                debug!(
+                    "request failed [method:{:?}, id:{}]: {}",
+                    R::METHOD,
+                    id,
+                    reason
+                );
                 if reason.contains("not found") {
                     if let Some(default_response) = R::default_for_soft_error() {
                         Ok(default_response)
@@ -433,13 +465,50 @@ impl Channel {
         }
     }
 
+    pub(crate) fn notify<N, HandlerId>(
+        &self,
+        handler_id: HandlerId,
+        notification: N,
+    ) -> Result<(), NotificationError>
+    where
+        N: Notification<HandlerId = HandlerId>,
+        HandlerId: Display,
+    {
+        debug!("notify() [{notification:?}]");
+
+        let data = notification.into_bytes(handler_id);
+
+        let message = Arc::new(AtomicTake::new(data));
+
+        {
+            let mut outgoing_message_buffer = self.inner.outgoing_message_buffer.lock();
+            outgoing_message_buffer
+                .messages
+                .push_back(Arc::clone(&message));
+            if let Some(handle) = outgoing_message_buffer.handle {
+                if self.inner.worker_closed.load(Ordering::Acquire) {
+                    return Err(NotificationError::ChannelClosed);
+                }
+                unsafe {
+                    // Notify worker that there is something to read
+                    let ret = mediasoup_sys::uv_async_send(handle);
+                    if ret != 0 {
+                        error!("uv_async_send call failed with code {}", ret);
+                        return Err(NotificationError::ChannelClosed);
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
     pub(crate) fn subscribe_to_notifications<F>(
         &self,
         target_id: SubscriptionTarget,
         callback: F,
     ) -> Option<SubscriptionHandler>
     where
-        F: Fn(&[u8]) + Send + Sync + 'static,
+        F: Fn(notification::NotificationRef<'_>) + Send + Sync + 'static,
     {
         self.inner
             .event_handlers_weak

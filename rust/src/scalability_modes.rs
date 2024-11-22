@@ -118,7 +118,7 @@ impl Default for ScalabilityMode {
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum ParseScalabilityModeError {
     /// Invalid input string
-    #[error("Invalid input string")]
+    #[error("Invalid Scalability Mode input string")]
     InvalidInput,
 }
 
@@ -184,9 +184,9 @@ impl FromStr for ScalabilityMode {
     }
 }
 
-impl ToString for ScalabilityMode {
-    fn to_string(&self) -> String {
-        self.as_str().to_string()
+impl std::fmt::Display for ScalabilityMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 

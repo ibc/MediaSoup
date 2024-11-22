@@ -1,7 +1,7 @@
 #include "common.hpp"
 #include "RTC/RTCP/ReceiverReport.hpp"
 #include "RTC/RTCP/SenderReport.hpp" // sizeof(SenderReport::Header)
-#include <catch2/catch.hpp>
+#include <catch2/catch_test_macros.hpp>
 
 using namespace RTC::RTCP;
 
@@ -53,7 +53,7 @@ SCENARIO("RTCP RR parsing", "[parser][rtcp][rr]")
 {
 	SECTION("parse RR packet with a single report")
 	{
-		ReceiverReportPacket* packet = ReceiverReportPacket::Parse(buffer, sizeof(buffer));
+		std::unique_ptr<ReceiverReportPacket> packet{ ReceiverReportPacket::Parse(buffer, sizeof(buffer)) };
 
 		REQUIRE(packet->GetCount() == 1);
 
@@ -67,7 +67,8 @@ SCENARIO("RTCP RR parsing", "[parser][rtcp][rr]")
 
 			packet->Serialize(serialized);
 
-			ReceiverReportPacket* packet2 = ReceiverReportPacket::Parse(serialized, sizeof(buffer));
+			std::unique_ptr<ReceiverReportPacket> packet2{ ReceiverReportPacket::Parse(
+				serialized, sizeof(buffer)) };
 
 			REQUIRE(packet2->GetType() == Type::RR);
 			REQUIRE(packet2->GetCount() == 1);
@@ -81,26 +82,21 @@ SCENARIO("RTCP RR parsing", "[parser][rtcp][rr]")
 
 			verify(report);
 
-			delete packet2;
-
 			SECTION("compare serialized packet with original buffer")
 			{
 				REQUIRE(std::memcmp(buffer, serialized, sizeof(buffer)) == 0);
 			}
 		}
-
-		delete packet;
 	}
 
 	SECTION("parse RR")
 	{
-		ReceiverReport* report = ReceiverReport::Parse(rrBuffer, ReceiverReport::HeaderSize);
+		std::unique_ptr<ReceiverReport> report{ ReceiverReport::Parse(
+			rrBuffer, ReceiverReport::HeaderSize) };
 
 		REQUIRE(report);
 
-		verify(report);
-
-		delete report;
+		verify(report.get());
 	}
 
 	SECTION("create RR packet with more than 31 reports")
@@ -132,7 +128,8 @@ SCENARIO("RTCP RR parsing", "[parser][rtcp][rr]")
 		// Serialization must contain 2 RR packets since report count exceeds 31.
 		packet.Serialize(buffer);
 
-		auto* packet2 = static_cast<ReceiverReportPacket*>(Packet::Parse(buffer, sizeof(buffer)));
+		std::unique_ptr<ReceiverReportPacket> packet2{ static_cast<ReceiverReportPacket*>(
+			Packet::Parse(buffer, sizeof(buffer))) };
 
 		REQUIRE(packet2 != nullptr);
 		REQUIRE(packet2->GetCount() == 31);
@@ -172,7 +169,6 @@ SCENARIO("RTCP RR parsing", "[parser][rtcp][rr]")
 			REQUIRE(report->GetDelaySinceLastSenderReport() == 31 + i);
 		}
 
-		delete packet2;
 		delete packet3;
 	}
 

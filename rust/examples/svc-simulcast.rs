@@ -201,10 +201,17 @@ impl SvcSimulcastConnection {
         // right away.
         // This may not be the case for real-world applications or you may create this at a
         // different time and/or in different order.
-        let transport_options = WebRtcTransportOptions::new(TransportListenIps::new(ListenIp {
-            ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-            announced_ip: None,
-        }));
+        let transport_options =
+            WebRtcTransportOptions::new(WebRtcTransportListenInfos::new(ListenInfo {
+                protocol: Protocol::Udp,
+                ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
+                announced_address: None,
+                port: None,
+                port_range: None,
+                flags: None,
+                send_buffer_size: None,
+                recv_buffer_size: None,
+            }));
         let producer_transport = router
             .create_webrtc_transport(transport_options.clone())
             .await

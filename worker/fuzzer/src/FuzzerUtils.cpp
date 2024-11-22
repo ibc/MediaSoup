@@ -12,10 +12,13 @@ void Fuzzer::Utils::Fuzz(const uint8_t* data, size_t len)
 	/* IP class. */
 
 	std::string ip;
+
 	ip = std::string(reinterpret_cast<const char*>(data2), INET6_ADDRSTRLEN / 2);
 	::Utils::IP::GetFamily(ip);
+
 	ip = std::string(reinterpret_cast<const char*>(data2), INET6_ADDRSTRLEN);
 	::Utils::IP::GetFamily(ip);
+
 	ip = std::string(reinterpret_cast<const char*>(data2), INET6_ADDRSTRLEN * 2);
 	::Utils::IP::GetFamily(ip);
 
@@ -23,6 +26,7 @@ void Fuzzer::Utils::Fuzz(const uint8_t* data, size_t len)
 	try
 	{
 		auto ip = std::string(reinterpret_cast<const char*>(data2), len);
+
 		::Utils::IP::NormalizeIp(ip);
 	}
 	catch (const MediaSoupError& error)
@@ -60,6 +64,7 @@ void Fuzzer::Utils::Fuzz(const uint8_t* data, size_t len)
 	try
 	{
 		size_t outLen;
+
 		::Utils::String::Base64Encode(data2, len);
 		::Utils::String::Base64Decode(data2, len, outLen);
 	}
@@ -70,6 +75,7 @@ void Fuzzer::Utils::Fuzz(const uint8_t* data, size_t len)
 	/* Time class. */
 
 	auto ntp = ::Utils::Time::TimeMs2Ntp(static_cast<uint64_t>(len));
+
 	::Utils::Time::Ntp2TimeMs(ntp);
 	::Utils::Time::IsNewerTimestamp(static_cast<uint32_t>(len), static_cast<uint32_t>(len * len));
 	::Utils::Time::IsNewerTimestamp(static_cast<uint32_t>(len * len), static_cast<uint32_t>(len));

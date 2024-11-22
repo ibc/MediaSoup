@@ -2,7 +2,6 @@
 // #define MS_LOG_DEV_LEVEL 3
 
 #include "RTC/RtpProbationGenerator.hpp"
-#include "DepLibUV.hpp"
 #include "Logger.hpp"
 #include "Utils.hpp"
 #include "RTC/RtpDictionaries.hpp"
@@ -17,7 +16,7 @@ namespace RTC
 	// Probation RTP header.
 	// Caution: This must have an exact size for the RTP extensions to be added
 	// and must align extensions to 4 bytes.
-	static uint8_t ProbationPacketHeader[] =
+	static const uint8_t ProbationPacketHeader[] =
 	{
 		0b10010000, 0b01111111, 0, 0, // PayloadType: 127, Sequence Number: 0
 		0, 0, 0, 0,                   // Timestamp: 0
@@ -139,9 +138,13 @@ namespace RTC
 
 		// Make the packet length fit into our available limits.
 		if (size > MaxProbationPacketSize)
+		{
 			size = MaxProbationPacketSize;
+		}
 		else if (size < ProbationPacketHeaderSize)
+		{
 			size = ProbationPacketHeaderSize;
+		}
 
 		// Just send up to StepNumPackets per step.
 		// Increase RTP seq number and timestamp.

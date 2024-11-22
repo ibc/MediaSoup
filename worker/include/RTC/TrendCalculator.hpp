@@ -11,7 +11,7 @@ namespace RTC
 		static constexpr float DecreaseFactor{ 0.05f }; // per second.
 
 	public:
-		TrendCalculator(float decreaseFactor = DecreaseFactor);
+		explicit TrendCalculator(float decreaseFactor = DecreaseFactor);
 
 	public:
 		uint32_t GetValue() const

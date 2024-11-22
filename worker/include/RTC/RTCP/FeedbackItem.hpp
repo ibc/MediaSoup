@@ -15,7 +15,9 @@ namespace RTC
 			{
 				// data size must be >= header.
 				if (Item::HeaderSize > len)
+				{
 					return nullptr;
+				}
 
 				auto* header =
 				  const_cast<typename Item::Header*>(reinterpret_cast<const typename Item::Header*>(data));

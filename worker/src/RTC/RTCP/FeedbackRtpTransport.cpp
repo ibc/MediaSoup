@@ -5,8 +5,7 @@
 #include "Logger.hpp"
 #include "Utils.hpp"
 #include "RTC/SeqManager.hpp"
-#include <limits> // std::numeric_limits()
-#include <sstream>
+#include <sstream> // std::ostringstream
 
 namespace RTC
 {
@@ -48,7 +47,9 @@ namespace RTC
 			  new FeedbackRtpTransportPacket(commonHeader, len));
 
 			if (!packet->IsCorrect())
+			{
 				return nullptr;
+			}
 
 			return packet.release();
 		}
@@ -60,7 +61,7 @@ namespace RTC
 		{
 			MS_TRACE();
 
-			size_t len = static_cast<size_t>(ntohs(commonHeader->length) + 1) * 4;
+			const size_t len = static_cast<size_t>(ntohs(commonHeader->length) + 1) * 4;
 
 			if (len > availableLen)
 			{
@@ -77,15 +78,15 @@ namespace RTC
 
 			this->baseSequenceNumber  = Utils::Byte::Get2Bytes(data, 0);
 			this->packetStatusCount   = Utils::Byte::Get2Bytes(data, 2);
-			this->referenceTime       = Utils::Byte::Get3Bytes(data, 4);
+			this->referenceTime       = Utils::Byte::Get3BytesSigned(data, 4);
 			this->feedbackPacketCount = Utils::Byte::Get1Byte(data, 7);
 			this->size                = len;
 
 			// Make contentData point to the beginning of the chunks.
 			uint8_t* contentData = data + FeedbackRtpTransportPacket::fixedHeaderSize;
 			// Make contentLen be the available length for chunks.
-			size_t contentLen = len - Packet::CommonHeaderSize - FeedbackPacket::HeaderSize -
-			                    FeedbackRtpTransportPacket::fixedHeaderSize;
+			const size_t contentLen = len - Packet::CommonHeaderSize - FeedbackPacket::HeaderSize -
+			                          FeedbackRtpTransportPacket::fixedHeaderSize;
 			size_t offset{ 0u };
 			uint16_t count{ 0u };
 			uint16_t receivedPacketStatusCount{ 0u };
@@ -178,11 +179,11 @@ namespace RTC
 			MS_TRACE();
 
 			MS_DUMP("<FeedbackRtpTransportPacket>");
-			MS_DUMP("  base sequence         : %" PRIu16, this->baseSequenceNumber);
-			MS_DUMP("  packet status count   : %" PRIu16, this->packetStatusCount);
-			MS_DUMP("  reference time        : %" PRIi32, this->referenceTime);
-			MS_DUMP("  feedback packet count : %" PRIu8, this->feedbackPacketCount);
-			MS_DUMP("  size                  : %zu", GetSize());
+			MS_DUMP("  base sequence: %" PRIu16, this->baseSequenceNumber);
+			MS_DUMP("  packet status count: %" PRIu16, this->packetStatusCount);
+			MS_DUMP("  reference time: %" PRIi32, this->referenceTime);
+			MS_DUMP("  feedback packet count: %" PRIu8, this->feedbackPacketCount);
+			MS_DUMP("  size: %zu", GetSize());
 
 			for (auto* chunk : this->chunks)
 			{
@@ -236,7 +237,7 @@ namespace RTC
 			offset += 2;
 
 			// Reference time.
-			Utils::Byte::Set3Bytes(buffer, offset, static_cast<uint32_t>(this->referenceTime));
+			Utils::Byte::Set3BytesSigned(buffer, offset, this->referenceTime);
 			offset += 3;
 
 			// Feedback packet count.
@@ -265,7 +266,7 @@ namespace RTC
 			}
 
 			// 32 bits padding.
-			size_t padding = (-offset) & 3;
+			const size_t padding = (-offset) & 3;
 
 			for (size_t i{ 0u }; i < padding; ++i)
 			{
@@ -277,26 +278,29 @@ namespace RTC
 			return offset;
 		}
 
+		void FeedbackRtpTransportPacket::SetBase(uint16_t sequenceNumber, uint64_t timestamp)
+		{
+			MS_TRACE();
+
+			MS_ASSERT(!this->baseSet, "base already set");
+
+			this->baseSet              = true;
+			this->baseSequenceNumber   = sequenceNumber;
+			this->referenceTime        = static_cast<int32_t>((timestamp & 0x1FFFFFC0) / 64);
+			this->latestSequenceNumber = sequenceNumber - 1;
+			this->latestTimestamp      = (timestamp >> 6) * 64; // IMPORTANT: Loose precision.
+		}
+
 		FeedbackRtpTransportPacket::AddPacketResult FeedbackRtpTransportPacket::AddPacket(
 		  uint16_t sequenceNumber, uint64_t timestamp, size_t maxRtcpPacketLen)
 		{
 			MS_TRACE();
 
+			MS_ASSERT(this->baseSet, "base not set");
 			MS_ASSERT(!IsFull(), "packet is full");
 
-			// Let's see if we must set our base.
-			if (this->latestTimestamp == 0u)
-			{
-				this->baseSequenceNumber   = sequenceNumber + 1;
-				this->referenceTime        = static_cast<int32_t>((timestamp & 0x1FFFFFC0) / 64);
-				this->latestSequenceNumber = sequenceNumber;
-				this->latestTimestamp      = (timestamp >> 6) * 64; // IMPORTANT: Loose precision.
-
-				return AddPacketResult::SUCCESS;
-			}
-
-			// If the wide sequence number of the new packet is lower than the latest seen,
-			// ignore it.
+			// If the wide sequence number of the new packet is lower than the latest
+			// seen, ignore it.
 			// NOTE: Not very spec compliant but libwebrtc does it.
 			// Also ignore if the sequence number matches the latest seen.
 			if (!RTC::SeqManager<uint16_t>::IsSeqHigherThan(sequenceNumber, this->latestSequenceNumber))
@@ -306,7 +310,9 @@ namespace RTC
 
 			// Check if there are too many missing packets.
 			{
-				auto missingPackets = sequenceNumber - (this->latestSequenceNumber + 1);
+				// NOTE: We CANNOT use auto here, we must use uint16_t. Otherwise this is a bug.
+				// https://github.com/versatica/mediasoup/issues/1385#issuecomment-2084982087
+				const uint16_t missingPackets = sequenceNumber - (this->latestSequenceNumber + 1);
 
 				if (missingPackets > FeedbackRtpTransportPacket::maxMissingPackets)
 				{
@@ -318,7 +324,7 @@ namespace RTC
 
 			// Deltas are represented as multiples of 250 us.
 			// NOTE: Read it as int 64 to detect long elapsed times.
-			int64_t delta64 = (timestamp - this->latestTimestamp) * 4;
+			const int64_t delta64 = (timestamp - this->latestTimestamp) * 4;
 
 			// clang-format off
 			if (
@@ -338,7 +344,8 @@ namespace RTC
 			// Delta in 16 bits signed.
 			auto delta = static_cast<int16_t>(delta64);
 
-			// Check whether another chunks and corresponding delta infos could be added.
+			// Check whether another chunks and corresponding delta infos could be
+			// added.
 			{
 				// Fixed packet size.
 				size_t size = FeedbackRtpPacket::GetSize();
@@ -399,7 +406,9 @@ namespace RTC
 				auto& packetResult = packetResults[idx];
 
 				if (!packetResult.received)
+				{
 					continue;
+				}
 
 				currentReceivedAtMs += this->deltas.at(deltaIdx) / 4;
 				packetResult.delta        = this->deltas.at(deltaIdx);
@@ -414,11 +423,13 @@ namespace RTC
 		{
 			MS_TRACE();
 
-			uint16_t expected = this->packetStatusCount;
+			const uint16_t expected = this->packetStatusCount;
 			uint16_t lost{ 0u };
 
 			if (expected == 0u)
+			{
 				return 0u;
+			}
 
 			for (auto* chunk : this->chunks)
 			{
@@ -428,7 +439,9 @@ namespace RTC
 			// NOTE: If lost equals expected, the math below would produce 256, which
 			// becomes 0 in uint8_t.
 			if (lost == expected)
+			{
 				return 255u;
+			}
 
 			return (lost << 8) / expected;
 		}
@@ -487,9 +500,13 @@ namespace RTC
 			Status status;
 
 			if (delta >= 0 && delta <= 255)
+			{
 				status = Status::SmallDelta;
+			}
 			else
+			{
 				status = Status::LargeDelta;
+			}
 
 			// Create a long run chunk before processing this packet, if needed.
 			// clang-format off
@@ -576,7 +593,9 @@ namespace RTC
 		{
 			// No pending status packets.
 			if (this->context.statuses.empty())
+			{
 				return;
+			}
 
 			if (this->context.allSameStatus)
 			{
@@ -604,8 +623,8 @@ namespace RTC
 				return nullptr;
 			}
 
-			auto bytes        = Utils::Byte::Get2Bytes(data, 0);
-			uint8_t chunkType = (bytes >> 15) & 0x01;
+			auto bytes              = Utils::Byte::Get2Bytes(data, 0);
+			const uint8_t chunkType = (bytes >> 15) & 0x01;
 
 			// Run length chunk.
 			if (chunkType == 0)
@@ -635,12 +654,16 @@ namespace RTC
 			// Vector chunk.
 			else
 			{
-				uint8_t symbolSize = data[0] & 0x40;
+				const uint8_t symbolSize = data[0] & 0x40;
 
 				if (symbolSize == 0)
+				{
 					return new OneBitVectorChunk(bytes, count);
+				}
 				else
+				{
 					return new TwoBitVectorChunk(bytes, count);
+				}
 			}
 
 			return nullptr;
@@ -707,8 +730,8 @@ namespace RTC
 			MS_TRACE();
 
 			MS_DUMP("  <RunLengthChunk>");
-			MS_DUMP("    status : %s", FeedbackRtpTransportPacket::status2String[this->status].c_str());
-			MS_DUMP("    count  : %" PRIu16, this->count);
+			MS_DUMP("    status: %s", FeedbackRtpTransportPacket::status2String[this->status].c_str());
+			MS_DUMP("    count: %" PRIu16, this->count);
 			MS_DUMP("  </RunLengthChunk>");
 		}
 
@@ -717,9 +740,13 @@ namespace RTC
 			MS_TRACE();
 
 			if (this->status == Status::SmallDelta || this->status == Status::LargeDelta)
+			{
 				return this->count;
+			}
 			else
+			{
 				return 0u;
+			}
 		}
 
 		void FeedbackRtpTransportPacket::RunLengthChunk::FillResults(
@@ -728,7 +755,8 @@ namespace RTC
 		{
 			MS_TRACE();
 
-			bool received = (this->status == Status::SmallDelta || this->status == Status::LargeDelta);
+			const bool received =
+			  (this->status == Status::SmallDelta || this->status == Status::LargeDelta);
 
 			for (uint16_t count{ 1u }; count <= this->count; ++count)
 			{
@@ -837,7 +865,9 @@ namespace RTC
 			for (auto status : this->statuses)
 			{
 				if (status == Status::SmallDelta || status == Status::LargeDelta)
+				{
 					count++;
+				}
 			}
 
 			return count;
@@ -851,7 +881,7 @@ namespace RTC
 
 			for (auto status : this->statuses)
 			{
-				bool received = (status == Status::SmallDelta || status == Status::LargeDelta);
+				const bool received = (status == Status::SmallDelta || status == Status::LargeDelta);
 
 				packetResults.emplace_back(++currentSequenceNumber, received);
 			}
@@ -975,7 +1005,9 @@ namespace RTC
 			for (auto status : this->statuses)
 			{
 				if (status == Status::SmallDelta || status == Status::LargeDelta)
+				{
 					count++;
+				}
 			}
 
 			return count;
@@ -989,7 +1021,7 @@ namespace RTC
 
 			for (auto status : this->statuses)
 			{
-				bool received = (status == Status::SmallDelta || status == Status::LargeDelta);
+				const bool received = (status == Status::SmallDelta || status == Status::LargeDelta);
 
 				packetResults.emplace_back(++currentSequenceNumber, received);
 			}

@@ -10,44 +10,48 @@ namespace RTC
 {
 	/* Instance methods. */
 
-	void RtpListener::FillJson(json& jsonObject) const
+	flatbuffers::Offset<FBS::Transport::RtpListener> RtpListener::FillBuffer(
+	  flatbuffers::FlatBufferBuilder& builder) const
 	{
 		MS_TRACE();
 
-		jsonObject["ssrcTable"] = json::object();
-		jsonObject["midTable"]  = json::object();
-		jsonObject["ridTable"]  = json::object();
-
-		auto jsonSsrcTableIt = jsonObject.find("ssrcTable");
-		auto jsonMidTableIt  = jsonObject.find("midTable");
-		auto jsonRidTableIt  = jsonObject.find("ridTable");
-
 		// Add ssrcTable.
-		for (auto& kv : this->ssrcTable)
+		std::vector<flatbuffers::Offset<FBS::Common::Uint32String>> ssrcTable;
+
+		for (const auto& kv : this->ssrcTable)
 		{
 			auto ssrc      = kv.first;
 			auto* producer = kv.second;
 
-			(*jsonSsrcTableIt)[std::to_string(ssrc)] = producer->id;
+			ssrcTable.emplace_back(
+			  FBS::Common::CreateUint32StringDirect(builder, ssrc, producer->id.c_str()));
 		}
 
 		// Add midTable.
-		for (auto& kv : this->midTable)
-		{
-			auto& mid      = kv.first;
-			auto* producer = kv.second;
+		std::vector<flatbuffers::Offset<FBS::Common::StringString>> midTable;
 
-			(*jsonMidTableIt)[mid] = producer->id;
+		for (const auto& kv : this->midTable)
+		{
+			const auto& mid = kv.first;
+			auto* producer  = kv.second;
+
+			midTable.emplace_back(
+			  FBS::Common::CreateStringStringDirect(builder, mid.c_str(), producer->id.c_str()));
 		}
 
 		// Add ridTable.
-		for (auto& kv : this->ridTable)
-		{
-			auto& rid      = kv.first;
-			auto* producer = kv.second;
+		std::vector<flatbuffers::Offset<FBS::Common::StringString>> ridTable;
 
-			(*jsonRidTableIt)[rid] = producer->id;
+		for (const auto& kv : this->ridTable)
+		{
+			const auto& rid = kv.first;
+			auto* producer  = kv.second;
+
+			ridTable.emplace_back(
+			  FBS::Common::CreateStringStringDirect(builder, rid.c_str(), producer->id.c_str()));
 		}
+
+		return FBS::Transport::CreateRtpListenerDirect(builder, &ssrcTable, &midTable, &ridTable);
 	}
 
 	void RtpListener::AddProducer(RTC::Producer* producer)
@@ -57,7 +61,7 @@ namespace RTC
 		const auto& rtpParameters = producer->GetRtpParameters();
 
 		// Add entries into the ssrcTable.
-		for (auto& encoding : rtpParameters.encodings)
+		for (const auto& encoding : rtpParameters.encodings)
 		{
 			uint32_t ssrc;
 
@@ -99,7 +103,7 @@ namespace RTC
 		// Add entries into midTable.
 		if (!rtpParameters.mid.empty())
 		{
-			auto& mid = rtpParameters.mid;
+			const auto& mid = rtpParameters.mid;
 
 			if (this->midTable.find(mid) == this->midTable.end())
 			{
@@ -114,12 +118,14 @@ namespace RTC
 		}
 
 		// Add entries into ridTable.
-		for (auto& encoding : rtpParameters.encodings)
+		for (const auto& encoding : rtpParameters.encodings)
 		{
-			auto& rid = encoding.rid;
+			const auto& rid = encoding.rid;
 
 			if (rid.empty())
+			{
 				continue;
+			}
 
 			if (this->ridTable.find(rid) == this->ridTable.end())
 			{
@@ -144,25 +150,37 @@ namespace RTC
 		for (auto it = this->ssrcTable.begin(); it != this->ssrcTable.end();)
 		{
 			if (it->second == producer)
+			{
 				it = this->ssrcTable.erase(it);
+			}
 			else
+			{
 				++it;
+			}
 		}
 
 		for (auto it = this->midTable.begin(); it != this->midTable.end();)
 		{
 			if (it->second == producer)
+			{
 				it = this->midTable.erase(it);
+			}
 			else
+			{
 				++it;
+			}
 		}
 
 		for (auto it = this->ridTable.begin(); it != this->ridTable.end();)
 		{
 			if (it->second == producer)
+			{
 				it = this->ridTable.erase(it);
+			}
 			else
+			{
 				++it;
+			}
 		}
 	}
 

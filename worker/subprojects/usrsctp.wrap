@@ -1,8 +1,8 @@
 [wrap-file]
-directory = usrsctp-4e06feb01cadcd127d119486b98a4bd3d64aa1e7
-source_url = https://github.com/sctplab/usrsctp/archive/4e06feb01cadcd127d119486b98a4bd3d64aa1e7.zip
-source_filename = 4e06feb01cadcd127d119486b98a4bd3d64aa1e7.zip
-source_hash = 15f7844c4c4ca93228ae0fe844182c72edd1d809b461cb97b1bb687a804dd4fc
+directory = usrsctp-d45b53f5dfa79533f5c5e7aefa5d7570405afb39
+source_url = https://github.com/sctplab/usrsctp/archive/d45b53f5dfa79533f5c5e7aefa5d7570405afb39.zip
+source_filename = d45b53f5dfa79533f5c5e7aefa5d7570405afb39.zip
+source_hash = da5f9adafc48fb5451f8355fee06508db52a3fca11138852c73ecb844f3b8647
 
 [provide]
 usrsctp = usrsctp_dep

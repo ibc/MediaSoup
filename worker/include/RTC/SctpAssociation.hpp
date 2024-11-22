@@ -6,9 +6,6 @@
 #include "RTC/DataConsumer.hpp"
 #include "RTC/DataProducer.hpp"
 #include <usrsctp.h>
-#include <nlohmann/json.hpp>
-
-using json = nlohmann::json;
 
 namespace RTC
 {
@@ -50,9 +47,9 @@ namespace RTC
 			virtual void OnSctpAssociationMessageReceived(
 			  RTC::SctpAssociation* sctpAssociation,
 			  uint16_t streamId,
-			  uint32_t ppid,
 			  const uint8_t* msg,
-			  size_t len) = 0;
+			  size_t len,
+			  uint32_t ppid) = 0;
 			virtual void OnSctpAssociationBufferedAmount(
 			  RTC::SctpAssociation* sctpAssociation, uint32_t len) = 0;
 		};
@@ -81,7 +78,8 @@ namespace RTC
 		~SctpAssociation();
 
 	public:
-		void FillJson(json& jsonObject) const;
+		flatbuffers::Offset<FBS::SctpParameters::SctpParameters> FillBuffer(
+		  flatbuffers::FlatBufferBuilder& builder) const;
 		void TransportConnected();
 		SctpState GetState() const
 		{
@@ -91,19 +89,19 @@ namespace RTC
 		{
 			return this->sctpBufferedAmount;
 		}
-		void ProcessSctpData(const uint8_t* data, size_t len);
+		void ProcessSctpData(const uint8_t* data, size_t len) const;
 		void SendSctpMessage(
 		  RTC::DataConsumer* dataConsumer,
-		  uint32_t ppid,
 		  const uint8_t* msg,
 		  size_t len,
+		  uint32_t ppid,
 		  onQueuedCallback* cb = nullptr);
 		void HandleDataConsumer(RTC::DataConsumer* dataConsumer);
 		void DataProducerClosed(RTC::DataProducer* dataProducer);
 		void DataConsumerClosed(RTC::DataConsumer* dataConsumer);
 
 	private:
-		void ResetSctpStream(uint16_t streamId, StreamDirection);
+		void ResetSctpStream(uint16_t streamId, StreamDirection direction);
 		void AddOutgoingStreams(bool force = false);
 
 		/* Callbacks fired by usrsctp events. */

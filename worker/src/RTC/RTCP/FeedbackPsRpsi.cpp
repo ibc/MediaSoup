@@ -25,7 +25,7 @@ namespace RTC
 				isCorrect = false;
 			}
 
-			size_t paddingBytes = this->header->paddingBits / 8;
+			const size_t paddingBytes = this->header->paddingBits / 8;
 
 			if (paddingBytes > FeedbackPsRpsiItem::maxBitStringSize)
 			{
@@ -50,7 +50,7 @@ namespace RTC
 			this->header = reinterpret_cast<Header*>(this->raw);
 
 			// 32 bits padding.
-			size_t padding = (-length) & 3;
+			const size_t padding = (-length) & 3;
 
 			this->header->paddingBits = padding * 8;
 			this->header->zero        = 0;
@@ -77,9 +77,9 @@ namespace RTC
 			MS_TRACE();
 
 			MS_DUMP("<FeedbackPsRpsiItem>");
-			MS_DUMP("  padding bits : %" PRIu8, this->header->paddingBits);
-			MS_DUMP("  payload type : %" PRIu8, this->GetPayloadType());
-			MS_DUMP("  length       : %zu", this->GetLength());
+			MS_DUMP("  padding bits %" PRIu8, this->header->paddingBits);
+			MS_DUMP("  payload type: %" PRIu8, this->GetPayloadType());
+			MS_DUMP("  length: %zu", this->GetLength());
 			MS_DUMP("</FeedbackPsRpsiItem>");
 		}
 	} // namespace RTCP

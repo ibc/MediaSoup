@@ -16,7 +16,10 @@ async fn init() -> Worker {
     let worker_manager = WorkerManager::new();
 
     worker_manager
-        .create_worker(WorkerSettings::default())
+        .create_worker(WorkerSettings {
+            enable_liburing: false,
+            ..WorkerSettings::default()
+        })
         .await
         .expect("Failed to create worker")
 }

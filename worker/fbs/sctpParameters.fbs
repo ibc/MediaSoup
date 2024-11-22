@@ -1,0 +1,25 @@
+namespace FBS.SctpParameters;
+
+table NumSctpStreams {
+    os: uint16 = 1024;
+    mis: uint16 = 1024;
+}
+
+table SctpParameters {
+    // Port is always 5000.
+    port: uint16 = 5000;
+    os: uint16;
+    mis: uint16;
+    max_message_size: uint32;
+    send_buffer_size: uint32;
+    sctp_buffered_amount: uint32;
+    is_data_channel: bool;
+}
+
+table SctpStreamParameters {
+    stream_id: uint16;
+    ordered: bool = null;
+    max_packet_life_time: uint16 = null;
+    max_retransmits: uint16 = null;
+}
+

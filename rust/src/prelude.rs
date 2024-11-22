@@ -20,8 +20,7 @@ pub use crate::router::{
 };
 
 pub use crate::webrtc_server::{
-    WebRtcServer, WebRtcServerId, WebRtcServerListenInfo, WebRtcServerListenInfos,
-    WebRtcServerOptions,
+    WebRtcServer, WebRtcServerId, WebRtcServerListenInfos, WebRtcServerOptions,
 };
 
 pub use crate::direct_transport::{DirectTransport, DirectTransportOptions, WeakDirectTransport};
@@ -36,7 +35,8 @@ pub use crate::transport::{
     TransportId,
 };
 pub use crate::webrtc_transport::{
-    TransportListenIps, WebRtcTransport, WebRtcTransportOptions, WebRtcTransportRemoteParameters,
+    WebRtcTransport, WebRtcTransportListenInfos, WebRtcTransportOptions,
+    WebRtcTransportRemoteParameters,
 };
 
 pub use crate::active_speaker_observer::{
@@ -60,11 +60,13 @@ pub use crate::data_producer::{
 pub use crate::producer::{Producer, ProducerId, ProducerOptions, WeakProducer};
 
 pub use crate::data_structures::{
-    AppData, DtlsParameters, IceCandidate, IceParameters, ListenIp, WebRtcMessage,
+    AppData, DtlsParameters, IceCandidate, IceParameters, ListenInfo, Protocol, WebRtcMessage,
 };
 pub use crate::rtp_parameters::{
-    MediaKind, MimeTypeAudio, MimeTypeVideo, RtcpFeedback, RtpCapabilities,
-    RtpCapabilitiesFinalized, RtpCodecCapability, RtpCodecParametersParameters, RtpParameters,
+    MediaKind, MimeTypeAudio, MimeTypeVideo, RtcpFeedback, RtcpParameters, RtpCapabilities,
+    RtpCapabilitiesFinalized, RtpCodecCapability, RtpCodecParameters, RtpCodecParametersParameters,
+    RtpEncodingParameters, RtpEncodingParametersRtx, RtpHeaderExtensionParameters,
+    RtpHeaderExtensionUri, RtpParameters,
 };
 pub use crate::sctp_parameters::SctpStreamParameters;
 pub use crate::srtp_parameters::SrtpCryptoSuite;

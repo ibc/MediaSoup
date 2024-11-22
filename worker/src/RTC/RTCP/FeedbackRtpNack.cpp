@@ -3,8 +3,8 @@
 
 #include "RTC/RTCP/FeedbackRtpNack.hpp"
 #include "Logger.hpp"
-#include <bitset> // std::bitset()
-#include <cstring>
+#include <bitset>  // std::bitset()
+#include <cstring> // std::memcpy
 
 namespace RTC
 {
@@ -37,8 +37,8 @@ namespace RTC
 			std::bitset<16> nackBitset(this->GetLostPacketBitmask());
 
 			MS_DUMP("<FeedbackRtpNackItem>");
-			MS_DUMP("  pid : %" PRIu16, this->GetPacketId());
-			MS_DUMP("  bpl : %s", nackBitset.to_string().c_str());
+			MS_DUMP("  pid: %" PRIu16, this->GetPacketId());
+			MS_DUMP("  bpl: %s", nackBitset.to_string().c_str());
 			MS_DUMP("</FeedbackRtpNackItem>");
 		}
 	} // namespace RTCP

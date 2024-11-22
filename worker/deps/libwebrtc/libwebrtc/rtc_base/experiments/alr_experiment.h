@@ -24,6 +24,7 @@ struct AlrExperimentSettings {
   int alr_bandwidth_usage_percent;
   int alr_start_budget_level_percent;
   int alr_stop_budget_level_percent;
+  int alr_timeout;
   // Will be sent to the receive side for stats slicing.
   // Can be 0..6, because it's sent as a 3 bits value and there's also
   // reserved value to indicate absence of experiment.

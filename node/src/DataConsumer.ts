@@ -1,97 +1,44 @@
 import { Logger } from './Logger';
-import { EnhancedEventEmitter } from './EnhancedEventEmitter';
+import { EnhancedEventEmitter } from './enhancedEvents';
+import type {
+	DataConsumer,
+	DataConsumerType,
+	DataConsumerDump,
+	DataConsumerStat,
+	DataConsumerEvents,
+	DataConsumerObserver,
+	DataConsumerObserverEvents,
+} from './DataConsumerTypes';
 import { Channel } from './Channel';
-import { PayloadChannel } from './PayloadChannel';
-import { TransportInternal } from './Transport';
-import { SctpStreamParameters } from './SctpParameters';
+import type { TransportInternal } from './Transport';
+import type { SctpStreamParameters } from './sctpParametersTypes';
+import { parseSctpStreamParameters } from './sctpParametersFbsUtils';
+import type { AppData } from './types';
+import * as fbsUtils from './fbsUtils';
+import { Event, Notification } from './fbs/notification';
+import * as FbsTransport from './fbs/transport';
+import * as FbsRequest from './fbs/request';
+import * as FbsDataConsumer from './fbs/data-consumer';
+import * as FbsDataProducer from './fbs/data-producer';
 
-export type DataConsumerOptions =
-{
-	/**
-	 * The id of the DataProducer to consume.
-	 */
-	dataProducerId: string;
-
-	/**
-	 * Just if consuming over SCTP.
-	 * Whether data messages must be received in order. If true the messages will
-	 * be sent reliably. Defaults to the value in the DataProducer if it has type
-	 * 'sctp' or to true if it has type 'direct'.
-	 */
-	ordered?: boolean;
-
-	/**
-	 * Just if consuming over SCTP.
-	 * When ordered is false indicates the time (in milliseconds) after which a
-	 * SCTP packet will stop being retransmitted. Defaults to the value in the
-	 * DataProducer if it has type 'sctp' or unset if it has type 'direct'.
-	 */
-	maxPacketLifeTime?: number;
-
-	/**
-	 * Just if consuming over SCTP.
-	 * When ordered is false indicates the maximum number of times a packet will
-	 * be retransmitted. Defaults to the value in the DataProducer if it has type
-	 * 'sctp' or unset if it has type 'direct'.
-	 */
-	maxRetransmits?: number;
-
-	/**
-	 * Custom application data.
-	 */
-	appData?: Record<string, unknown>;
-};
-
-export type DataConsumerStat =
-{
-	type: string;
-	timestamp: number;
-	label: string;
-	protocol: string;
-	messagesSent: number;
-	bytesSent: number;
-	bufferedAmount: number;
-};
-
-/**
- * DataConsumer type.
- */
-export type DataConsumerType = 'sctp' | 'direct';
-
-export type DataConsumerEvents =
-{
-	transportclose: [];
-	dataproducerclose: [];
-	message: [Buffer, number];
-	sctpsendbufferfull: [];
-	bufferedamountlow: [number];
-	// Private events.
-	'@close': [];
-	'@dataproducerclose': [];
-};
-
-export type DataConsumerObserverEvents =
-{
-	close: [];
-};
-
-type DataConsumerInternal = TransportInternal &
-{
+type DataConsumerInternal = TransportInternal & {
 	dataConsumerId: string;
 };
 
-type DataConsumerData =
-{
+type DataConsumerData = {
 	dataProducerId: string;
 	type: DataConsumerType;
 	sctpStreamParameters?: SctpStreamParameters;
 	label: string;
 	protocol: string;
+	bufferedAmountLowThreshold: number;
 };
 
 const logger = new Logger('DataConsumer');
 
-export class DataConsumer extends EnhancedEventEmitter<DataConsumerEvents>
+export class DataConsumerImpl<DataConsumerAppData extends AppData = AppData>
+	extends EnhancedEventEmitter<DataConsumerEvents>
+	implements DataConsumer
 {
 	// Internal data.
 	readonly #internal: DataConsumerInternal;
@@ -102,38 +49,42 @@ export class DataConsumer extends EnhancedEventEmitter<DataConsumerEvents>
 	// Channel instance.
 	readonly #channel: Channel;
 
-	// PayloadChannel instance.
-	readonly #payloadChannel: PayloadChannel;
-
 	// Closed flag.
 	#closed = false;
 
+	// Paused flag.
+	#paused = false;
+
+	// Associated DataProducer paused flag.
+	#dataProducerPaused = false;
+
+	// Subchannels subscribed to.
+	#subchannels: number[];
+
 	// Custom app data.
-	readonly #appData: Record<string, unknown>;
+	#appData: DataConsumerAppData;
 
 	// Observer instance.
-	readonly #observer = new EnhancedEventEmitter<DataConsumerObserverEvents>();
+	readonly #observer: DataConsumerObserver =
+		new EnhancedEventEmitter<DataConsumerObserverEvents>();
 
-	/**
-	 * @private
-	 */
-	constructor(
-		{
-			internal,
-			data,
-			channel,
-			payloadChannel,
-			appData
-		}:
-		{
-			internal: DataConsumerInternal;
-			data: DataConsumerData;
-			channel: Channel;
-			payloadChannel: PayloadChannel;
-			appData?: Record<string, unknown>;
-		}
-	)
-	{
+	constructor({
+		internal,
+		data,
+		channel,
+		paused,
+		dataProducerPaused,
+		subchannels,
+		appData,
+	}: {
+		internal: DataConsumerInternal;
+		data: DataConsumerData;
+		channel: Channel;
+		paused: boolean;
+		dataProducerPaused: boolean;
+		subchannels: number[];
+		appData?: DataConsumerAppData;
+	}) {
 		super();
 
 		logger.debug('constructor()');
@@ -141,99 +92,71 @@ export class DataConsumer extends EnhancedEventEmitter<DataConsumerEvents>
 		this.#internal = internal;
 		this.#data = data;
 		this.#channel = channel;
-		this.#payloadChannel = payloadChannel;
-		this.#appData = appData || {};
+		this.#paused = paused;
+		this.#dataProducerPaused = dataProducerPaused;
+		this.#subchannels = subchannels;
+		this.#appData = appData ?? ({} as DataConsumerAppData);
 
 		this.handleWorkerNotifications();
+		this.handleListenerError();
 	}
 
-	/**
-	 * DataConsumer id.
-	 */
-	get id(): string
-	{
+	get id(): string {
 		return this.#internal.dataConsumerId;
 	}
 
-	/**
-	 * Associated DataProducer id.
-	 */
-	get dataProducerId(): string
-	{
+	get dataProducerId(): string {
 		return this.#data.dataProducerId;
 	}
 
-	/**
-	 * Whether the DataConsumer is closed.
-	 */
-	get closed(): boolean
-	{
+	get closed(): boolean {
 		return this.#closed;
 	}
 
-	/**
-	 * DataConsumer type.
-	 */
-	get type(): DataConsumerType
-	{
+	get type(): DataConsumerType {
 		return this.#data.type;
 	}
 
-	/**
-	 * SCTP stream parameters.
-	 */
-	get sctpStreamParameters(): SctpStreamParameters | undefined
-	{
+	get sctpStreamParameters(): SctpStreamParameters | undefined {
 		return this.#data.sctpStreamParameters;
 	}
 
-	/**
-	 * DataChannel label.
-	 */
-	get label(): string
-	{
+	get label(): string {
 		return this.#data.label;
 	}
 
-	/**
-	 * DataChannel protocol.
-	 */
-	get protocol(): string
-	{
+	get protocol(): string {
 		return this.#data.protocol;
 	}
 
-	/**
-	 * App custom data.
-	 */
-	get appData(): Record<string, unknown>
-	{
+	get paused(): boolean {
+		return this.#paused;
+	}
+
+	get dataProducerPaused(): boolean {
+		return this.#dataProducerPaused;
+	}
+
+	get subchannels(): number[] {
+		return Array.from(this.#subchannels);
+	}
+
+	get appData(): DataConsumerAppData {
 		return this.#appData;
 	}
 
-	/**
-	 * Invalid setter.
-	 */
-	set appData(appData: Record<string, unknown>) // eslint-disable-line no-unused-vars
-	{
-		throw new Error('cannot override appData object');
+	set appData(appData: DataConsumerAppData) {
+		this.#appData = appData;
 	}
 
-	/**
-	 * Observer.
-	 */
-	get observer(): EnhancedEventEmitter<DataConsumerObserverEvents>
-	{
+	get observer(): DataConsumerObserver {
 		return this.#observer;
 	}
 
-	/**
-	 * Close the DataConsumer.
-	 */
-	close(): void
-	{
-		if (this.#closed)
+	close(): void {
+		if (this.#closed) {
 			return;
+		}
 
 		logger.debug('close()');
 
@@ -241,11 +164,19 @@ export class DataConsumer extends EnhancedEventEmitter<DataConsumerEvents>
 
 		// Remove notification subscriptions.
 		this.#channel.removeAllListeners(this.#internal.dataConsumerId);
-		this.#payloadChannel.removeAllListeners(this.#internal.dataConsumerId);
 
-		const reqData = { dataConsumerId: this.#internal.dataConsumerId };
+		/* Build Request. */
+		const requestOffset = new FbsTransport.CloseDataConsumerRequestT(
+			this.#internal.dataConsumerId
+		).pack(this.#channel.bufferBuilder);
 
-		this.#channel.request('transport.closeDataConsumer', this.#internal.transportId, reqData)
+		this.#channel
+			.request(
+				FbsRequest.Method.TRANSPORT_CLOSE_DATACONSUMER,
+				FbsRequest.Body.Transport_CloseDataConsumerRequest,
+				requestOffset,
+				this.#internal.transportId
+			)
 			.catch(() => {});
 
 		this.emit('@close');
@@ -254,15 +185,10 @@ export class DataConsumer extends EnhancedEventEmitter<DataConsumerEvents>
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Transport was closed.
-	 *
-	 * @private
-	 */
-	transportClosed(): void
-	{
-		if (this.#closed)
+	transportClosed(): void {
+		if (this.#closed) {
 			return;
+		}
 
 		logger.debug('transportClosed()');
 
@@ -270,7 +196,6 @@ export class DataConsumer extends EnhancedEventEmitter<DataConsumerEvents>
 
 		// Remove notification subscriptions.
 		this.#channel.removeAllListeners(this.#internal.dataConsumerId);
-		this.#payloadChannel.removeAllListeners(this.#internal.dataConsumerId);
 
 		this.safeEmit('transportclose');
 
@@ -278,46 +203,119 @@ export class DataConsumer extends EnhancedEventEmitter<DataConsumerEvents>
 		this.#observer.safeEmit('close');
 	}
 
-	/**
-	 * Dump DataConsumer.
-	 */
-	async dump(): Promise<any>
-	{
+	async dump(): Promise<DataConsumerDump> {
 		logger.debug('dump()');
 
-		return this.#channel.request('dataConsumer.dump', this.#internal.dataConsumerId);
+		const response = await this.#channel.request(
+			FbsRequest.Method.DATACONSUMER_DUMP,
+			undefined,
+			undefined,
+			this.#internal.dataConsumerId
+		);
+
+		/* Decode Response. */
+		const dumpResponse = new FbsDataConsumer.DumpResponse();
+
+		response.body(dumpResponse);
+
+		return parseDataConsumerDumpResponse(dumpResponse);
 	}
 
-	/**
-	 * Get DataConsumer stats.
-	 */
-	async getStats(): Promise<DataConsumerStat[]>
-	{
+	async getStats(): Promise<DataConsumerStat[]> {
 		logger.debug('getStats()');
 
-		return this.#channel.request('dataConsumer.getStats', this.#internal.dataConsumerId);
+		const response = await this.#channel.request(
+			FbsRequest.Method.DATACONSUMER_GET_STATS,
+			undefined,
+			undefined,
+			this.#internal.dataConsumerId
+		);
+
+		/* Decode Response. */
+		const data = new FbsDataConsumer.GetStatsResponse();
+
+		response.body(data);
+
+		return [parseDataConsumerStats(data)];
 	}
 
-	/**
-	 * Set buffered amount low threshold.
-	 */
-	async setBufferedAmountLowThreshold(threshold: number): Promise<void>
-	{
-		logger.debug('setBufferedAmountLowThreshold() [threshold:%s]', threshold);
-
-		const reqData = { threshold };
+	async pause(): Promise<void> {
+		logger.debug('pause()');
 
 		await this.#channel.request(
-			'dataConsumer.setBufferedAmountLowThreshold', this.#internal.dataConsumerId, reqData);
+			FbsRequest.Method.DATACONSUMER_PAUSE,
+			undefined,
+			undefined,
+			this.#internal.dataConsumerId
+		);
+
+		const wasPaused = this.#paused;
+
+		this.#paused = true;
+
+		// Emit observer event.
+		if (!wasPaused && !this.#dataProducerPaused) {
+			this.#observer.safeEmit('pause');
+		}
 	}
 
-	/**
-	 * Send data.
-	 */
-	async send(message: string | Buffer, ppid?: number): Promise<void>
-	{
-		if (typeof message !== 'string' && !Buffer.isBuffer(message))
-		{
+	async resume(): Promise<void> {
+		logger.debug('resume()');
+
+		await this.#channel.request(
+			FbsRequest.Method.DATACONSUMER_RESUME,
+			undefined,
+			undefined,
+			this.#internal.dataConsumerId
+		);
+
+		const wasPaused = this.#paused;
+
+		this.#paused = false;
+
+		// Emit observer event.
+		if (wasPaused && !this.#dataProducerPaused) {
+			this.#observer.safeEmit('resume');
+		}
+	}
+
+	async setBufferedAmountLowThreshold(threshold: number): Promise<void> {
+		logger.debug(`setBufferedAmountLowThreshold() [threshold:${threshold}]`);
+
+		/* Build Request. */
+		const requestOffset =
+			FbsDataConsumer.SetBufferedAmountLowThresholdRequest.createSetBufferedAmountLowThresholdRequest(
+				this.#channel.bufferBuilder,
+				threshold
+			);
+
+		await this.#channel.request(
+			FbsRequest.Method.DATACONSUMER_SET_BUFFERED_AMOUNT_LOW_THRESHOLD,
+			FbsRequest.Body.DataConsumer_SetBufferedAmountLowThresholdRequest,
+			requestOffset,
+			this.#internal.dataConsumerId
+		);
+	}
+
+	async getBufferedAmount(): Promise<number> {
+		logger.debug('getBufferedAmount()');
+
+		const response = await this.#channel.request(
+			FbsRequest.Method.DATACONSUMER_GET_BUFFERED_AMOUNT,
+			undefined,
+			undefined,
+			this.#internal.dataConsumerId
+		);
+
+		const data = new FbsDataConsumer.GetBufferedAmountResponse();
+
+		response.body(data);
+
+		return data.bufferedAmount();
+	}
+
+	async send(message: string | Buffer, ppid?: number): Promise<void> {
+		if (typeof message !== 'string' && !Buffer.isBuffer(message)) {
 			throw new TypeError('message must be a string or a Buffer');
 		}
 
@@ -337,111 +335,299 @@ export class DataConsumer extends EnhancedEventEmitter<DataConsumerEvents>
 		 * +-------------------------------+----------+
 		 */
 
-		if (typeof ppid !== 'number')
-		{
-			ppid = (typeof message === 'string')
-				? message.length > 0 ? 51 : 56
-				: message.length > 0 ? 53 : 57;
+		if (typeof ppid !== 'number') {
+			ppid =
+				typeof message === 'string'
+					? message.length > 0
+						? 51
+						: 56
+					: message.length > 0
+						? 53
+						: 57;
 		}
 
 		// Ensure we honor PPIDs.
-		if (ppid === 56)
+		if (ppid === 56) {
 			message = ' ';
-		else if (ppid === 57)
+		} else if (ppid === 57) {
 			message = Buffer.alloc(1);
+		}
 
-		const requestData = String(ppid);
+		const builder = this.#channel.bufferBuilder;
 
-		await this.#payloadChannel.request(
-			'dataConsumer.send', this.#internal.dataConsumerId, requestData, message);
+		let dataOffset = 0;
+
+		if (typeof message === 'string') {
+			message = Buffer.from(message);
+		}
+
+		dataOffset = FbsDataConsumer.SendRequest.createDataVector(builder, message);
+
+		const requestOffset = FbsDataConsumer.SendRequest.createSendRequest(
+			builder,
+			ppid,
+			dataOffset
+		);
+
+		await this.#channel.request(
+			FbsRequest.Method.DATACONSUMER_SEND,
+			FbsRequest.Body.DataConsumer_SendRequest,
+			requestOffset,
+			this.#internal.dataConsumerId
+		);
 	}
 
-	/**
-	 * Get buffered amount size.
-	 */
-	async getBufferedAmount(): Promise<number>
-	{
-		logger.debug('getBufferedAmount()');
+	async setSubchannels(subchannels: number[]): Promise<void> {
+		logger.debug('setSubchannels()');
 
-		const { bufferedAmount } =
-			await this.#channel.request('dataConsumer.getBufferedAmount', this.#internal.dataConsumerId);
+		/* Build Request. */
+		const requestOffset = new FbsDataConsumer.SetSubchannelsRequestT(
+			subchannels
+		).pack(this.#channel.bufferBuilder);
 
-		return bufferedAmount;
+		const response = await this.#channel.request(
+			FbsRequest.Method.DATACONSUMER_SET_SUBCHANNELS,
+			FbsRequest.Body.DataConsumer_SetSubchannelsRequest,
+			requestOffset,
+			this.#internal.dataConsumerId
+		);
+
+		/* Decode Response. */
+		const data = new FbsDataConsumer.SetSubchannelsResponse();
+
+		response.body(data);
+
+		// Update subchannels.
+		this.#subchannels = fbsUtils.parseVector(data, 'subchannels');
 	}
 
-	private handleWorkerNotifications(): void
-	{
-		this.#channel.on(this.#internal.dataConsumerId, (event: string, data: any) =>
-		{
-			switch (event)
-			{
-				case 'dataproducerclose':
-				{
-					if (this.#closed)
+	async addSubchannel(subchannel: number): Promise<void> {
+		logger.debug('addSubchannel()');
+
+		/* Build Request. */
+		const requestOffset =
+			FbsDataConsumer.AddSubchannelRequest.createAddSubchannelRequest(
+				this.#channel.bufferBuilder,
+				subchannel
+			);
+
+		const response = await this.#channel.request(
+			FbsRequest.Method.DATACONSUMER_ADD_SUBCHANNEL,
+			FbsRequest.Body.DataConsumer_AddSubchannelRequest,
+			requestOffset,
+			this.#internal.dataConsumerId
+		);
+
+		/* Decode Response. */
+		const data = new FbsDataConsumer.AddSubchannelResponse();
+
+		response.body(data);
+
+		// Update subchannels.
+		this.#subchannels = fbsUtils.parseVector(data, 'subchannels');
+	}
+
+	async removeSubchannel(subchannel: number): Promise<void> {
+		logger.debug('removeSubchannel()');
+
+		/* Build Request. */
+		const requestOffset =
+			FbsDataConsumer.RemoveSubchannelRequest.createRemoveSubchannelRequest(
+				this.#channel.bufferBuilder,
+				subchannel
+			);
+
+		const response = await this.#channel.request(
+			FbsRequest.Method.DATACONSUMER_REMOVE_SUBCHANNEL,
+			FbsRequest.Body.DataConsumer_RemoveSubchannelRequest,
+			requestOffset,
+			this.#internal.dataConsumerId
+		);
+
+		/* Decode Response. */
+		const data = new FbsDataConsumer.RemoveSubchannelResponse();
+
+		response.body(data);
+
+		// Update subchannels.
+		this.#subchannels = fbsUtils.parseVector(data, 'subchannels');
+	}
+
+	private handleWorkerNotifications(): void {
+		this.#channel.on(
+			this.#internal.dataConsumerId,
+			(event: Event, data?: Notification) => {
+				switch (event) {
+					case Event.DATACONSUMER_DATAPRODUCER_CLOSE: {
+						if (this.#closed) {
+							break;
+						}
+
+						this.#closed = true;
+
+						// Remove notification subscriptions.
+						this.#channel.removeAllListeners(this.#internal.dataConsumerId);
+
+						this.emit('@dataproducerclose');
+						this.safeEmit('dataproducerclose');
+
+						// Emit observer event.
+						this.#observer.safeEmit('close');
+
 						break;
+					}
 
-					this.#closed = true;
+					case Event.DATACONSUMER_DATAPRODUCER_PAUSE: {
+						if (this.#dataProducerPaused) {
+							break;
+						}
 
-					// Remove notification subscriptions.
-					this.#channel.removeAllListeners(this.#internal.dataConsumerId);
-					this.#payloadChannel.removeAllListeners(this.#internal.dataConsumerId);
+						this.#dataProducerPaused = true;
 
-					this.emit('@dataproducerclose');
-					this.safeEmit('dataproducerclose');
+						this.safeEmit('dataproducerpause');
 
-					// Emit observer event.
-					this.#observer.safeEmit('close');
+						// Emit observer event.
+						if (!this.#paused) {
+							this.#observer.safeEmit('pause');
+						}
 
-					break;
-				}
+						break;
+					}
 
-				case 'sctpsendbufferfull':
-				{
-					this.safeEmit('sctpsendbufferfull');
+					case Event.DATACONSUMER_DATAPRODUCER_RESUME: {
+						if (!this.#dataProducerPaused) {
+							break;
+						}
 
-					break;
-				}
+						this.#dataProducerPaused = false;
 
-				case 'bufferedamountlow':
-				{
-					const { bufferedAmount } = data as { bufferedAmount: number };
+						this.safeEmit('dataproducerresume');
 
-					this.safeEmit('bufferedamountlow', bufferedAmount);
+						// Emit observer event.
+						if (!this.#paused) {
+							this.#observer.safeEmit('resume');
+						}
 
-					break;
-				}
+						break;
+					}
 
-				default:
-				{
-					logger.error('ignoring unknown event "%s" in channel listener', event);
+					case Event.DATACONSUMER_SCTP_SENDBUFFER_FULL: {
+						this.safeEmit('sctpsendbufferfull');
+
+						break;
+					}
+
+					case Event.DATACONSUMER_BUFFERED_AMOUNT_LOW: {
+						const notification =
+							new FbsDataConsumer.BufferedAmountLowNotification();
+
+						data!.body(notification);
+
+						const bufferedAmount = notification.bufferedAmount();
+
+						this.safeEmit('bufferedamountlow', bufferedAmount);
+
+						break;
+					}
+
+					case Event.DATACONSUMER_MESSAGE: {
+						if (this.#closed) {
+							break;
+						}
+
+						const notification = new FbsDataConsumer.MessageNotification();
+
+						data!.body(notification);
+
+						this.safeEmit(
+							'message',
+							Buffer.from(notification.dataArray()!),
+							notification.ppid()
+						);
+
+						break;
+					}
+
+					default: {
+						logger.error(`ignoring unknown event "${event}"`);
+					}
 				}
 			}
-		});
-
-		this.#payloadChannel.on(
-			this.#internal.dataConsumerId,
-			(event: string, data: any | undefined, payload: Buffer) =>
-			{
-				switch (event)
-				{
-					case 'message':
-					{
-						if (this.#closed)
-							break;
-
-						const ppid = data.ppid as number;
-						const message = payload;
-
-						this.safeEmit('message', message, ppid);
-
-						break;
-					}
-
-					default:
-					{
-						logger.error('ignoring unknown event "%s" in payload channel listener', event);
-					}
-				}
-			});
+		);
 	}
+
+	private handleListenerError(): void {
+		this.on('listenererror', (eventName, error) => {
+			logger.error(
+				`event listener threw an error [eventName:${eventName}]:`,
+				error
+			);
+		});
+	}
+}
+
+export function dataConsumerTypeToFbs(
+	type: DataConsumerType
+): FbsDataProducer.Type {
+	switch (type) {
+		case 'sctp': {
+			return FbsDataProducer.Type.SCTP;
+		}
+
+		case 'direct': {
+			return FbsDataProducer.Type.DIRECT;
+		}
+
+		default: {
+			throw new TypeError('invalid DataConsumerType: ${type}');
+		}
+	}
+}
+
+export function dataConsumerTypeFromFbs(
+	type: FbsDataProducer.Type
+): DataConsumerType {
+	switch (type) {
+		case FbsDataProducer.Type.SCTP: {
+			return 'sctp';
+		}
+
+		case FbsDataProducer.Type.DIRECT: {
+			return 'direct';
+		}
+	}
+}
+
+export function parseDataConsumerDumpResponse(
+	data: FbsDataConsumer.DumpResponse
+): DataConsumerDump {
+	return {
+		id: data.id()!,
+		dataProducerId: data.dataProducerId()!,
+		type: dataConsumerTypeFromFbs(data.type()),
+		sctpStreamParameters:
+			data.sctpStreamParameters() !== null
+				? parseSctpStreamParameters(data.sctpStreamParameters()!)
+				: undefined,
+		label: data.label()!,
+		protocol: data.protocol()!,
+		bufferedAmountLowThreshold: data.bufferedAmountLowThreshold(),
+		paused: data.paused(),
+		dataProducerPaused: data.dataProducerPaused(),
+		subchannels: fbsUtils.parseVector(data, 'subchannels'),
+	};
+}
+
+function parseDataConsumerStats(
+	binary: FbsDataConsumer.GetStatsResponse
+): DataConsumerStat {
+	return {
+		type: 'data-consumer',
+		timestamp: Number(binary.timestamp()),
+		label: binary.label()!,
+		protocol: binary.protocol()!,
+		messagesSent: Number(binary.messagesSent()),
+		bytesSent: Number(binary.bytesSent()),
+		bufferedAmount: binary.bufferedAmount(),
+	};
 }

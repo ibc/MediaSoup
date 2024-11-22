@@ -1,68 +1,121 @@
 name: mediasoup-worker
 
-on: [push, pull_request]
+on: [pull_request, workflow_dispatch]
+
+concurrency:
+  # Cancel a currently running workflow from the same PR, branch or tag when a
+  # new workflow is triggered.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   ci:
     strategy:
+      # Here we want to see all errors, not just the first one.
       fail-fast: false
       matrix:
         build:
-          - os: ubuntu-18.04
-            cc: gcc
-            cxx: g++
-          - os: ubuntu-18.04
-            cc: clang
-            cxx: clang++
           - os: ubuntu-20.04
             cc: gcc
             cxx: g++
+            # Workaround for this issue in Ubunt 20.04:
+            # https://github.com/versatica/mediasoup/actions/runs/9992113733/job/27616379442?pr=1427
+            workaround-ubuntu-20-04: true
+            run-test-asan-address: true
+            # Skip test-asan-undefined in Linux with GCC due to a bug in GCC
+            # that affects abseil-cpp:
+            # https://github.com/abseil/abseil-cpp/issues/1634
+            run-test-asan-undefined: false
+            run-test-asan-thread: true
           - os: ubuntu-20.04
             cc: clang
             cxx: clang++
+            workaround-ubuntu-20-04: true
+            run-test-asan-address: true
+            run-test-asan-undefined: true
+            run-test-asan-thread: true
           - os: ubuntu-22.04
             cc: gcc
             cxx: g++
+            run-test-asan-address: true
+            run-test-asan-undefined: false
+            run-test-asan-thread: true
           - os: ubuntu-22.04
             cc: clang
             cxx: clang++
-          - os: macos-12
+            run-test-asan-address: true
+            run-test-asan-undefined: true
+            run-test-asan-thread: true
+          - os: ubuntu-24.04
             cc: gcc
             cxx: g++
-          - os: macos-12
+            pip-break-system-packages: true
+            run-test-asan-address: true
+            run-test-asan-undefined: false
+            run-test-asan-thread: true
+          - os: ubuntu-24.04
             cc: clang
             cxx: clang++
+            pip-break-system-packages: true
+            run-test-asan-address: true
+            run-test-asan-undefined: true
+            run-test-asan-thread: true
+          - os: macos-13
+            cc: gcc
+            cxx: g++
+            pip-break-system-packages: true
+            # Address Sanitizer does not work on MacOS.
+            run-test-asan-address: false
+            run-test-asan-undefined: false
+            run-test-asan-thread: false
+          - os: macos-14
+            cc: clang
+            cxx: clang++
+            pip-break-system-packages: true
+            run-test-asan-address: false
+            run-test-asan-undefined: false
+            run-test-asan-thread: false
+          - os: macos-15
+            cc: clang
+            cxx: clang++
+            pip-break-system-packages: true
+            run-test-asan-address: false
+            run-test-asan-undefined: false
+            run-test-asan-thread: false
           - os: windows-2022
             cc: cl
             cxx: cl
+            # Address Sanitizer does not work on Windows.
+            run-test-asan-address: false
+            run-test-asan-undefined: false
+            run-test-asan-thread: false
         # A single Node.js version should be fine for C++.
         node:
-          - 16
+          - 22
+        build-type:
+          - Release
+          - Debug
 
     runs-on: ${{ matrix.build.os }}
 
     env:
       CC: ${{ matrix.build.cc }}
       CXX: ${{ matrix.build.cxx }}
+      MEDIASOUP_SKIP_WORKER_PREBUILT_DOWNLOAD: 'true'
+      MEDIASOUP_LOCAL_DEV: 'false'
+      MEDIASOUP_BUILDTYPE: ${{ matrix.build-type }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Node.js
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
 
-      - run: npm run install-clang-tools
-        # TODO: Maybe fix this one day.
-        if: runner.os != 'Windows'
-      - run: npm run lint:worker
-        # TODO: Maybe fix this one day.
-        if: runner.os != 'Windows'
-
       - name: Configure cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ~/.npm
@@ -70,6 +123,51 @@ jobs:
           restore-keys: |
             ${{ matrix.build.os }}-node-${{matrix.build.cc}}-
 
-      - run: npm run worker:build
-      - run: npm run test:worker
-        if: runner.os != 'Windows'
+      # We need to install pip invoke manually.
+      - if: ${{ !matrix.build.pip-break-system-packages }}
+        name: pip3 install invoke
+        run: pip3 install invoke
+
+      # In modern OSs we need to run pip with this option.
+      - if: ${{ matrix.build.pip-break-system-packages }}
+        name: pip3 install --break-system-packages invoke
+        run: pip3 install --break-system-packages invoke
+
+      # We need to install npm deps of worker/scripts/package.json.
+      - if: runner.os != 'Windows'
+        name: npm ci --prefix worker/scripts
+        run: npm ci --prefix worker/scripts --foreground-scripts
+
+      # Workaround for this issue in Ubuntu 20.04:
+      # https://github.com/versatica/mediasoup/actions/runs/9992113733/job/27616379442?pr=1427
+      - if: ${{ matrix.build.workaround-ubuntu-20-04 }}
+        name: workaround for Ubuntu 20.04
+        run: sudo apt install -y libgcc-10-dev && sudo ln -s /usr/lib/gcc/x86_64-linux-gnu/10/libtsan_preinit.o /usr/lib/libtsan_preinit.o
+
+      # NOTE: Maybe make it work on Windows someday.
+      - if: runner.os != 'Windows'
+        name: invoke -r worker lint
+        run: invoke -r worker lint
+
+      - name: invoke -r worker mediasoup-worker
+        run: invoke -r worker mediasoup-worker
+
+      # NOTE: Maybe make it work on Windows someday.
+      - if: runner.os != 'Windows'
+        name: invoke -r worker test
+        run: invoke -r worker test
+
+      # Let's clean everything before rebuilding worker tests with ASAN.
+      - if: ${{ matrix.build.run-test-asan-address }}
+        name: invoke -r worker test-asan-address
+        run: invoke -r worker clean-all && invoke -r worker test-asan-address
+
+      # Let's clean everything before rebuilding worker tests with ASAN.
+      - if: ${{ matrix.build.run-test-asan-undefined }}
+        name: invoke -r worker test-asan-undefined
+        run: invoke -r worker clean-all && invoke -r worker test-asan-undefined
+
+      # Let's clean everything before rebuilding worker tests with ASAN.
+      - if: ${{ matrix.build.run-test-asan-thread }}
+        name: invoke -r worker test-asan-thread
+        run: invoke -r worker clean-all && invoke -r worker test-asan-thread

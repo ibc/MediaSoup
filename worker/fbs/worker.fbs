@@ -1,0 +1,59 @@
+include "liburing.fbs";
+include "transport.fbs";
+
+namespace FBS.Worker;
+
+table ChannelMessageHandlers {
+    channel_request_handlers: [string] (required);
+    channel_notification_handlers: [string] (required);
+}
+
+table DumpResponse {
+    pid: uint32;
+    web_rtc_server_ids: [string] (required);
+    router_ids: [string] (required);
+    channel_message_handlers: ChannelMessageHandlers (required);
+    liburing: FBS.LibUring.Dump;
+}
+
+table ResourceUsageResponse {
+    ru_utime: uint64;
+    ru_stime: uint64;
+    ru_maxrss: uint64;
+    ru_ixrss: uint64;
+    ru_idrss: uint64;
+    ru_isrss: uint64;
+    ru_minflt: uint64;
+    ru_majflt: uint64;
+    ru_nswap: uint64;
+    ru_inblock: uint64;
+    ru_oublock: uint64;
+    ru_msgsnd: uint64;
+    ru_msgrcv: uint64;
+    ru_nsignals: uint64;
+    ru_nvcsw: uint64;
+    ru_nivcsw: uint64;
+}
+
+table UpdateSettingsRequest {
+    log_level: string;
+    log_tags: [string];
+}
+
+table CreateWebRtcServerRequest {
+    web_rtc_server_id: string (required);
+    listen_infos: [FBS.Transport.ListenInfo];
+}
+
+table CloseWebRtcServerRequest {
+    web_rtc_server_id: string (required);
+}
+
+table CreateRouterRequest {
+    router_id: string (required);
+}
+
+table CloseRouterRequest {
+    router_id: string (required);
+}
+

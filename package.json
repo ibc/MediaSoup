@@ -114,6 +114,7 @@
 		"@types/debug": "^4.1.12",
 		"@types/jest": "^29.5.14",
 		"@types/node": "^22.10.2",
+		"@versatica/sctp": "^1.1.0",
 		"eslint": "^9.17.0",
 		"eslint-config-prettier": "^9.1.0",
 		"eslint-plugin-jest": "^28.9.0",
@@ -124,7 +125,6 @@
 		"open-cli": "^8.0.0",
 		"pick-port": "^2.1.0",
 		"prettier": "^3.4.2",
-		"sctp": "^1.0.0",
 		"ts-jest": "^29.2.5",
 		"typescript": "^5.7.2",
 		"typescript-eslint": "^8.18.1"

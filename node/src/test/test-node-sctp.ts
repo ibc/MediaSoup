@@ -1,6 +1,6 @@
 import * as dgram from 'node:dgram';
 // @ts-expect-error -- sctp library doesn't have TS types.
-import * as sctp from 'sctp';
+import * as sctp from '@versatica/sctp';
 import * as mediasoup from '../';
 import { enhancedOnce } from '../enhancedEvents';
 import type { WorkerEvents } from '../types';

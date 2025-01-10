@@ -322,4 +322,68 @@ SCENARIO("process VP8 payload descriptor", "[codecs][vp8]")
 		forwarded = ProcessPacket(context, 1, 0, 1);
 		REQUIRE_FALSE(forwarded);
 	}
+
+	SECTION("old packets with higher temporal layer than current are dropped")
+	{
+		RTC::Codecs::EncodingContext::Params params;
+		params.spatialLayers  = 0;
+		params.temporalLayers = 2;
+		Codecs::VP8::EncodingContext context(params);
+		context.SyncRequired();
+
+		context.SetCurrentTemporalLayer(0);
+		context.SetTargetTemporalLayer(0);
+
+		// Frame 1.
+		auto forwarded = ProcessPacket(context, 1, 0, 0);
+		REQUIRE(forwarded);
+		REQUIRE(forwarded->pictureId == 1);
+		REQUIRE(forwarded->tlIndex == 0);
+		REQUIRE(forwarded->tl0PictureIndex == 1);
+
+		// Frame 2.
+		forwarded = ProcessPacket(context, 2, 0, 0);
+		REQUIRE(forwarded);
+		REQUIRE(forwarded->pictureId == 2);
+		REQUIRE(forwarded->tlIndex == 0);
+		REQUIRE(forwarded->tl0PictureIndex == 1);
+
+		// Frame 3. Old packet with higher temporal layer than current.
+		forwarded = ProcessPacket(context, 0, 0, 1);
+		REQUIRE_FALSE(forwarded);
+		REQUIRE(context.GetCurrentTemporalLayer() == 0);
+	}
+
+	SECTION("packets with higher temporal layer than current are dropped")
+	{
+		RTC::Codecs::EncodingContext::Params params;
+		params.spatialLayers  = 0;
+		params.temporalLayers = 2;
+		Codecs::VP8::EncodingContext context(params);
+		context.SyncRequired();
+
+		context.SetCurrentTemporalLayer(0);
+		context.SetTargetTemporalLayer(0);
+
+		// Frame 1.
+		auto forwarded = ProcessPacket(context, 1, 0, 0);
+		REQUIRE(forwarded);
+		REQUIRE(forwarded->pictureId == 1);
+		REQUIRE(forwarded->tlIndex == 0);
+		REQUIRE(forwarded->tl0PictureIndex == 1);
+
+		// Frame 2.
+		forwarded = ProcessPacket(context, 2, 0, 0);
+		REQUIRE(forwarded);
+		REQUIRE(forwarded->pictureId == 2);
+		REQUIRE(forwarded->tlIndex == 0);
+		REQUIRE(forwarded->tl0PictureIndex == 1);
+
+		context.SetTargetTemporalLayer(2);
+
+		// Frame 3. Old packet with higher temporal layer than current.
+		forwarded = ProcessPacket(context, 3, 0, 1);
+		REQUIRE_FALSE(forwarded);
+		REQUIRE(context.GetCurrentTemporalLayer() == 0);
+	}
 }

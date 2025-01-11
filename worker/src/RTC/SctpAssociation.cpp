@@ -2,6 +2,7 @@
 // #define MS_LOG_DEV_LEVEL 3
 
 #include "RTC/SctpAssociation.hpp"
+#include "DepLibUV.hpp"
 #include "DepUsrSCTP.hpp"
 #include "Logger.hpp"
 #include "MediaSoupErrors.hpp"
@@ -28,6 +29,13 @@ const uint16_t EventTypes[] =
 	SCTP_STREAM_CHANGE_EVENT
 };
 /* clang-format on */
+
+/* Static methods for UV callbacks. */
+
+inline static void onCloseAsync(uv_handle_t* handle)
+{
+	delete reinterpret_cast<uv_async_t*>(handle);
+}
 
 /* Static methods for usrsctp callbacks. */
 
@@ -120,6 +128,9 @@ namespace RTC
 	    isDataChannel(isDataChannel)
 	{
 		MS_TRACE();
+
+		// Create a uv_async_t handle.
+		this->uvAsyncHandle = new uv_async_t;
 
 		// Register ourselves in usrsctp.
 		// NOTE: This must be done before calling usrsctp_bind().
@@ -293,6 +304,9 @@ namespace RTC
 		// Register the SctpAssociation from the global map.
 		DepUsrSCTP::DeregisterSctpAssociation(this);
 
+		uv_close(
+		  reinterpret_cast<uv_handle_t*>(this->uvAsyncHandle), static_cast<uv_close_cb>(onCloseAsync));
+
 		delete[] this->messageBuffer;
 	}
 
@@ -379,6 +393,18 @@ namespace RTC
 		  this->sctpBufferedAmount,
 		  // Add isDataChannel.
 		  this->isDataChannel);
+	}
+
+	void SctpAssociation::InitializeSyncHandle(uv_async_cb callback)
+	{
+		MS_TRACE();
+
+		int err = uv_async_init(DepLibUV::GetLoop(), this->uvAsyncHandle, callback);
+
+		if (err != 0)
+		{
+			MS_ABORT("uv_async_init() failed: %s", uv_strerror(err));
+		}
 	}
 
 	void SctpAssociation::ProcessSctpData(const uint8_t* data, size_t len) const
@@ -666,11 +692,9 @@ namespace RTC
 		}
 	}
 
-	void SctpAssociation::OnUsrSctpSendSctpData(void* buffer, size_t len)
+	void SctpAssociation::OnUsrSctpSendSctpData(uint8_t* data, size_t len)
 	{
 		MS_TRACE();
-
-		const uint8_t* data = static_cast<uint8_t*>(buffer);
 
 #if MS_LOG_DEV_LEVEL == 3
 		MS_DUMP_DATA(data, len);
@@ -728,7 +752,8 @@ namespace RTC
 
 			this->listener->OnSctpAssociationMessageReceived(this, streamId, data, len, ppid);
 		}
-		// If end of message and there is buffered data, append data and notify buffer.
+		// If end of message and there is buffered data, append data and notify
+		// buffer.
 		else if (eor && this->messageBufferLen != 0)
 		{
 			std::memcpy(this->messageBuffer + this->messageBufferLen, data, len);

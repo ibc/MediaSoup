@@ -173,6 +173,7 @@ common_sources = [
   'src/RTC/RTCP/XR.cpp',
   'src/RTC/RTCP/XrDelaySinceLastRr.cpp',
   'src/RTC/RTCP/XrReceiverReferenceTime.cpp',
+  'src/SCTP/UsrSctpChecker.cpp',
 ]
 
 openssl_proj = subproject(
@@ -296,6 +297,12 @@ if host_machine.system() == 'linux' and not get_option('ms_disable_liburing')
       '-DMS_LIBURING_SUPPORTED',
     ]
   endif
+endif
+
+if get_option('ms_enable_multithread')
+  cpp_args += [
+    '-DMS_MULTITHREAD_ENABLED',
+  ]
 endif
 
 libmediasoup_worker = library(

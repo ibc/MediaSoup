@@ -9,13 +9,15 @@
 #include "RTC/Shared.hpp"
 #include "RTC/WebRtcServer.hpp"
 #include "handles/SignalHandle.hpp"
+#include "handles/TimerHandle.hpp"
 #include <flatbuffers/flatbuffer_builder.h>
 #include <absl/container/flat_hash_map.h>
 #include <string>
 
 class Worker : public Channel::ChannelSocket::Listener,
                public SignalHandle::Listener,
-               public RTC::Router::Listener
+               public RTC::Router::Listener,
+               public TimerHandle::Listener
 {
 public:
 	explicit Worker(Channel::ChannelSocket* channel);
@@ -48,6 +50,10 @@ public:
 	/* Pure virtual methods inherited from RTC::Router::Listener. */
 public:
 	RTC::WebRtcServer* OnRouterNeedWebRtcServer(RTC::Router* router, std::string& webRtcServerId) override;
+
+	/* Pure virtual methods inherited from TimerHandle::Listener. */
+public:
+	void OnTimer(TimerHandle* timer) override;
 
 private:
 	// Passed by argument.

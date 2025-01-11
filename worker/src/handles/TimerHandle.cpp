@@ -6,6 +6,9 @@
 #include "Logger.hpp"
 #include "MediaSoupErrors.hpp"
 
+// TODO: REMOVE
+#include <fstream>
+
 /* Static methods for UV callbacks. */
 
 inline static void onTimer(uv_timer_t* handle)
@@ -15,6 +18,11 @@ inline static void onTimer(uv_timer_t* handle)
 
 inline static void onCloseTimer(uv_handle_t* handle)
 {
+	std::ofstream outfile;
+	outfile.open("/tmp/ms_log.txt", std::ios_base::app);
+	outfile << "---- onCloseTimer\n";
+	outfile.flush();
+
 	delete reinterpret_cast<uv_timer_t*>(handle);
 }
 
@@ -23,6 +31,11 @@ inline static void onCloseTimer(uv_handle_t* handle)
 TimerHandle::TimerHandle(Listener* listener) : listener(listener), uvHandle(new uv_timer_t)
 {
 	MS_TRACE();
+
+	std::ofstream outfile;
+	outfile.open("/tmp/ms_log.txt", std::ios_base::app);
+	outfile << "---- Timer created\n";
+	outfile.flush();
 
 	this->uvHandle->data = static_cast<void*>(this);
 

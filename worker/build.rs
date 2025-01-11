@@ -143,8 +143,11 @@ fn main() {
         .env("PYTHONPATH", &pythonpath)
         .env("MEDIASOUP_OUT_DIR", &mediasoup_out_dir)
         .env("MEDIASOUP_BUILDTYPE", build_type)
-        // Force forward slashes on Windows too, otherwise Meson thinks path is not absolute 🤷
+        // Force forward slashes on Windows too, otherwise Meson thinks path is
+        // not absolute 🤷.
         .env("MEDIASOUP_INSTALL_DIR", &out_dir.replace('\\', "/"))
+        // In Rust we want to enable worker multi-thread usage.
+        .env("MEDIASOUP_ENABLE_MULTITHREAD", "true")
         .spawn()
         .expect("Failed to start")
         .wait()

@@ -138,6 +138,10 @@ def setup(ctx, meson_args=MESON_ARGS):
     """
     Run meson setup
     """
+    enable_multithread = os.getenv('MEDIASOUP_ENABLE_MULTITHREAD');
+    if enable_multithread:
+        meson_args += ' -Dms_enable_multithread=true';
+
     if MEDIASOUP_BUILDTYPE == 'Release':
         with ctx.cd(f'"{WORKER_DIR}"'):
             ctx.run(

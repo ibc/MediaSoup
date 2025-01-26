@@ -473,7 +473,7 @@ export function rtpHeaderExtensionUriToFbs(
 		}
 
 		case 'https://aomediacodec.github.io/av1-rtp-spec/#dependency-descriptor-rtp-header-extension': {
-			return FbsRtpHeaderExtensionUri.DependencyDescriptor
+			return FbsRtpHeaderExtensionUri.DependencyDescriptor;
 		}
 
 		default: {

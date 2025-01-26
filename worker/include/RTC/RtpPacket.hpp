@@ -9,6 +9,7 @@
 #include "RTC/RtcLogger.hpp"
 #endif
 #include <flatbuffers/flatbuffers.h>
+#include <libwebrtc/modules/rtp_rtcp/source/rtp_dependency_descriptor_reader.h>
 #include <absl/container/flat_hash_map.h>
 #include <array>
 #include <string>
@@ -314,6 +315,11 @@ namespace RTC
 			this->playoutDelayExtensionId = id;
 		}
 
+		void SetDependencyDescriptorExtensionId(uint8_t id)
+		{
+			this->dependencyDescriptorExtensionId = id;
+		}
+
 		bool ReadMid(std::string& mid) const
 		{
 			uint8_t extenLen;
@@ -510,6 +516,30 @@ namespace RTC
 			return true;
 		}
 
+		bool ReadDependencyDescriptor(
+		  webrtc::DependencyDescriptor* descriptor,
+		  std::unique_ptr<webrtc::FrameDependencyStructure>& frameDependencyStructure) const
+		{
+			uint8_t extenLen;
+			uint8_t* extenValue = GetExtension(this->dependencyDescriptorExtensionId, extenLen);
+
+			if (!extenValue || extenLen < 2u)
+			{
+				return false;
+			}
+
+			auto reader = webrtc::RtpDependencyDescriptorReader(
+			  rtc::ArrayView<const uint8_t>(extenValue, extenLen),
+			  frameDependencyStructure.get(),
+			  descriptor);
+			if (reader.ParseSuccessful() && descriptor->attached_structure)
+			{
+				frameDependencyStructure.reset(
+				  new webrtc::FrameDependencyStructure(*descriptor->attached_structure));
+			}
+			return reader.ParseSuccessful();
+		}
+
 		bool HasExtension(uint8_t id) const
 		{
 			if (id == 0u)
@@ -694,6 +724,7 @@ namespace RTC
 		uint8_t ssrcAudioLevelExtensionId{ 0u };
 		uint8_t videoOrientationExtensionId{ 0u };
 		uint8_t playoutDelayExtensionId{ 0u };
+		uint8_t dependencyDescriptorExtensionId{ 0u };
 		uint8_t* payload{ nullptr };
 		size_t payloadLength{ 0u };
 		uint8_t payloadPadding{ 0u };

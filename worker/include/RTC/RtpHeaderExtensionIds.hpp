@@ -20,6 +20,7 @@ namespace RTC
 		uint8_t toffset{ 0u };
 		uint8_t absCaptureTime{ 0u };
 		uint8_t playoutDelay{ 0u };
+		uint8_t dependencyDescriptor{ 0u };
 	};
 } // namespace RTC
 

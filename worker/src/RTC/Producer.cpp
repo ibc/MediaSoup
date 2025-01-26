@@ -197,6 +197,13 @@ namespace RTC
 			{
 				this->rtpHeaderExtensionIds.playoutDelay = exten.id;
 			}
+
+			if (
+			  this->rtpHeaderExtensionIds.dependencyDescriptor == 0u &&
+			  exten.type == RTC::RtpHeaderExtensionUri::Type::DEPENDENCY_DESCRIPTOR)
+			{
+				this->rtpHeaderExtensionIds.dependencyDescriptor = exten.id;
+			}
 		}
 
 		// Set the RTCP report generation interval.
@@ -1196,6 +1203,7 @@ namespace RTC
 			// NOTE: Remove this once framemarking draft becomes RFC.
 			packet->SetFrameMarking07ExtensionId(this->rtpHeaderExtensionIds.frameMarking07);
 			packet->SetFrameMarkingExtensionId(this->rtpHeaderExtensionIds.frameMarking);
+			packet->SetDependencyDescriptorExtensionId(this->rtpHeaderExtensionIds.dependencyDescriptor);
 		}
 	}
 
@@ -1380,6 +1388,21 @@ namespace RTC
 					bufferPtr += extenLen;
 				}
 
+				// Proxy https://aomediacodec.github.io/av1-rtp-spec/#dependency-descriptor-rtp-header-extension.
+				extenValue = packet->GetExtension(this->rtpHeaderExtensionIds.dependencyDescriptor, extenLen);
+
+				if (extenValue)
+				{
+					std::memcpy(bufferPtr, extenValue, extenLen);
+
+					extensions.emplace_back(
+					  static_cast<uint8_t>(RTC::RtpHeaderExtensionUri::Type::DEPENDENCY_DESCRIPTOR),
+					  extenLen,
+					  bufferPtr);
+
+					bufferPtr += extenLen;
+				}
+
 				// Proxy urn:ietf:params:rtp-hdrext:toffset.
 				extenValue = packet->GetExtension(this->rtpHeaderExtensionIds.toffset, extenLen);
 
@@ -1396,7 +1419,7 @@ namespace RTC
 			}
 
 			// Set the new extensions into the packet using One-Byte format.
-			packet->SetExtensions(1, extensions);
+			packet->SetExtensions(packet->HasTwoBytesExtensions() ? 2 : 1, extensions);
 
 			// Assign mediasoup RTP header extension ids (just those that mediasoup may
 			// be interested in after passing it to the Router).
@@ -1416,6 +1439,8 @@ namespace RTC
 			  static_cast<uint8_t>(RTC::RtpHeaderExtensionUri::Type::VIDEO_ORIENTATION));
 			packet->SetPlayoutDelayExtensionId(
 			  static_cast<uint8_t>(RTC::RtpHeaderExtensionUri::Type::PLAYOUT_DELAY));
+			packet->SetDependencyDescriptorExtensionId(
+			  static_cast<uint8_t>(RTC::RtpHeaderExtensionUri::Type::DEPENDENCY_DESCRIPTOR));
 		}
 
 		return true;

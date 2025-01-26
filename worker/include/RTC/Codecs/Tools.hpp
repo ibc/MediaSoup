@@ -10,6 +10,7 @@
 #include "RTC/Codecs/VP9.hpp"
 #include "RTC/RtpDictionaries.hpp"
 #include "RTC/RtpPacket.hpp"
+#include <libwebrtc/api/transport/rtp/dependency_descriptor.h>
 
 namespace RTC
 {
@@ -43,7 +44,10 @@ namespace RTC
 				}
 			}
 
-			static void ProcessRtpPacket(RTC::RtpPacket* packet, const RTC::RtpCodecMimeType& mimeType)
+			static void ProcessRtpPacket(
+			  RTC::RtpPacket* packet,
+			  const RTC::RtpCodecMimeType& mimeType,
+			  std::unique_ptr<webrtc::FrameDependencyStructure>& frameDependencyStructure)
 			{
 				switch (mimeType.type)
 				{
@@ -67,7 +71,7 @@ namespace RTC
 
 							case RTC::RtpCodecMimeType::Subtype::H264:
 							{
-								RTC::Codecs::H264::ProcessRtpPacket(packet);
+								RTC::Codecs::H264::ProcessRtpPacket(packet, frameDependencyStructure);
 
 								break;
 							}

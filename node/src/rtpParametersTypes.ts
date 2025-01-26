@@ -302,7 +302,8 @@ export type RtpHeaderExtensionUri =
 	| 'http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01'
 	| 'http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time'
 	| 'http://www.webrtc.org/experiments/rtp-hdrext/abs-capture-time'
-	| 'http://www.webrtc.org/experiments/rtp-hdrext/playout-delay';
+	| 'http://www.webrtc.org/experiments/rtp-hdrext/playout-delay'
+	| 'https://aomediacodec.github.io/av1-rtp-spec/#dependency-descriptor-rtp-header-extension';
 
 /**
  * Defines a RTP header extension within the RTP parameters. The list of RTP

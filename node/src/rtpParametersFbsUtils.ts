@@ -413,6 +413,10 @@ export function rtpHeaderExtensionUriFromFbs(
 		case FbsRtpHeaderExtensionUri.PlayoutDelay: {
 			return 'http://www.webrtc.org/experiments/rtp-hdrext/playout-delay';
 		}
+
+		case FbsRtpHeaderExtensionUri.DependencyDescriptor: {
+			return 'https://aomediacodec.github.io/av1-rtp-spec/#dependency-descriptor-rtp-header-extension';
+		}
 	}
 }
 
@@ -466,6 +470,10 @@ export function rtpHeaderExtensionUriToFbs(
 
 		case 'http://www.webrtc.org/experiments/rtp-hdrext/playout-delay': {
 			return FbsRtpHeaderExtensionUri.PlayoutDelay;
+		}
+
+		case 'https://aomediacodec.github.io/av1-rtp-spec/#dependency-descriptor-rtp-header-extension': {
+			return FbsRtpHeaderExtensionUri.DependencyDescriptor
 		}
 
 		default: {

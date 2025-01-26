@@ -6,6 +6,7 @@
 #include "RTC/RateCalculator.hpp"
 #include "RTC/RtpStream.hpp"
 #include "handles/TimerHandle.hpp"
+#include <libwebrtc/api/transport/rtp/dependency_descriptor.h>
 #include <vector>
 
 namespace RTC
@@ -131,6 +132,8 @@ namespace RTC
 		TransmissionCounter transmissionCounter;
 		// Just valid media.
 		RTC::RtpDataCounter mediaTransmissionCounter;
+
+		std::unique_ptr<webrtc::FrameDependencyStructure> frameDependencyStructure;
 	};
 } // namespace RTC
 

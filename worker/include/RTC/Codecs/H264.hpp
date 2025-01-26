@@ -4,6 +4,7 @@
 #include "common.hpp"
 #include "RTC/Codecs/PayloadDescriptorHandler.hpp"
 #include "RTC/RtpPacket.hpp"
+#include <libwebrtc/api/transport/rtp/dependency_descriptor.h>
 
 namespace RTC
 {
@@ -19,30 +20,24 @@ namespace RTC
 
 				void Dump() const override;
 
-				// Fields in frame-marking extension.
-				uint8_t s : 1;          // Start of Frame.
-				uint8_t e : 1;          // End of Frame.
-				uint8_t i : 1;          // Independent Frame.
-				uint8_t d : 1;          // Discardable Frame.
-				uint8_t b : 1;          // Base Layer Sync.
-				uint8_t tid{ 0 };       // Temporal layer id.
-				uint8_t lid{ 0 };       // Spatial layer id.
-				uint8_t tl0picidx{ 0 }; // TL0PICIDX
+				// Fields in dependency descriptor.
+				bool s{ false };  // Start bit.
+				bool e{ false };  // End bit.
+				uint8_t tid{ 0 }; // Temporal layer id.
+				uint8_t lid{ 0 }; // Spatial layer id.
 
 				// Parsed values.
 				bool hasLid{ false };
 				bool hasTid{ false };
-				bool hasTl0picidx{ false };
 				bool isKeyFrame{ false };
 			};
 
 		public:
 			static H264::PayloadDescriptor* Parse(
-			  const uint8_t* data,
-			  size_t len,
-			  RTC::RtpPacket::FrameMarking* frameMarking = nullptr,
-			  uint8_t frameMarkingLen                    = 0);
-			static void ProcessRtpPacket(RTC::RtpPacket* packet);
+			  const uint8_t* data, size_t len, webrtc::DependencyDescriptor* descriptor = nullptr);
+			static void ProcessRtpPacket(
+			  RTC::RtpPacket* packet,
+			  std::unique_ptr<webrtc::FrameDependencyStructure>& frameDependencyStructure);
 
 		public:
 			class EncodingContext : public RTC::Codecs::EncodingContext

@@ -4,6 +4,7 @@
 #include "RTC/Codecs/H264.hpp"
 #include "Logger.hpp"
 #include "Utils.hpp"
+#include <libwebrtc/api/transport/rtp/dependency_descriptor.h>
 
 namespace RTC
 {
@@ -12,7 +13,7 @@ namespace RTC
 		/* Class methods. */
 
 		H264::PayloadDescriptor* H264::Parse(
-		  const uint8_t* data, size_t len, RTC::RtpPacket::FrameMarking* frameMarking, uint8_t frameMarkingLen)
+		  const uint8_t* data, size_t len, webrtc::DependencyDescriptor* descriptor)
 		{
 			MS_TRACE();
 
@@ -26,32 +27,20 @@ namespace RTC
 			std::unique_ptr<PayloadDescriptor> payloadDescriptor(new PayloadDescriptor());
 
 			// Use frame-marking.
-			if (frameMarking)
+			if (descriptor)
 			{
 				// Read fields.
-				payloadDescriptor->s   = frameMarking->start;
-				payloadDescriptor->e   = frameMarking->end;
-				payloadDescriptor->i   = frameMarking->independent;
-				payloadDescriptor->d   = frameMarking->discardable;
-				payloadDescriptor->b   = frameMarking->base;
-				payloadDescriptor->tid = frameMarking->tid;
+				payloadDescriptor->s = descriptor->first_packet_in_frame;
+				payloadDescriptor->e = descriptor->last_packet_in_frame;
 
+				payloadDescriptor->lid    = descriptor->frame_dependencies.spatial_id;
+				payloadDescriptor->hasLid = true;
+
+				payloadDescriptor->tid    = descriptor->frame_dependencies.temporal_id;
 				payloadDescriptor->hasTid = true;
 
-				if (frameMarkingLen >= 2)
-				{
-					payloadDescriptor->hasLid = true;
-					payloadDescriptor->lid    = frameMarking->lid;
-				}
-
-				if (frameMarkingLen == 3)
-				{
-					payloadDescriptor->hasTl0picidx = true;
-					payloadDescriptor->tl0picidx    = frameMarking->tl0picidx;
-				}
-
 				// Detect key frame.
-				if (frameMarking->start && frameMarking->independent)
+				if (descriptor->attached_structure)
 				{
 					payloadDescriptor->isKeyFrame = true;
 				}
@@ -63,7 +52,7 @@ namespace RTC
 			//
 			// As a temporal workaround, always do payload parsing to detect keyframes if
 			// there is no frame-marking or if there is but keyframe was not detected above.
-			if (!frameMarking || !payloadDescriptor->isKeyFrame)
+			if (!descriptor || !payloadDescriptor->isKeyFrame)
 			{
 				const uint8_t nal = *data & 0x1F;
 
@@ -133,19 +122,20 @@ namespace RTC
 			return payloadDescriptor.release();
 		}
 
-		void H264::ProcessRtpPacket(RTC::RtpPacket* packet)
+		void H264::ProcessRtpPacket(
+		  RTC::RtpPacket* packet,
+		  std::unique_ptr<webrtc::FrameDependencyStructure>& frameDependencyStructure)
 		{
 			MS_TRACE();
 
-			auto* data = packet->GetPayload();
-			auto len   = packet->GetPayloadLength();
-			RtpPacket::FrameMarking* frameMarking{ nullptr };
-			uint8_t frameMarkingLen{ 0 };
+			auto* data      = packet->GetPayload();
+			auto len        = packet->GetPayloadLength();
+			auto descriptor = webrtc::DependencyDescriptor{};
 
-			// Read frame-marking.
-			packet->ReadFrameMarking(&frameMarking, frameMarkingLen);
+			// Read dependency descriptor.
+			bool ok = packet->ReadDependencyDescriptor(&descriptor, frameDependencyStructure);
 
-			PayloadDescriptor* payloadDescriptor = H264::Parse(data, len, frameMarking, frameMarkingLen);
+			PayloadDescriptor* payloadDescriptor = H264::Parse(data, len, ok ? &descriptor : nullptr);
 
 			if (!payloadDescriptor)
 			{
@@ -164,13 +154,7 @@ namespace RTC
 			MS_TRACE();
 
 			MS_DUMP("<H264::PayloadDescriptor>");
-			MS_DUMP(
-			  "  s:%" PRIu8 "|e:%" PRIu8 "|i:%" PRIu8 "|d:%" PRIu8 "|b:%" PRIu8,
-			  this->s,
-			  this->e,
-			  this->i,
-			  this->d,
-			  this->b);
+			MS_DUMP("  s:%" PRIu8 "|e:%" PRIu8, this->s, this->e);
 			if (this->hasTid)
 			{
 				MS_DUMP("  tid: %" PRIu8, this->tid);
@@ -178,10 +162,6 @@ namespace RTC
 			if (this->hasLid)
 			{
 				MS_DUMP("  lid: %" PRIu8, this->lid);
-			}
-			if (this->hasTl0picidx)
-			{
-				MS_DUMP("  tl0picidx: %" PRIu8, this->tl0picidx);
 			}
 			MS_DUMP("  isKeyFrame: %s", this->isKeyFrame ? "true" : "false");
 			MS_DUMP("</H264::PayloadDescriptor>");
@@ -225,8 +205,7 @@ namespace RTC
 			// clang-format off
 			else if (
 				this->payloadDescriptor->hasTid &&
-				this->payloadDescriptor->tid > context->GetCurrentTemporalLayer() &&
-				!this->payloadDescriptor->b
+				this->payloadDescriptor->tid > context->GetCurrentTemporalLayer()
 			)
 			// clang-format on
 			{

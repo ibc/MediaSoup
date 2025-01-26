@@ -72,6 +72,11 @@ namespace RTC
 			{
 				return RtpHeaderExtensionUri::Type::ABS_CAPTURE_TIME;
 			}
+
+			case FBS::RtpParameters::RtpHeaderExtensionUri::DependencyDescriptor:
+			{
+				return RtpHeaderExtensionUri::Type::DEPENDENCY_DESCRIPTOR;
+			}
 		}
 	}
 
@@ -138,6 +143,11 @@ namespace RTC
 			case RtpHeaderExtensionUri::Type::ABS_CAPTURE_TIME:
 			{
 				return FBS::RtpParameters::RtpHeaderExtensionUri::AbsCaptureTime;
+			}
+
+			case RtpHeaderExtensionUri::Type::DEPENDENCY_DESCRIPTOR:
+			{
+				return FBS::RtpParameters::RtpHeaderExtensionUri::DependencyDescriptor;
 			}
 		}
 	}

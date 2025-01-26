@@ -294,6 +294,13 @@ const supportedRtpCapabilities: RtpCapabilities = {
 			direction: 'sendrecv',
 		},
 		{
+			kind: 'video',
+			uri: 'https://aomediacodec.github.io/av1-rtp-spec/#dependency-descriptor-rtp-header-extension',
+			preferredId: 8,
+			preferredEncrypt: false,
+			direction: 'recvonly',
+		},
+		{
 			kind: 'audio',
 			uri: 'urn:ietf:params:rtp-hdrext:ssrc-audio-level',
 			preferredId: 10,

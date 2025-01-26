@@ -109,6 +109,11 @@ fn video_producer_options() -> ProducerOptions {
             }],
             header_extensions: vec![
                 RtpHeaderExtensionParameters {
+                    uri: RtpHeaderExtensionUri::DependencyDescriptor,
+                    id: 8,
+                    encrypt: false,
+                },
+                RtpHeaderExtensionParameters {
                     uri: RtpHeaderExtensionUri::Mid,
                     id: 10,
                     encrypt: false,
@@ -495,6 +500,11 @@ fn pipe_to_router_succeeds_with_video() {
                     encrypt: false,
                 },
                 RtpHeaderExtensionParameters {
+                    uri: RtpHeaderExtensionUri::DependencyDescriptor,
+                    id: 8,
+                    encrypt: false,
+                },
+                RtpHeaderExtensionParameters {
                     uri: RtpHeaderExtensionUri::VideoOrientation,
                     id: 11,
                     encrypt: false,
@@ -554,6 +564,11 @@ fn pipe_to_router_succeeds_with_video() {
                 RtpHeaderExtensionParameters {
                     uri: RtpHeaderExtensionUri::FrameMarking,
                     id: 7,
+                    encrypt: false,
+                },
+                RtpHeaderExtensionParameters {
+                    uri: RtpHeaderExtensionUri::DependencyDescriptor,
+                    id: 8,
                     encrypt: false,
                 },
                 RtpHeaderExtensionParameters {
@@ -756,6 +771,11 @@ fn create_with_enable_rtx_succeeds() {
                 RtpHeaderExtensionParameters {
                     uri: RtpHeaderExtensionUri::FrameMarking,
                     id: 7,
+                    encrypt: false,
+                },
+                RtpHeaderExtensionParameters {
+                    uri: RtpHeaderExtensionUri::DependencyDescriptor,
+                    id: 8,
                     encrypt: false,
                 },
                 RtpHeaderExtensionParameters {

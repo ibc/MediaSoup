@@ -6,11 +6,13 @@ libwebrtc_sources = [
   'libwebrtc/rtc_base/experiments/field_trial_units.cc',
   'libwebrtc/rtc_base/experiments/rate_control_settings.cc',
   'libwebrtc/rtc_base/network/sent_packet.cc',
+  'libwebrtc/rtc_base/bitstream_reader.cc',
   'libwebrtc/call/rtp_transport_controller_send.cc',
   'libwebrtc/api/transport/bitrate_settings.cc',
   'libwebrtc/api/transport/field_trial_based_config.cc',
   'libwebrtc/api/transport/network_types.cc',
   'libwebrtc/api/transport/goog_cc_factory.cc',
+  'libwebrtc/api/transport/rtp/dependency_descriptor.cc',
   'libwebrtc/api/units/timestamp.cc',
   'libwebrtc/api/units/time_delta.cc',
   'libwebrtc/api/units/data_rate.cc',
@@ -43,6 +45,7 @@ libwebrtc_sources = [
   'libwebrtc/modules/congestion_controller/rtp/send_time_history.cc',
   'libwebrtc/modules/congestion_controller/rtp/transport_feedback_adapter.cc',
   'libwebrtc/modules/congestion_controller/rtp/control_handler.cc',
+  'libwebrtc/modules/rtp_rtcp/source/rtp_dependency_descriptor_reader.cc',
 ]
 
 abseil_cpp_proj = subproject(

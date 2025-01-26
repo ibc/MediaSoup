@@ -42,8 +42,8 @@ absl::InlinedVector<DecodeTargetIndication, 10> StringToDecodeTargetIndications(
       case 'S':
         indication = DecodeTargetIndication::kSwitch;
         break;
-      default:
-        // RTC_DCHECK_NOTREACHED();
+      // default:
+      //  RTC_DCHECK_NOTREACHED();
     }
     dtis.push_back(indication);
   }

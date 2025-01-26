@@ -109,11 +109,6 @@ fn video_producer_options() -> ProducerOptions {
             }],
             header_extensions: vec![
                 RtpHeaderExtensionParameters {
-                    uri: RtpHeaderExtensionUri::DependencyDescriptor,
-                    id: 8,
-                    encrypt: false,
-                },
-                RtpHeaderExtensionParameters {
                     uri: RtpHeaderExtensionUri::Mid,
                     id: 10,
                     encrypt: false,

@@ -114,6 +114,13 @@ namespace RTC
 			{
 				this->rtpHeaderExtensionIds.rrid = exten.id;
 			}
+
+			if (
+			  this->rtpHeaderExtensionIds.dependencyDescriptor == 0u &&
+			  exten.type == RTC::RtpHeaderExtensionUri::Type::DEPENDENCY_DESCRIPTOR)
+			{
+				this->rtpHeaderExtensionIds.dependencyDescriptor = exten.id;
+			}
 		}
 
 		// paused is set to false by default.

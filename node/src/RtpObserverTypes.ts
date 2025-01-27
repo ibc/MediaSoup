@@ -9,7 +9,6 @@ export type RtpObserverType = 'audiolevel' | 'activespeaker';
 
 export type RtpObserverEvents = {
 	routerclose: [];
-	listenererror: [string, Error];
 	// Private events.
 	'@close': [];
 };

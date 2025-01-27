@@ -87,7 +87,6 @@ export type DataConsumerEvents = {
 	message: [Buffer, number];
 	sctpsendbufferfull: [];
 	bufferedamountlow: [number];
-	listenererror: [string, Error];
 	// Private events.
 	'@close': [];
 	'@dataproducerclose': [];

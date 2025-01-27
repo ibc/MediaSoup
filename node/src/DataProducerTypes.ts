@@ -61,7 +61,6 @@ export type DataProducerStat = {
 
 export type DataProducerEvents = {
 	transportclose: [];
-	listenererror: [string, Error];
 	// Private events.
 	'@close': [];
 };

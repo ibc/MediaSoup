@@ -190,7 +190,6 @@ export type WorkerDump = {
 export type WorkerEvents = {
 	died: [Error];
 	subprocessclose: [];
-	listenererror: [string, Error];
 	// Private events.
 	'@success': [];
 	'@failure': [Error];

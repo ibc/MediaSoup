@@ -2,7 +2,7 @@
 
 ### NEXT
 
-- Node: Expose `Index` interface in `types.indexTypes` or via `import { Index as MediasoupIndex } from 'mediasoup/lib/indexTypes'` ([PR #XXXX](https://github.com/versatica/mediasoup/pull/XXXX)).
+- Node: Expose `Index` interface in `types.indexTypes` or via `import { Index as MediasoupIndex } from 'mediasoup/lib/indexTypes'` ([PR #1485](https://github.com/versatica/mediasoup/pull/1485)).
 
 ### 3.15.2
 

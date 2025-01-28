@@ -1,4 +1,4 @@
-export type { Observer, ObserverEvents } from './index';
+export type * from './indexTypes';
 export type * from './WorkerTypes';
 export type * from './WebRtcServerTypes';
 export type * from './RouterTypes';
@@ -31,13 +31,4 @@ export type Either<T, U> = Only<T, U> | Only<U, T>;
 
 export type AppData = {
 	[key: string]: unknown;
-};
-
-/**
- * Event listeners for mediasoup generated logs.
- */
-export type LogEventListeners = {
-	ondebug?: (namespace: string, log: string) => void;
-	onwarn?: (namespace: string, log: string) => void;
-	onerror?: (namespace: string, log: string, error?: Error) => void;
 };

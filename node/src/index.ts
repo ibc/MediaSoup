@@ -1,28 +1,29 @@
 import { Logger, LoggerEmitter } from './Logger';
 import { EnhancedEventEmitter } from './enhancedEvents';
+import type {
+	Observer,
+	ObserverEvents,
+	LogEventListeners,
+	Index,
+} from './indexTypes';
 import type { Worker, WorkerSettings } from './WorkerTypes';
 import { WorkerImpl, workerBin } from './Worker';
 import { supportedRtpCapabilities } from './supportedRtpCapabilities';
 import type { RtpCapabilities } from './rtpParametersTypes';
-import type * as types from './types';
+import { parseScalabilityMode } from './scalabilityModesUtils';
+import type { AppData } from './types';
 import * as utils from './utils';
 
 /**
  * Expose all types.
  */
-export { types };
+export type * as types from './types';
 
 /**
  * Expose mediasoup version.
  */
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 export const version: string = require('../../package.json').version;
-
-export type Observer = EnhancedEventEmitter<ObserverEvents>;
-
-export type ObserverEvents = {
-	newworker: [Worker];
-};
 
 const observer: Observer = new EnhancedEventEmitter<ObserverEvents>();
 
@@ -59,9 +60,7 @@ const logger = new Logger();
  * });
  * ```
  */
-export function setLogEventListeners(
-	listeners?: types.LogEventListeners
-): void {
+export function setLogEventListeners(listeners?: LogEventListeners): void {
 	logger.debug('setLogEventListeners()');
 
 	let debugLogEmitter: LoggerEmitter | undefined;
@@ -92,9 +91,7 @@ export function setLogEventListeners(
 /**
  * Create a Worker.
  */
-export async function createWorker<
-	WorkerAppData extends types.AppData = types.AppData,
->({
+export async function createWorker<WorkerAppData extends AppData = AppData>({
 	logLevel = 'error',
 	logTags,
 	rtcMinPort = 10000,
@@ -145,9 +142,24 @@ export function getSupportedRtpCapabilities(): RtpCapabilities {
 /**
  * Expose parseScalabilityMode() function.
  */
-export { parseScalabilityMode } from './scalabilityModesUtils';
+export { parseScalabilityMode };
 
 /**
  * Expose extras module.
  */
 export * as extras from './extras';
+
+// NOTE: This constant of type Index is created just to check at TypeScript
+// level that everything exported here (all but TS types) matches the Index
+// interface exposed by indexTypes.ts.
+//
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const indexImpl: Index = {
+	version,
+	observer,
+	workerBin,
+	setLogEventListeners,
+	createWorker,
+	getSupportedRtpCapabilities,
+	parseScalabilityMode,
+};

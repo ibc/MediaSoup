@@ -145,6 +145,12 @@ const config = tsEslint.config(
 			],
 			// We want to use `type` instead of `interface`.
 			'@typescript-eslint/consistent-type-definitions': 0,
+			'@typescript-eslint/prefer-nullish-coalescing': [
+				0,
+				{
+					ignorePrimitives: { string: true },
+				},
+			],
 			// Sorry, we need many `any` usage.
 			'@typescript-eslint/no-explicit-any': 0,
 			'@typescript-eslint/explicit-function-return-type': 2,

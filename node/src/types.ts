@@ -1,4 +1,4 @@
-export type { Observer, ObserverEvents } from './index';
+export type * from './indexTypes';
 export type * from './WorkerTypes';
 export type * from './WebRtcServerTypes';
 export type * from './RouterTypes';
@@ -19,10 +19,7 @@ export type * from './rtpStreamStatsTypes';
 export type * from './sctpParametersTypes';
 export type * from './srtpParametersTypes';
 export type * from './scalabilityModesTypes';
-
-// TODO: Here we are exporting real classes rather than types. This should
-// be exported somehow else rather than in mediasoup.types namespace.
-export * from './errors';
+export type * from './errors';
 
 type Only<T, U> = {
 	[P in keyof T]: T[P];
@@ -34,13 +31,4 @@ export type Either<T, U> = Only<T, U> | Only<U, T>;
 
 export type AppData = {
 	[key: string]: unknown;
-};
-
-/**
- * Event listeners for mediasoup generated logs.
- */
-export type LogEventListeners = {
-	ondebug?: (namespace: string, log: string) => void;
-	onwarn?: (namespace: string, log: string) => void;
-	onerror?: (namespace: string, log: string, error?: Error) => void;
 };

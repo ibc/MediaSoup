@@ -47,7 +47,6 @@ export type WebRtcServerDump = {
 
 export type WebRtcServerEvents = {
 	workerclose: [];
-	listenererror: [string, Error];
 	// Private events.
 	'@close': [];
 };

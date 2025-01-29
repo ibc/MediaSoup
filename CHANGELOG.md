@@ -2,6 +2,8 @@
 
 ### NEXT
 
+- `Worker`: Drop VP8 packets with a higher temporal layer than the current one ([PR #1009](https://github.com/versatica/mediasoup/pull/1009)).
+
 ### 3.15.3
 
 - Node: Expose `Index` interface in `types.indexTypes` or via `import { Index as MediasoupIndex } from 'mediasoup/lib/indexTypes'` ([PR #1485](https://github.com/versatica/mediasoup/pull/1485)).

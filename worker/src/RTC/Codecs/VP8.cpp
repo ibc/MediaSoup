@@ -359,7 +359,7 @@ namespace RTC
 			// clang-format off
 			if (
 				this->payloadDescriptor->hasTlIndex &&
-				this->payloadDescriptor->tlIndex > context->GetCurrentTemporalLayer()
+				this->payloadDescriptor->tlIndex == context->GetTargetTemporalLayer()
 			)
 			// clang-format on
 			{
@@ -373,6 +373,12 @@ namespace RTC
 			if (context->GetCurrentTemporalLayer() > context->GetTargetTemporalLayer())
 			{
 				context->SetCurrentTemporalLayer(context->GetTargetTemporalLayer());
+			}
+
+			// Do not send tlIndex higher than current one.
+			if (this->payloadDescriptor->tlIndex > context->GetCurrentTemporalLayer())
+			{
+				return false;
 			}
 
 			// clang-format off

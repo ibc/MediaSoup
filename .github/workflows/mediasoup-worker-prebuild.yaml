@@ -3,7 +3,7 @@ name: mediasoup-worker-prebuild
 # Only trigger on GitHub releases.
 on:
   release:
-    types: [published]
+    types: [ published ]
 
 jobs:
   ci:
@@ -19,7 +19,7 @@ jobs:
             cc: gcc
             cxx: g++
           # Worker prebuild for Linux with kernel version 6 Ubuntu (22.04).
-          # Let's not use Ubutu 24.04 to avoid same potential problem as described
+          # Let's not use Ubuntu 24.04 to avoid same potential problem as described
           # above.
           - os: ubuntu-22.04
             cc: gcc

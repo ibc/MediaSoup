@@ -2,6 +2,8 @@
 #define MS_RTC_CODECS_PAYLOAD_DESCRIPTOR_HANDLER_HPP
 
 #include "common.hpp"
+#include "RTC/SeqManager.hpp"
+#include <deque>
 
 namespace RTC
 {
@@ -12,6 +14,61 @@ namespace RTC
 		{
 			virtual ~PayloadDescriptor() = default;
 			virtual void Dump() const    = 0;
+		};
+
+		class PictureIdList
+		{
+			static constexpr uint16_t MaxCurrentLayerPictureIdNum{ 1000u };
+
+		public:
+			explicit PictureIdList()
+			{
+			}
+			~PictureIdList()
+			{
+				this->list.clear();
+			}
+
+			void Push(uint16_t pictureId, int16_t layer)
+			{
+				for (const auto& it : this->list)
+				{
+					// Layers can be changed only with ordered pictureId values.
+					// If pictureId is lower than the previous one, then it has rolled over the max value.
+					uint16_t diff = pictureId > it.first
+					                  ? pictureId - it.first
+					                  : pictureId + RTC::SeqManager<uint16_t, 15>::MaxValue - it.first;
+
+					if (diff > MaxCurrentLayerPictureIdNum)
+					{
+						this->list.pop_front();
+					}
+					else
+					{
+						break;
+					}
+				}
+				this->list.push_back({ pictureId, layer });
+			}
+
+			int16_t GetLayer(uint16_t pictureId) const
+			{
+				if (this->list.size() > 1)
+				{
+					for (auto it = std::next(this->list.begin()); it != this->list.end(); ++it)
+					{
+						if (RTC::SeqManager<uint16_t, 15>::IsSeqHigherThan(it->first, pictureId))
+						{
+							return std::prev(it)->second;
+						}
+					}
+				}
+
+				return -1;
+			}
+
+		private:
+			std::deque<std::pair<uint16_t, int16_t>> list;
 		};
 
 		// Encoding context used by PayloadDescriptorHandler to properly rewrite the
@@ -87,6 +144,49 @@ namespace RTC
 			}
 			virtual void SyncRequired() = 0;
 
+			void SetCurrentSpatialLayer(int16_t spatialLayer, uint16_t pictureId)
+			{
+				if (this->currentSpatialLayer == spatialLayer)
+				{
+					return;
+				}
+
+				this->spatialLayerPictureIdList.Push(pictureId, spatialLayer);
+
+				this->currentSpatialLayer = spatialLayer;
+			}
+			void SetCurrentTemporalLayer(int16_t temporalLayer, uint16_t pictureId)
+			{
+				if (this->currentTemporalLayer == temporalLayer)
+				{
+					return;
+				}
+
+				this->temporalLayerPictureIdList.Push(pictureId, temporalLayer);
+
+				this->currentTemporalLayer = temporalLayer;
+			}
+			int16_t GetCurrentSpatialLayer(uint16_t pictureId) const
+			{
+				int16_t layer = this->spatialLayerPictureIdList.GetLayer(pictureId);
+				if (layer > -1)
+				{
+					return layer;
+				}
+
+				return this->currentSpatialLayer;
+			}
+			int16_t GetCurrentTemporalLayer(uint16_t pictureId) const
+			{
+				int16_t layer = this->temporalLayerPictureIdList.GetLayer(pictureId);
+				if (layer > -1)
+				{
+					return layer;
+				}
+
+				return this->currentTemporalLayer;
+			}
+
 		private:
 			Params params;
 			int16_t targetSpatialLayer{ -1 };
@@ -94,6 +194,10 @@ namespace RTC
 			int16_t currentSpatialLayer{ -1 };
 			int16_t currentTemporalLayer{ -1 };
 			bool ignoreDtx{ false };
+
+		private:
+			PictureIdList spatialLayerPictureIdList;
+			PictureIdList temporalLayerPictureIdList;
 		};
 
 		class PayloadDescriptorHandler

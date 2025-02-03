@@ -6,6 +6,7 @@
 #include "RTC/DataConsumer.hpp"
 #include "RTC/DataProducer.hpp"
 #include <usrsctp.h>
+#include <uv.h>
 
 namespace RTC
 {
@@ -80,7 +81,11 @@ namespace RTC
 	public:
 		flatbuffers::Offset<FBS::SctpParameters::SctpParameters> FillBuffer(
 		  flatbuffers::FlatBufferBuilder& builder) const;
-		void TransportConnected();
+		uv_async_t* GetAsyncHandle() const
+		{
+			return this->uvAsyncHandle;
+		}
+		void InitializeSyncHandle(uv_async_cb callback);
 		SctpState GetState() const
 		{
 			return this->state;
@@ -89,6 +94,7 @@ namespace RTC
 		{
 			return this->sctpBufferedAmount;
 		}
+		void TransportConnected();
 		void ProcessSctpData(const uint8_t* data, size_t len) const;
 		void SendSctpMessage(
 		  RTC::DataConsumer* dataConsumer,
@@ -106,7 +112,7 @@ namespace RTC
 
 		/* Callbacks fired by usrsctp events. */
 	public:
-		void OnUsrSctpSendSctpData(void* buffer, size_t len);
+		void OnUsrSctpSendSctpData(uint8_t* data, size_t len);
 		void OnUsrSctpReceiveSctpData(
 		  uint16_t streamId, uint16_t ssn, uint32_t ppid, int flags, const uint8_t* data, size_t len);
 		void OnUsrSctpReceiveSctpNotification(union sctp_notification* notification, size_t len);
@@ -125,6 +131,7 @@ namespace RTC
 		size_t sctpBufferedAmount{ 0u };
 		bool isDataChannel{ false };
 		// Allocated by this.
+		uv_async_t* uvAsyncHandle{ nullptr };
 		uint8_t* messageBuffer{ nullptr };
 		// Others.
 		SctpState state{ SctpState::NEW };

@@ -254,7 +254,8 @@ afterEach(async () => {
 	}
 });
 
-test('transport.consume() succeeds', async () => {
+console.log('REMOVE test.only');
+test.only('transport.consume() succeeds', async () => {
 	const onObserverNewConsumer1 = jest.fn();
 
 	ctx.webRtcTransport2!.observer.once('newconsumer', onObserverNewConsumer1);

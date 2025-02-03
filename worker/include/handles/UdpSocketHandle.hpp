@@ -18,7 +18,8 @@ public:
 		{
 		}
 
-		// Disable copy constructor because of the dynamically allocated data (store).
+		// Disable copy constructor because of the dynamically allocated data
+		// (store).
 		UvSendData(const UvSendData&) = delete;
 
 		~UvSendData()

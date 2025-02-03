@@ -2,3 +2,4 @@ option('ms_log_trace', type : 'boolean', value : false, description : 'When set 
 option('ms_log_file_line', type : 'boolean', value : false, description : 'When set to true, all the logging macros print more verbose information, including current file and line')
 option('ms_rtc_logger_rtp', type : 'boolean', value : false, description : 'When set to true, prints a line with information for each RTP packet')
 option('ms_disable_liburing', type : 'boolean', value : false, description : 'When set to true, disables liburing integration despite current host supports it')
+option('ms_enable_multithread', type : 'boolean', value : false, description : 'When set to true, mediasoup worker is built assuming multi-thread usage')

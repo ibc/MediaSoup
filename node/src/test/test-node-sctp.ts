@@ -186,8 +186,6 @@ test('ordered DataProducer delivers all SCTP messages to the DataConsumer', asyn
 							`ppid in message with id ${id} should be ${sctp.PPID.WEBRTC_BINARY} but it is ${ppid}`
 						)
 					);
-
-					return;
 				}
 			});
 		});

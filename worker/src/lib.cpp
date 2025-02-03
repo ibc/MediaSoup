@@ -23,6 +23,9 @@
 #include <csignal> // sigaction()
 #include <string>
 
+// TODO: REMOVE
+#include <fstream>
+
 void IgnoreSignals();
 
 // NOLINTNEXTLINE
@@ -138,8 +141,15 @@ extern "C" int mediasoup_worker_run(
 		IgnoreSignals();
 #endif
 
+		MS_DUMP("------------- CREATING WORKER...");
+
 		// Run the Worker.
 		const Worker worker(channel.get());
+
+		std::ofstream outfile;
+		outfile.open("/tmp/ms_log.txt", std::ios_base::app);
+		outfile << "---- WORKER CLOSED\n";
+		outfile.flush();
 
 		// Free static stuff.
 		DepLibSRTP::ClassDestroy();

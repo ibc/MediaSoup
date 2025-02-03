@@ -4,6 +4,9 @@
 #include "DepLibUV.hpp"
 #include "Logger.hpp"
 
+// TODO: REMOVE
+#include <fstream>
+
 /* Static variables. */
 
 thread_local uv_loop_t* DepLibUV::loop{ nullptr };
@@ -17,6 +20,11 @@ inline static void onCloseLoop(uv_handle_t* handle)
 
 inline static void onWalk(uv_handle_t* handle, void* /*arg*/)
 {
+	std::ofstream outfile;
+	outfile.open("/tmp/ms_log.txt", std::ios_base::app);
+	outfile << "---- onWalk\n";
+	outfile.flush();
+
 	// Must use MS_ERROR_STD since at this point the Channel is already closed.
 	MS_ERROR_STD(
 	  "alive UV handle found (this shouldn't happen) [type:%s, active:%d, closing:%d, has_ref:%d]",

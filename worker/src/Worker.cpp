@@ -7,13 +7,15 @@
 #include "DepLibUring.hpp"
 #endif
 #include "DepLibUV.hpp"
-#include "DepUsrSCTP.hpp"
 #include "Logger.hpp"
 #include "MediaSoupErrors.hpp"
 #include "Settings.hpp"
 #include "Channel/ChannelNotifier.hpp"
 #include "FBS/response.h"
 #include "FBS/worker.h"
+
+// TODO: REMOVE
+#include <fstream>
 
 /* Instance methods. */
 
@@ -40,9 +42,6 @@ Worker::Worker(::Channel::ChannelSocket* channel) : channel(channel)
 	}
 #endif
 
-	// Create the Checker instance in DepUsrSCTP.
-	DepUsrSCTP::CreateChecker();
-
 #ifdef MS_LIBURING_SUPPORTED
 	if (DepLibUring::IsEnabled())
 	{
@@ -54,6 +53,9 @@ Worker::Worker(::Channel::ChannelSocket* channel) : channel(channel)
 	// Tell the Node process that we are running.
 	this->shared->channelNotifier->Emit(
 	  std::to_string(Logger::Pid), FBS::Notification::Event::WORKER_RUNNING);
+
+	auto* timer = new TimerHandle(this);
+	// timer->Start(1000, 1000);
 
 	MS_DEBUG_DEV("starting libuv loop");
 	DepLibUV::RunLoop();
@@ -104,9 +106,6 @@ void Worker::Close()
 
 	// Delete the RTC::Shared singleton.
 	delete this->shared;
-
-	// Close the Checker instance in DepUsrSCTP.
-	DepUsrSCTP::CloseChecker();
 
 #ifdef MS_LIBURING_SUPPORTED
 	if (DepLibUring::IsEnabled())
@@ -568,4 +567,13 @@ RTC::WebRtcServer* Worker::OnRouterNeedWebRtcServer(RTC::Router* /*router*/, std
 	}
 
 	return webRtcServer;
+}
+
+void Worker::OnTimer(TimerHandle* /*timer*/)
+{
+	MS_DUMP_STD("---- Worker::OnTimer()");
+	std::ofstream outfile;
+	outfile.open("/tmp/ms_log.txt", std::ios_base::app);
+	outfile << "---- Worker::OnTimer()\n";
+	outfile.flush();
 }

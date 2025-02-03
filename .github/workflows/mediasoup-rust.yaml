@@ -1,6 +1,10 @@
 name: mediasoup-rust
 
-on: [pull_request, workflow_dispatch]
+on:
+  push:
+    branches: [ v3 ]
+  pull_request:
+  workflow_dispatch:
 
 concurrency:
   # Cancel a currently running workflow from the same PR, branch or tag when a

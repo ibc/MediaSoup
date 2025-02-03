@@ -11,7 +11,11 @@
 #
 name: CodeQL
 
-on: [pull_request, workflow_dispatch]
+on:
+  push:
+    branches: [ v3 ]
+  pull_request:
+  workflow_dispatch:
 
 concurrency:
   # Cancel a currently running workflow from the same PR, branch or tag when a
@@ -32,7 +36,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: ['c-cpp', 'javascript-typescript', 'python']
+        language: [ 'c-cpp', 'javascript-typescript', 'python' ]
         # CodeQL supports [ 'c-cpp', 'csharp', 'go', 'java-kotlin', 'javascript-typescript', 'python', 'ruby', 'swift' ]
         # Use only 'java-kotlin' to analyze code written in Java, Kotlin or both.
         # Use only 'javascript-typescript' to analyze code written in JavaScript,
